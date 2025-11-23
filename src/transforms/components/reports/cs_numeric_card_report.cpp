@@ -11,7 +11,8 @@ std::string CSNumericCardReport::GetAggregation() const {
   return epoch_core::CSNumericArrowAggregateFunctionWrapper::ToString(m_agg);
 }
 
-void CSNumericCardReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const {
+void CSNumericCardReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                                     epoch_tearsheet::DashboardBuilder &dashboard) const {
   using namespace epoch_frame;
 
   if (normalizedDf.empty() || normalizedDf.num_cols() == 0) {
@@ -117,7 +118,7 @@ void CSNumericCardReport::generateTearsheet(const epoch_frame::DataFrame &normal
   }
 
   // Add the card group to dashboard
-  m_dashboard.addCard(cardBuilder.build());
+  dashboard.addCard(cardBuilder.build());
 }
 
 } // namespace epoch_script::reports

@@ -75,9 +75,11 @@ Track institutional and insider trading through regulatory filings:
 
 **`finbert_sentiment`** - FinBERT sentiment analysis for financial text using AWS SageMaker. Analyzes financial news, earnings call transcripts, social media, and other text data.
 
-**Returns:** Two columns
-- `sentiment` - Classification: "positive", "neutral", or "negative"
-- `score` - Confidence score between 0.0 and 1.0
+**Returns:** Four columns
+- `positive` - Boolean flag indicating positive sentiment
+- `neutral` - Boolean flag indicating neutral sentiment
+- `negative` - Boolean flag indicating negative sentiment
+- `confidence` - Confidence score between 0.0 and 1.0
 
 **Requirements:** AWS credentials configured, active SageMaker endpoint named "finbert" in us-west-2 region.
 

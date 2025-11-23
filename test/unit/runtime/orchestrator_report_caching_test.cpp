@@ -21,38 +21,39 @@
 #include <catch2/catch_test_macros.hpp>
 #include <trompeloeil.hpp>
 #include <epoch_protos/tearsheet.pb.h>
+#include <epoch_dashboard/tearsheet/tearsheet_builder.h>
 
 using namespace epoch_script::runtime;
 using namespace epoch_script::runtime;
 using namespace epoch_script::runtime::test;
 using namespace epoch_script;
 
-// Helper to create a tearsheet with specific content
-epoch_proto::TearSheet CreateTearSheetWithCards(int cardCount) {
-    epoch_proto::TearSheet sheet;
-    auto* cards = sheet.mutable_cards();
+// Helper to create a dashboard builder with specific content
+epoch_tearsheet::DashboardBuilder CreateDashboardWithCards(int cardCount) {
+    epoch_tearsheet::DashboardBuilder builder;
     for (int i = 0; i < cardCount; ++i) {
-        cards->add_cards();  // Add empty cards for counting
+        epoch_proto::CardDef card;
+        builder.addCard(card);  // Add empty cards for counting
     }
-    return sheet;
+    return builder;
 }
 
-epoch_proto::TearSheet CreateTearSheetWithCharts(int chartCount) {
-    epoch_proto::TearSheet sheet;
-    auto* charts = sheet.mutable_charts();
+epoch_tearsheet::DashboardBuilder CreateDashboardWithCharts(int chartCount) {
+    epoch_tearsheet::DashboardBuilder builder;
     for (int i = 0; i < chartCount; ++i) {
-        charts->add_charts();  // Add empty charts for counting
+        epoch_proto::Chart chart;
+        builder.addChart(chart);  // Add empty charts for counting
     }
-    return sheet;
+    return builder;
 }
 
-epoch_proto::TearSheet CreateTearSheetWithTables(int tableCount) {
-    epoch_proto::TearSheet sheet;
-    auto* tables = sheet.mutable_tables();
+epoch_tearsheet::DashboardBuilder CreateDashboardWithTables(int tableCount) {
+    epoch_tearsheet::DashboardBuilder builder;
     for (int i = 0; i < tableCount; ++i) {
-        tables->add_tables();  // Add empty tables for counting
+        epoch_proto::Table table;
+        builder.addTable(table);  // Add empty tables for counting
     }
-    return sheet;
+    return builder;
 }
 
 TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][reports][critical]") {
@@ -66,14 +67,14 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         // Empty reports (ByteSizeLong() == 0) should be skipped
         auto mock = CreateSimpleMockTransform("reporter", dailyTF);
 
-        epoch_proto::TearSheet emptySheet;  // Empty, ByteSizeLong() == 0
-        REQUIRE(emptySheet.ByteSizeLong() == 0);
+        epoch_tearsheet::DashboardBuilder emptyBuilder;  // Empty, ByteSizeLong() == 0
+        REQUIRE(emptyBuilder.build().ByteSizeLong() == 0);
 
         REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
 
-        REQUIRE_CALL(*mock, GetTearSheet())
-            .RETURN(emptySheet);
+        REQUIRE_CALL(*mock, GetDashboard(trompeloeil::_))
+            .LR_RETURN(std::nullopt);
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mock));
@@ -94,14 +95,14 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         // Line 305-307 in dataflow_orchestrator.cpp
         auto mock = CreateSimpleMockTransform("reporter", dailyTF);
 
-        auto sheet = CreateTearSheetWithCards(3);
-        REQUIRE(sheet.ByteSizeLong() > 0);
+        auto builder = CreateDashboardWithCards(3);
+        REQUIRE(builder.build().ByteSizeLong() > 0);
 
         REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
 
-        REQUIRE_CALL(*mock, GetTearSheet())
-            .RETURN(sheet);
+        REQUIRE_CALL(*mock, GetDashboard(trompeloeil::_))
+            .LR_RETURN(std::optional{builder});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mock));
@@ -125,15 +126,15 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         // Report should be cached for EACH asset
         auto mock = CreateSimpleMockTransform("reporter", dailyTF);
 
-        auto sheet = CreateTearSheetWithCards(2);
+        auto builder = CreateDashboardWithCards(2);
 
         REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
             .TIMES(3)  // Called for each asset
             .RETURN(epoch_frame::DataFrame());
 
-        REQUIRE_CALL(*mock, GetTearSheet())
+        REQUIRE_CALL(*mock, GetDashboard(trompeloeil::_))
             .TIMES(AT_LEAST(1))
-            .RETURN(sheet);
+            .LR_RETURN(std::optional{builder});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mock));
@@ -163,18 +164,18 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         auto reporter1 = CreateSimpleMockTransform("reporter1", dailyTF);
         auto reporter2 = CreateSimpleMockTransform("reporter2", dailyTF);
 
-        auto sheet1 = CreateTearSheetWithCards(2);
-        auto sheet2 = CreateTearSheetWithCards(3);
+        auto builder1 = CreateDashboardWithCards(2);
+        auto builder2 = CreateDashboardWithCards(3);
 
         REQUIRE_CALL(*reporter1, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
-        REQUIRE_CALL(*reporter1, GetTearSheet())
-            .RETURN(sheet1);
+        REQUIRE_CALL(*reporter1, GetDashboard(trompeloeil::_))
+            .LR_RETURN(std::optional{builder1});
 
         REQUIRE_CALL(*reporter2, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
-        REQUIRE_CALL(*reporter2, GetTearSheet())
-            .RETURN(sheet2);
+        REQUIRE_CALL(*reporter2, GetDashboard(trompeloeil::_))
+            .LR_RETURN(std::optional{builder2});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(reporter1));
@@ -200,24 +201,24 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         auto reporter2 = CreateSimpleMockTransform("reporter2", dailyTF);
         auto reporter3 = CreateSimpleMockTransform("reporter3", dailyTF);
 
-        auto sheet1 = CreateTearSheetWithCards(1);
-        auto sheet2 = CreateTearSheetWithCards(2);
-        auto sheet3 = CreateTearSheetWithCards(3);
+        auto builder1 = CreateDashboardWithCards(1);
+        auto builder2 = CreateDashboardWithCards(2);
+        auto builder3 = CreateDashboardWithCards(3);
 
         REQUIRE_CALL(*reporter1, TransformData(trompeloeil::_))
             .TIMES(2).RETURN(epoch_frame::DataFrame());
-        REQUIRE_CALL(*reporter1, GetTearSheet())
-            .TIMES(AT_LEAST(1)).RETURN(sheet1);
+        REQUIRE_CALL(*reporter1, GetDashboard(trompeloeil::_))
+            .TIMES(AT_LEAST(1)).LR_RETURN(std::optional{builder1});
 
         REQUIRE_CALL(*reporter2, TransformData(trompeloeil::_))
             .TIMES(2).RETURN(epoch_frame::DataFrame());
-        REQUIRE_CALL(*reporter2, GetTearSheet())
-            .TIMES(AT_LEAST(1)).RETURN(sheet2);
+        REQUIRE_CALL(*reporter2, GetDashboard(trompeloeil::_))
+            .TIMES(AT_LEAST(1)).LR_RETURN(std::optional{builder2});
 
         REQUIRE_CALL(*reporter3, TransformData(trompeloeil::_))
             .TIMES(2).RETURN(epoch_frame::DataFrame());
-        REQUIRE_CALL(*reporter3, GetTearSheet())
-            .TIMES(AT_LEAST(1)).RETURN(sheet3);
+        REQUIRE_CALL(*reporter3, GetDashboard(trompeloeil::_))
+            .TIMES(AT_LEAST(1)).LR_RETURN(std::optional{builder3});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(reporter1));
@@ -244,16 +245,16 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         auto reporter1 = CreateSimpleMockTransform("r1", dailyTF);
         auto reporter2 = CreateSimpleMockTransform("r2", dailyTF);
 
-        auto sheet1 = CreateTearSheetWithCards(5);
-        auto sheet2 = CreateTearSheetWithCards(7);
+        auto builder1 = CreateDashboardWithCards(5);
+        auto builder2 = CreateDashboardWithCards(7);
 
         ALLOW_CALL(*reporter1, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
-        ALLOW_CALL(*reporter1, GetTearSheet()).RETURN(sheet1);
+        ALLOW_CALL(*reporter1, GetDashboard(trompeloeil::_)).LR_RETURN(std::optional{builder1});
 
         ALLOW_CALL(*reporter2, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
-        ALLOW_CALL(*reporter2, GetTearSheet()).RETURN(sheet2);
+        ALLOW_CALL(*reporter2, GetDashboard(trompeloeil::_)).LR_RETURN(std::optional{builder2});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(reporter1));
@@ -274,16 +275,16 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         auto reporter1 = CreateSimpleMockTransform("r1", dailyTF);
         auto reporter2 = CreateSimpleMockTransform("r2", dailyTF);
 
-        auto sheet1 = CreateTearSheetWithCharts(3);
-        auto sheet2 = CreateTearSheetWithCharts(4);
+        auto builder1 = CreateDashboardWithCharts(3);
+        auto builder2 = CreateDashboardWithCharts(4);
 
         ALLOW_CALL(*reporter1, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
-        ALLOW_CALL(*reporter1, GetTearSheet()).RETURN(sheet1);
+        ALLOW_CALL(*reporter1, GetDashboard(trompeloeil::_)).LR_RETURN(std::optional{builder1});
 
         ALLOW_CALL(*reporter2, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
-        ALLOW_CALL(*reporter2, GetTearSheet()).RETURN(sheet2);
+        ALLOW_CALL(*reporter2, GetDashboard(trompeloeil::_)).LR_RETURN(std::optional{builder2});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(reporter1));
@@ -304,16 +305,16 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         auto reporter1 = CreateSimpleMockTransform("r1", dailyTF);
         auto reporter2 = CreateSimpleMockTransform("r2", dailyTF);
 
-        auto sheet1 = CreateTearSheetWithTables(2);
-        auto sheet2 = CreateTearSheetWithTables(3);
+        auto builder1 = CreateDashboardWithTables(2);
+        auto builder2 = CreateDashboardWithTables(3);
 
         ALLOW_CALL(*reporter1, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
-        ALLOW_CALL(*reporter1, GetTearSheet()).RETURN(sheet1);
+        ALLOW_CALL(*reporter1, GetDashboard(trompeloeil::_)).LR_RETURN(std::optional{builder1});
 
         ALLOW_CALL(*reporter2, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
-        ALLOW_CALL(*reporter2, GetTearSheet()).RETURN(sheet2);
+        ALLOW_CALL(*reporter2, GetDashboard(trompeloeil::_)).LR_RETURN(std::optional{builder2});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(reporter1));
@@ -334,21 +335,25 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         auto reporter1 = CreateSimpleMockTransform("r1", dailyTF);
         auto reporter2 = CreateSimpleMockTransform("r2", dailyTF);
 
-        epoch_proto::TearSheet sheet1;
-        sheet1.mutable_cards()->add_cards();  // Add empty card
-        sheet1.mutable_charts()->add_charts();  // Add empty chart
+        epoch_tearsheet::DashboardBuilder builder1;
+        epoch_proto::CardDef card1;
+        builder1.addCard(card1);  // Add empty card
+        epoch_proto::Chart chart1;
+        builder1.addChart(chart1);  // Add empty chart
 
-        epoch_proto::TearSheet sheet2;
-        sheet2.mutable_cards()->add_cards();  // Add empty card
-        sheet2.mutable_tables()->add_tables();  // Add empty table
+        epoch_tearsheet::DashboardBuilder builder2;
+        epoch_proto::CardDef card2;
+        builder2.addCard(card2);  // Add empty card
+        epoch_proto::Table table2;
+        builder2.addTable(table2);  // Add empty table
 
         ALLOW_CALL(*reporter1, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
-        ALLOW_CALL(*reporter1, GetTearSheet()).RETURN(sheet1);
+        ALLOW_CALL(*reporter1, GetDashboard(trompeloeil::_)).LR_RETURN(std::optional{builder1});
 
         ALLOW_CALL(*reporter2, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
-        ALLOW_CALL(*reporter2, GetTearSheet()).RETURN(sheet2);
+        ALLOW_CALL(*reporter2, GetDashboard(trompeloeil::_)).LR_RETURN(std::optional{builder2});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(reporter1));
@@ -374,7 +379,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
 
-        // No GetTearSheet call expected
+        // No GetDashboard call expected
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mock));
@@ -395,11 +400,11 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
 
         for (int i = 0; i < 20; ++i) {
             auto mock = CreateSimpleMockTransform("reporter_" + std::to_string(i), dailyTF);
-            auto sheet = CreateTearSheetWithCards(1);
+            auto builder = CreateDashboardWithCards(1);
 
             ALLOW_CALL(*mock, TransformData(trompeloeil::_))
                 .RETURN(epoch_frame::DataFrame());
-            ALLOW_CALL(*mock, GetTearSheet()).RETURN(sheet);
+            ALLOW_CALL(*mock, GetDashboard(trompeloeil::_)).LR_RETURN(std::optional{builder});
 
             transforms.push_back(std::move(mock));
         }

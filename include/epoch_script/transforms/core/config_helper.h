@@ -1753,7 +1753,7 @@ inline auto finbert_sentiment_cfg = [](std::string const &id,
       .id = id,
       .options = {},
       .timeframe = timeframe,
-      .inputs = {{"ARG", std::vector<std::string>{input}}}
+      .inputs = {{ARG, std::vector<std::string>{input}}}
   };
   return TransformConfiguration{TransformDefinition{std::move(data)}};
 };

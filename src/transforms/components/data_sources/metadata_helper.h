@@ -54,4 +54,13 @@ BuildRequiredDataSourcesFromSDKMetadata(data_sdk::DataFrameMetadata const& sdkMe
   return requiredDataSources;
 }
 
+  inline std::vector<std::string>
+BuildRequiredDataSourcesFromSDKMetadata(data_sdk::DataFrameMetadata const& sdkMetadata, std::string const& placeholder) {
+  std::vector<std::string> requiredDataSources;
+  for (const auto& col : sdkMetadata.columns) {
+    requiredDataSources.push_back(sdkMetadata.category_prefix + "{" + placeholder + "}"+ col.id);
+  }
+  return requiredDataSources;
+}
+
 } // namespace epoch_script::data_sources

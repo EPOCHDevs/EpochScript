@@ -43,8 +43,12 @@ public:
 protected:
     int64_t m_pivotHour;
   // Implementation of IReporter's virtual methods
-  void
-  generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const override;
+  void generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                          epoch_tearsheet::DashboardBuilder &dashboard) const override;
+
+  // Override to provide event markers for gap events
+  std::optional<epoch_script::transform::EventMarkerData>
+  GetEventMarkers(const epoch_frame::DataFrame &df) const override;
 
 public:
   epoch_tearsheet::DashboardBuilder generate_impl(const epoch_frame::DataFrame &df) const;

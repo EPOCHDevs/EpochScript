@@ -227,6 +227,13 @@ void DataFlowRuntimeOrchestrator::CacheReportFromTransform(
     const epoch_script::transform::ITransformBase& transform) const {
   const std::string transformId = transform.GetId();
 
+  // TODO: Implement stateless dashboard caching from TransformResult
+  // This method needs to be called from execution nodes, not here
+  // For now, stubbed out to allow compilation
+  (void)transformId;  // Suppress unused variable warning
+  return;
+
+  /* OLD STATEFUL IMPLEMENTATION - TO BE REPLACED
   try {
     auto report = transform.GetTearSheet();
 
@@ -258,38 +265,36 @@ void DataFlowRuntimeOrchestrator::CacheReportFromTransform(
                transformId, report.ByteSizeLong());
         m_reportCache.emplace(epoch_script::GROUP_KEY, report);
       }
+    } else if (asset_id.has_value()) {
+      // Per-asset transform: cache report only for the specific asset
+      std::lock_guard<std::mutex> lock(m_reportCacheMutex);
+
+      // Check if we already have a report for this asset
+      if (m_reportCache.contains(*asset_id)) {
+        SPDLOG_DEBUG("Merging per-asset report from transform {} with existing report for asset {}",
+                     transformId, *asset_id);
+
+        // Merge the new report with the existing one
+        auto& existingReport = m_reportCache[*asset_id];
+        MergeReportInPlace(existingReport, report, transformId);
+
+        SPDLOG_DEBUG("Successfully merged per-asset report from transform {} into existing report for asset {} (final size: {} bytes)",
+                     transformId, *asset_id, existingReport.ByteSizeLong());
+      } else {
+        SPDLOG_DEBUG("Cached first per-asset report from transform {} for asset {} ({} bytes)",
+               transformId, *asset_id, report.ByteSizeLong());
+        m_reportCache.emplace(*asset_id, report);
+      }
     } else {
-      // For multi-asset scenarios, cache the report for each asset
-      // Reporter transforms typically generate aggregate statistics that apply to all assets
-      // Parallel report caching with mutex protection
-      tbb::parallel_for_each(m_asset_ids.begin(), m_asset_ids.end(), [&](const auto& asset) {
-        {
-          std::lock_guard<std::mutex> lock(m_reportCacheMutex);
-
-          // Check if we already have a report for this asset
-          if (m_reportCache.contains(asset)) {
-            SPDLOG_DEBUG("Merging report from transform {} with existing report for asset {}",
-                         transformId, asset);
-
-            // Merge the new report with the existing one
-            auto& existingReport = m_reportCache[asset];
-            MergeReportInPlace(existingReport, report, transformId);
-
-            SPDLOG_DEBUG("Successfully merged report from transform {} into existing report for asset {} (final size: {} bytes)",
-                         transformId, asset, existingReport.ByteSizeLong());
-          } else {
-            SPDLOG_DEBUG("Cached first report from transform {} for asset {} ({} bytes)",
-                   transformId, asset, report.ByteSizeLong());
-            m_reportCache.emplace(asset, report);
-          }
-        }
-        // Note: EventMarker caching is handled by CacheEventMarkerFromTransform() to avoid duplication
-      });
+      // Legacy fallback: no asset_id provided for non-cross-sectional transform
+      // This shouldn't happen with the new architecture, but keep it for safety
+      SPDLOG_WARN("Non-cross-sectional transform {} has no asset_id - this indicates a bug", transformId);
     }
 
   } catch (const std::exception& e) {
     SPDLOG_WARN("Failed to cache report from transform {}: {}", transformId, e.what());
   }
+  */
 }
 
 void DataFlowRuntimeOrchestrator::MergeReportInPlace(
@@ -384,6 +389,13 @@ void DataFlowRuntimeOrchestrator::CacheEventMarkerFromTransform(
     const epoch_script::transform::ITransformBase& transform) const {
   const std::string transformId = transform.GetId();
 
+  // TODO: Implement stateless event marker caching from TransformResult
+  // This method needs to be called from execution nodes, not here
+  // For now, stubbed out to allow compilation
+  (void)transformId;  // Suppress unused variable warning
+  return;
+
+  /* OLD STATEFUL IMPLEMENTATION - TO BE REPLACED
   try {
     auto eventMarkerData = transform.GetEventMarkerData();
 
@@ -419,6 +431,7 @@ void DataFlowRuntimeOrchestrator::CacheEventMarkerFromTransform(
   } catch (const std::exception& e) {
     SPDLOG_WARN("Failed to cache event marker from transform {}: {}", transformId, e.what());
   }
+  */
 }
 
 AssetEventMarkerMap DataFlowRuntimeOrchestrator::GetGeneratedEventMarkers() const {

@@ -74,6 +74,17 @@ std::vector<DataCategory>
 ExtractAuxiliaryCategoriesFromTransforms(
     epoch_script::transform::TransformConfigurationPtrList const &configs);
 
+// Extract cross-sectional data categories (FRED economic indicators) from transform configurations
+std::vector<CrossSectionalDataCategory>
+ExtractCrossSectionalCategoriesFromTransforms(
+    epoch_script::transform::TransformConfigurationPtrList const &configs);
+
+// Extract and validate index tickers from indices/common_indices transforms
+// Throws if ticker's asset (e.g., "SPX-Indices") doesn't exist in AssetDatabase
+std::set<std::string>
+ExtractIndicesTickersFromTransforms(
+    epoch_script::transform::TransformConfigurationPtrList const &configs);
+
 void ProcessConfigurations(
     std::vector<std::unique_ptr<
         epoch_script::transform::TransformConfiguration>> const &configs,

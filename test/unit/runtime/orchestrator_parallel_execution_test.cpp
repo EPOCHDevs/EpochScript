@@ -101,15 +101,13 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Parallel Execution", "[.orchestrator][p
         for (int i = 0; i < 10; ++i) {
             auto mock = CreateSimpleMockTransform("reporter_" + std::to_string(i), dailyTF);
 
-            epoch_proto::TearSheet sheet;
-            sheet.mutable_cards()->add_cards();  // Add empty card
-
             ALLOW_CALL(*mock, TransformData(trompeloeil::_))
                 .LR_SIDE_EFFECT(std::this_thread::sleep_for(10ms))  // Introduce timing variance
                 .RETURN(epoch_frame::DataFrame());
 
-            ALLOW_CALL(*mock, GetTearSheet())
-                .RETURN(sheet);
+            // Return nullopt since this test focuses on parallel execution, not dashboard content
+            ALLOW_CALL(*mock, GetDashboard(trompeloeil::_))
+                .LR_RETURN(std::nullopt);
 
             transforms.push_back(std::move(mock));
         }

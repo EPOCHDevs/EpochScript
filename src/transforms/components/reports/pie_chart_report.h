@@ -14,7 +14,8 @@ namespace epoch_script::reports {
     }
 
   protected:
-    void generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const override;
+    void generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                          epoch_tearsheet::DashboardBuilder &dashboard) const override;
 
   private:
     const std::string m_chartTitle;

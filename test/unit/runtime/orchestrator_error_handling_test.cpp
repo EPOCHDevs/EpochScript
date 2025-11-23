@@ -208,14 +208,14 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors
         );
     }
 
-    SECTION("Exception during GetTearSheet is caught") {
+    SECTION("Exception during GetDashboard is caught") {
         // Line 332-334 in dataflow_orchestrator.cpp
         auto mock = CreateSimpleMockTransform("reporter_failure", dailyTF);
 
         ALLOW_CALL(*mock, TransformData(trompeloeil::_))
             .RETURN(epoch_frame::DataFrame());
 
-        ALLOW_CALL(*mock, GetTearSheet())
+        ALLOW_CALL(*mock, GetDashboard(trompeloeil::_))
             .THROW(std::runtime_error("TearSheet generation failed"));
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;

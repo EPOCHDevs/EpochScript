@@ -11,7 +11,8 @@
 
 namespace epoch_script::reports {
 
-void BarChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const {
+void BarChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                                     epoch_tearsheet::DashboardBuilder &dashboard) const {
   // Get column names from input mapping
   auto labelColumn = m_config.GetInput("label");
   auto valueColumn = m_config.GetInput("value");
@@ -74,7 +75,7 @@ void BarChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedD
 
   // Add chart to dashboard
   auto chart = chartBuilder.build();
-  m_dashboard.addChart(chart);
+  dashboard.addChart(chart);
 }
 
 

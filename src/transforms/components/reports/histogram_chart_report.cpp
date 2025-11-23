@@ -7,7 +7,8 @@
 #include <regex>
 
 namespace epoch_script::reports {
-  void HistogramChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const {
+  void HistogramChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                                     epoch_tearsheet::DashboardBuilder &dashboard) const {
     auto valuesColumn = m_config.GetInput("value");
 
     // Build histogram chart
@@ -22,6 +23,6 @@ namespace epoch_script::reports {
     chartBuilder.fromDataFrame(normalizedDf, valuesColumn, m_bins);
 
     auto chart = chartBuilder.build();
-    m_dashboard.addChart(chart);
+    dashboard.addChart(chart);
   }
 } // namespace epoch_script::reports

@@ -1,7 +1,8 @@
 target_sources(epoch_script_test PRIVATE
 transform_metadata_factory.cpp
 transforms_test.cpp trade_executor_test.cpp typed_transforms_test.cpp
-flag_schema_validation_test.cpp)
+flag_schema_validation_test.cpp
+template_expansion_test.cpp)
 
 
 add_subdirectory(cummulative)

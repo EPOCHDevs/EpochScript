@@ -13,6 +13,7 @@
 // Use epoch_data_sdk for all dataloader infrastructure
 #include <epoch_data_sdk/dataloader/dataloader.hpp>
 #include <epoch_data_sdk/dataloader/factory.hpp>
+#include <epoch_data_sdk/dataloader/options.hpp>
 
 #include "epoch_script/core/constants.h"
 #include "epoch_script/strategy/introspection.h"
@@ -261,6 +262,88 @@ ExtractAuxiliaryCategoriesFromTransforms(
   return std::vector<DataCategory>(categorySet.begin(), categorySet.end());
 }
 
+std::vector<CrossSectionalDataCategory>
+ExtractCrossSectionalCategoriesFromTransforms(
+    epoch_script::transform::TransformConfigurationPtrList const &configs) {
+
+  // Use a set to deduplicate categories
+  std::set<CrossSectionalDataCategory> categorySet;
+
+  for (auto const &config : configs) {
+    auto const &metadata = config->GetTransformDefinition().GetMetadata();
+
+    // Only process DataSource transforms
+    if (metadata.category != epoch_core::TransformCategory::DataSource) {
+      continue;
+    }
+
+    // Get the transform type/id
+    std::string transformType = config->GetTransformName();
+
+    // Check if it's the economic_indicator transform
+    if (transformType == epoch_script::fred::ECONOMIC_INDICATOR) {
+      // Extract the selected category option (e.g., "CPI", "GDP")
+      auto category_str = config->GetOptionValue("category").GetSelectOption();
+
+      // Map string to CrossSectionalDataCategory enum
+      auto csCategory = CrossSectionalDataCategoryWrapper::FromString(category_str);
+      categorySet.insert(csCategory);
+    }
+  }
+
+  // Convert set to vector
+  return std::vector<CrossSectionalDataCategory>(categorySet.begin(), categorySet.end());
+}
+
+std::set<std::string>
+ExtractIndicesTickersFromTransforms(
+    epoch_script::transform::TransformConfigurationPtrList const &configs) {
+
+  std::set<std::string> tickerSet;
+
+  for (auto const &config : configs) {
+    auto const &metadata = config->GetTransformDefinition().GetMetadata();
+
+    // Only process DataSource transforms
+    if (metadata.category != epoch_core::TransformCategory::DataSource) {
+      continue;
+    }
+
+    std::string transformType = config->GetTransformName();
+
+    // Check if it's indices or common_indices transform
+    if (transformType == epoch_script::polygon::INDICES ||
+        transformType == epoch_script::polygon::COMMON_INDICES) {
+
+      // Extract ticker option
+      // common_indices uses SelectOption, indices uses String
+      std::string ticker;
+      if (transformType == epoch_script::polygon::COMMON_INDICES) {
+        ticker = config->GetOptionValue("ticker").GetSelectOption();
+      } else {
+        ticker = config->GetOptionValue("ticker").GetString();
+      }
+
+      // Validate: Check if asset "{ticker}-Indices" exists in AssetDatabase
+      std::string assetId = ticker + "-Indices";  // e.g., "SPX-Indices"
+
+      // Check if asset ID exists in the database
+      const auto& specs = asset::AssetSpecificationDatabase::GetInstance().GetAssetSpecifications();
+      if (!specs.contains(assetId)) {
+        throw std::runtime_error(std::format(
+            "Index ticker '{}' validation failed: asset '{}' not found in AssetDatabase",
+            ticker, assetId));
+      }
+
+      // Asset exists, add ticker
+      tickerSet.insert(ticker);
+      SPDLOG_DEBUG("Index ticker '{}' validated (asset '{}' exists)", ticker, assetId);
+    }
+  }
+
+  return tickerSet;
+}
+
 void ProcessConfigurations(
     std::vector<std::unique_ptr<
         epoch_script::transform::TransformConfiguration>> const
@@ -277,6 +360,18 @@ void ProcessConfigurations(
 
   auto detectedCategories = ExtractAuxiliaryCategoriesFromTransforms(configurations);
   dataModuleOption.loader.categories.insert(detectedCategories.begin(), detectedCategories.end());
+
+  // Extract cross-sectional categories (FRED economic indicators)
+  auto crossSectionalCategories = ExtractCrossSectionalCategoriesFromTransforms(configurations);
+  for (auto const& cat : crossSectionalCategories) {
+    dataModuleOption.loader.AddCrossSectionalCategory(cat);
+  }
+
+  // Extract and validate index tickers
+  auto indexTickers = ExtractIndicesTickersFromTransforms(configurations);
+  for (auto const& ticker : indexTickers) {
+    dataModuleOption.loader.AddIndexTicker(ticker);
+  }
 }
 
 DataModuleOption
@@ -291,7 +386,6 @@ MakeDataModuleOption(CountryCurrency baseCurrency,
   const auto [dataloaderAssets, strategyAssets, continuationAssets] =
       MakeAssets(baseCurrency, resolvedAssetIds,
                  config.futures_continuation.has_value());
-  const auto today = epoch_frame::DateTime::now().date();
 
   // Build flat categories set: {primaryCategory} ∪ auxiliaryCategories
   std::set<DataCategory> categories;
@@ -302,9 +396,12 @@ MakeDataModuleOption(CountryCurrency baseCurrency,
       .loader = {.startDate = period.from,
                  .endDate = period.to,
                  .categories = categories,
+                 .crossSectionalCategories = {},  // Empty by default, filled by factory methods
+                 .indicesTickers = {},  // Empty by default, filled by factory methods
                  .dataloaderAssets = dataloaderAssets,
                  .strategyAssets = strategyAssets,
                  .continuationAssets = continuationAssets,
+                 .provider = data_sdk::DataProvider::Polygon,
                  .sourcePath = config.source.empty()
                      ? std::make_optional<std::filesystem::path>(DEFAULT_DATABASE_PATH)
                      : std::make_optional<std::filesystem::path>(config.source),
@@ -314,7 +411,7 @@ MakeDataModuleOption(CountryCurrency baseCurrency,
       .futureContinuation =
           MakeContinuations(continuationAssets, config.futures_continuation),
       .barResampleTimeFrames = {},
-      .liveUpdates = today >= period.from && today <= period.to};
+      .liveUpdates = false};
 
   return dataModuleConfig;
 }
@@ -353,6 +450,20 @@ DataModuleOption MakeDataModuleOptionFromStrategy(
             *dataModuleOption.transformManager->GetTransforms());
         dataModuleOption.loader.categories.insert(detectedCategories.begin(),
                                                   detectedCategories.end());
+
+        // Extract cross-sectional categories (FRED economic indicators)
+        auto crossSectionalCategories = ExtractCrossSectionalCategoriesFromTransforms(
+            *dataModuleOption.transformManager->GetTransforms());
+        for (auto const& cat : crossSectionalCategories) {
+            dataModuleOption.loader.AddCrossSectionalCategory(cat);
+        }
+
+        // Extract and validate index tickers
+        auto indexTickers = ExtractIndicesTickersFromTransforms(
+            *dataModuleOption.transformManager->GetTransforms());
+        for (auto const& ticker : indexTickers) {
+            dataModuleOption.loader.AddIndexTicker(ticker);
+        }
     }
 
     return dataModuleOption;

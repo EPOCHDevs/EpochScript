@@ -22,8 +22,10 @@ namespace epoch_script::transform {
  *
  * Input: String column containing text to analyze
  * Outputs:
- *   - sentiment: String column with labels ("positive", "neutral", "negative")
- *   - score: Float64 column with confidence scores (0.0 to 1.0)
+ *   - positive: Boolean column indicating positive sentiment
+ *   - neutral: Boolean column indicating neutral sentiment
+ *   - negative: Boolean column indicating negative sentiment
+ *   - confidence: Float64 column with confidence scores (0.0 to 1.0)
  *
  * Requirements:
  * - AWS credentials in environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)

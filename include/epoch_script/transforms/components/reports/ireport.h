@@ -27,7 +27,7 @@ public:
     BuildColumnMappings();
   }
 
-  // TransformData normalizes column names and generates TearSheet
+  // TransformData normalizes column names (stateless - no dashboard generation)
   epoch_frame::DataFrame TransformData(const epoch_frame::DataFrame &df) const override {
     // 1. Get expected columns from configuration inputs
     std::vector<std::string> inputColumns;
@@ -50,24 +50,26 @@ public:
     // This follows TradeExecutorTransform pattern
     auto normalizedDf = m_columnMappings.empty() ? df[inputColumns] : df[inputColumns].rename(m_columnMappings);
 
-    // 3. Child classes implement generateDashboard() to fill m_dashboard
-    generateTearsheet(normalizedDf);
-
-    // 4. Return normalized DataFrame (computation graph expects DataFrame output)
+    // 3. Return normalized DataFrame (computation graph expects DataFrame output)
+    // Dashboard generation happens in GetDashboard() for stateless execution
     return normalizedDf;
   }
 
-  // Public getter for the generated TearSheet
-  epoch_proto::TearSheet GetTearSheet() const final {
-    return m_dashboard.build();
+  // New stateless interface: build dashboard locally and return
+  std::optional<epoch_tearsheet::DashboardBuilder>
+  GetDashboard(const epoch_frame::DataFrame &df) const override {
+    epoch_tearsheet::DashboardBuilder dashboard;
+    generateTearsheet(df, dashboard);  // Child classes fill dashboard
+    return dashboard;
   }
-
 
   virtual ~IReporter() = default;
 
 protected:
-  // Child classes only need to implement this to fill m_tearsheet
-  virtual void generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const = 0;
+  // Child classes implement this to populate the dashboard
+  // Updated signature: now receives dashboard reference (stateless pattern)
+  virtual void generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                                  epoch_tearsheet::DashboardBuilder &dashboard) const = 0;
 
   void BuildColumnMappings() {
     // Similar to TradeExecutorTransform constructor
@@ -84,7 +86,7 @@ protected:
     }
   }
 
-  mutable epoch_tearsheet::DashboardBuilder m_dashboard;  // Dashboard using builder pattern
+  // Removed: mutable epoch_tearsheet::DashboardBuilder m_dashboard; (stateless now!)
   std::unordered_map<std::string, std::string> m_columnMappings;
 };
 

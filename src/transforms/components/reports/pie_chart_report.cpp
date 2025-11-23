@@ -9,7 +9,8 @@
 
 namespace epoch_script::reports {
 
-void PieChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const {
+void PieChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                                     epoch_tearsheet::DashboardBuilder &dashboard) const {
   try {
     // Get column names from input mapping
     auto labelColumn = m_config.GetInput("label");
@@ -29,7 +30,7 @@ void PieChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedD
     chartBuilder.addSeries(labelColumn, pieData, epoch_tearsheet::PieSize{100}, std::nullopt);
 
     auto chart = chartBuilder.build();
-    m_dashboard.addChart(chart);
+    dashboard.addChart(chart);
 
   } catch (const std::exception& e) {
     std::cerr << "Error: PieChartReport execution failed: " << e.what() << std::endl;

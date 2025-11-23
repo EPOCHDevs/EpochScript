@@ -6,7 +6,8 @@
 
 namespace epoch_script::reports {
 
-void BaseCardReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const {
+void BaseCardReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                                        epoch_tearsheet::DashboardBuilder &dashboard) const {
   // For single input transforms, get the inputId (which is what the column is renamed to)
   auto inputCol = m_config.GetInput();
 
@@ -215,7 +216,7 @@ void BaseCardReport::generateTearsheet(const epoch_frame::DataFrame &normalizedD
     // Add the single card
     cardBuilder.addCardData(DataBuilder.build());
 
-    m_dashboard.addCard(cardBuilder.build());
+    dashboard.addCard(cardBuilder.build());
 
   } catch (const std::exception& e) {
     // Aggregation failed, return empty

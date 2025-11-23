@@ -107,8 +107,8 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Selector Caching", "[.][orchestrator][s
         REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
             .RETURN(CreateTestDataFrame());
 
-        REQUIRE_CALL(*mock, GetEventMarkerData())
-            .RETURN(emptySelector);
+        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
+            .LR_RETURN(std::nullopt);
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mock));
@@ -137,8 +137,8 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Selector Caching", "[.][orchestrator][s
         REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
             .RETURN(CreateTestDataFrame());
 
-        REQUIRE_CALL(*mock, GetEventMarkerData())
-            .RETURN(invalidSelector);
+        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
+            .LR_RETURN(std::nullopt);
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mock));
@@ -166,8 +166,8 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Selector Caching", "[.][orchestrator][s
         REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
             .RETURN(CreateTestDataFrame(5));
 
-        REQUIRE_CALL(*mock, GetEventMarkerData())
-            .RETURN(selectorData);
+        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
+            .LR_RETURN(std::optional{selectorData});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mock));
@@ -200,9 +200,9 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Selector Caching", "[.][orchestrator][s
             .TIMES(3)  // Called for each asset
             .RETURN(CreateTestDataFrame(4));
 
-        REQUIRE_CALL(*mock, GetEventMarkerData())
+        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
             .TIMES(AT_LEAST(1))
-            .RETURN(selectorData);
+            .LR_RETURN(std::optional{selectorData});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mock));
@@ -241,13 +241,13 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Selector Caching", "[.][orchestrator][s
 
         REQUIRE_CALL(*selector1, TransformData(trompeloeil::_))
             .RETURN(CreateTestDataFrame());
-        REQUIRE_CALL(*selector1, GetEventMarkerData())
-            .RETURN(selectorData1);
+        REQUIRE_CALL(*selector1, GetEventMarkers(trompeloeil::_))
+            .LR_RETURN(std::optional{selectorData1});
 
         REQUIRE_CALL(*selector2, TransformData(trompeloeil::_))
             .RETURN(CreateTestDataFrame());
-        REQUIRE_CALL(*selector2, GetEventMarkerData())
-            .RETURN(selectorData2);
+        REQUIRE_CALL(*selector2, GetEventMarkers(trompeloeil::_))
+            .LR_RETURN(std::optional{selectorData2});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(selector1));
@@ -282,8 +282,8 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Selector Caching", "[.][orchestrator][s
 
         REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
             .RETURN(CreateTestDataFrame());
-        REQUIRE_CALL(*mock, GetEventMarkerData())
-            .RETURN(selectorData);
+        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
+            .LR_RETURN(std::optional{selectorData});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mock));
@@ -345,8 +345,8 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Selector Caching", "[.][orchestrator][s
         auto selectorData = CreateEventMarkerData("Pipeline Selector", 2);
         REQUIRE_CALL(*selector, TransformData(trompeloeil::_))
             .RETURN(CreateTestDataFrame());
-        REQUIRE_CALL(*selector, GetEventMarkerData())
-            .RETURN(selectorData);
+        REQUIRE_CALL(*selector, GetEventMarkers(trompeloeil::_))
+            .LR_RETURN(std::optional{selectorData});
 
         REQUIRE_CALL(*final_transform, TransformData(trompeloeil::_))
             .RETURN(CreateTestDataFrame());
@@ -384,9 +384,9 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Selector Caching", "[.][orchestrator][s
             .TIMES(5)  // Once per asset
             .RETURN(CreateTestDataFrame());
 
-        REQUIRE_CALL(*mock, GetEventMarkerData())
+        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
             .TIMES(AT_LEAST(1))
-            .RETURN(selectorData);
+            .LR_RETURN(std::optional{selectorData});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mock));
@@ -420,8 +420,8 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Selector Caching", "[.][orchestrator][s
         REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
             .RETURN(testDataFrame);
 
-        REQUIRE_CALL(*mock, GetEventMarkerData())
-            .RETURN(selectorData);
+        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
+            .LR_RETURN(std::optional{selectorData});
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mock));

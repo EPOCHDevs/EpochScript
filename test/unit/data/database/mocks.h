@@ -45,6 +45,38 @@ public:
                      std::unordered_map<std::string, std::string> = {}) const override {
     co_return std::unexpected("Not implemented in mock");
   }
+
+  // LoadCrossSectionalData and LoadCrossSectionalDataAsync stub implementations
+  std::expected<epoch_frame::DataFrame, std::string>
+  LoadCrossSectionalData(data_sdk::CrossSectionalDataCategory,
+                         const epoch_frame::Date&,
+                         const epoch_frame::Date&) const override {
+    return std::unexpected("Not implemented in mock");
+  }
+
+  drogon::Task<std::expected<epoch_frame::DataFrame, std::string>>
+  LoadCrossSectionalDataAsync(data_sdk::CrossSectionalDataCategory,
+                              const epoch_frame::Date&,
+                              const epoch_frame::Date&) const override {
+    co_return std::unexpected("Not implemented in mock");
+  }
+
+  // LoadIndicesData and LoadIndicesDataAsync stub implementations
+  std::expected<epoch_frame::DataFrame, std::string>
+  LoadIndicesData(const std::string&,
+                  const epoch_frame::Date&,
+                  const epoch_frame::Date&,
+                  bool = false) const override {
+    return std::unexpected("Not implemented in mock");
+  }
+
+  drogon::Task<std::expected<epoch_frame::DataFrame, std::string>>
+  LoadIndicesDataAsync(const std::string&,
+                       const epoch_frame::Date&,
+                       const epoch_frame::Date&,
+                       bool = false) const override {
+    co_return std::unexpected("Not implemented in mock");
+  }
 };
 
 class MockTransformGraph final : public epoch_script::runtime::IDataFlowOrchestrator {

@@ -7,7 +7,8 @@
 
 namespace epoch_script::reports {
 
-void TableReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const {
+void TableReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                                     epoch_tearsheet::DashboardBuilder &dashboard) const {
   try {
     // Filter by boolean column specified in select_key (like event_marker)
     // Note: select_key is already resolved to node_id#handle by compiler
@@ -36,7 +37,7 @@ void TableReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf) 
                 .fromDataFrame(resultDf);
 
     // Add table to dashboard
-    m_dashboard.addTable(tableBuilder.build());
+    dashboard.addTable(tableBuilder.build());
 
   } catch (const std::exception& e) {
     std::cerr << "Error: TableReport execution failed: " << e.what() << std::endl;

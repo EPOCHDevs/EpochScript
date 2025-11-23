@@ -15,7 +15,8 @@ public:
       : IReporter(std::move(config), true) {}
 
 protected:
-  void generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const override;
+  void generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                          epoch_tearsheet::DashboardBuilder &dashboard) const override;
 
   // Shared helper methods
   std::string GetCategory() const;

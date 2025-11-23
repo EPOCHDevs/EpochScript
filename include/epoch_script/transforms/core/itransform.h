@@ -6,31 +6,16 @@
 #include "memory"
 #include <epoch_frame/dataframe.h>
 #include <epoch_frame/series.h>
-#include "epoch_protos/tearsheet.pb.h"
+#include <epoch_protos/tearsheet.pb.h>
+#include <optional>
+#include <epoch_script/transforms/runtime/types.h>
+
+// Forward declaration
+namespace epoch_tearsheet {
+    class DashboardBuilder;
+}
 
 namespace epoch_script::transform {
-
-  // Forward declaration for EventMarkerData
-  struct EventMarkerData {
-    std::string title;
-    epoch_core::Icon icon;
-    std::vector<epoch_script::CardColumnSchema> schemas;
-    epoch_frame::DataFrame data;
-    std::optional<size_t> pivot_index;  // Index in schemas array pointing to Timestamp column for chart navigation
-
-    EventMarkerData() : icon(epoch_core::Icon::Info) {}
-    EventMarkerData(std::string title_,
-                 std::vector<epoch_script::CardColumnSchema> schemas_,
-                 epoch_frame::DataFrame data_,
-                 std::optional<size_t> pivot_index_ = std::nullopt,
-                 epoch_core::Icon icon_ = epoch_core::Icon::Info)
-        : title(std::move(title_)),
-          icon(icon_),
-          schemas(std::move(schemas_)),
-          data(std::move(data_)),
-          pivot_index(pivot_index_) {}
-  };
-
 struct ITransformBase {
 
   virtual std::string GetId() const = 0;
@@ -62,8 +47,23 @@ struct ITransformBase {
   virtual epoch_frame::DataFrame
   TransformData(const epoch_frame::DataFrame &) const = 0;
 
-  virtual  epoch_proto::TearSheet GetTearSheet() const = 0;
-  virtual  EventMarkerData GetEventMarkerData() const = 0;
+  // New stateless interfaces for reporters/event markers
+  // Child classes override these to provide dashboards/events based on transform output
+  virtual std::optional<epoch_tearsheet::DashboardBuilder>
+  GetDashboard(const epoch_frame::DataFrame &df) const = 0;
+
+  virtual std::optional<EventMarkerData>
+  GetEventMarkers(const epoch_frame::DataFrame &df) const = 0;
+
+  // Higher-order method that combines all interfaces
+  // Calls TransformData, then GetDashboard and GetEventMarkers with the result
+  virtual epoch_script::runtime::TransformResult
+  TransformDataWithMetadata(const epoch_frame::DataFrame &df) const = 0;
+
+  // Virtual method for getting required data sources
+  // Default returns metadata requiredDataSources, but transforms can override
+  // to do template expansion (e.g., FRED replaces {category} with actual option value)
+  virtual std::vector<std::string> GetRequiredDataSources() const = 0;
 
   virtual ~ITransformBase() = default;
 };
@@ -136,15 +136,26 @@ public:
     return os;
   }
 
-  epoch_proto::TearSheet GetTearSheet() const override {
-    return epoch_proto::TearSheet::default_instance();
+  // New stateless interface implementations - provide defaults
+  std::optional<epoch_tearsheet::DashboardBuilder>
+  GetDashboard(const epoch_frame::DataFrame &) const override {
+    return std::nullopt;  // Default: no dashboard
   }
 
-  EventMarkerData GetEventMarkerData() const override {
-    if (!m_eventMarkerData.has_value()) {
-      return {};  // Return empty EventMarkerData if not set
-    }
-    return m_eventMarkerData.value();
+  std::optional<EventMarkerData>
+  GetEventMarkers(const epoch_frame::DataFrame &) const override {
+    return std::nullopt;  // Default: no event markers
+  }
+
+  epoch_script::runtime::TransformResult
+  TransformDataWithMetadata(const epoch_frame::DataFrame &df) const override {
+    auto data = TransformData(df);
+    return {data, GetDashboard(data), GetEventMarkers(data)};
+  }
+
+  // Default implementation: return metadata's requiredDataSources as-is
+  std::vector<std::string> GetRequiredDataSources() const override {
+    return m_config.GetTransformDefinition().GetMetadata().requiredDataSources;
   }
 
   ~ITransform() override = default;
@@ -152,12 +163,6 @@ public:
 
 protected:
   TransformConfiguration m_config;
-  mutable std::optional<EventMarkerData> m_eventMarkerData;
-
-  // Protected setter for derived classes to populate event marker data
-  void SetEventMarkerData(EventMarkerData data) const {
-    m_eventMarkerData = std::move(data);
-  }
 
   static auto GetValidSeries(epoch_frame::Series const &input) {
     const auto output = input.loc(input.is_valid());
@@ -166,19 +171,6 @@ protected:
 
   epoch_frame::DataFrame MakeResult(epoch_frame::Series const &series) const {
     return series.to_frame(GetOutputId());
-  }
-
-  // Build column rename mapping for input-based SQL queries
-  // Maps input column names to SLOT0, SLOT1, SLOT2, etc. based on order
-  std::unordered_map<std::string, std::string> BuildVARGInputRenameMapping() const {
-    std::unordered_map<std::string, std::string> renameMap;
-    auto slot = m_config.GetInputs();
-    AssertFromStream(slot.size() == 1, "Expected a VARG");
-    for (auto const &[i, column] : std::views::enumerate(slot.begin()->second)) {
-      renameMap[column] = "SLOT" + std::to_string(i);
-    }
-
-    return renameMap;
   }
 };
 

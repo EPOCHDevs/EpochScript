@@ -19,17 +19,22 @@ public:
     // Filter by boolean column specified in select_key
     epoch_frame::DataFrame result = df.loc(df[m_schema.select_key]);
 
-    // Collect event marker data and store in base class
+    // Reset index to create pivot column for timestamp navigation
     result = result.reset_index("pivot");
-    this->SetEventMarkerData(EventMarkerData(
-      m_schema.title,
-      m_schema.schemas,
-      result,
-      m_schema.schemas.size()-1,
-      m_schema.icon
-    ));
 
     return result;
+  }
+
+  // Override GetEventMarkers to return event marker data based on transformed DataFrame
+  std::optional<EventMarkerData>
+  GetEventMarkers(const epoch_frame::DataFrame &df) const override {
+    return EventMarkerData(
+      m_schema.title,
+      m_schema.schemas,
+      df,
+      m_schema.schemas.size()-1,  // pivot_index points to the last schema (pivot column)
+      m_schema.icon
+    );
   }
 
   EventMarkerSchema GetSchema() const { return m_schema; }

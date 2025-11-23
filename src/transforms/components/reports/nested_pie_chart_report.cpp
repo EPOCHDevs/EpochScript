@@ -8,7 +8,8 @@
 
 namespace epoch_script::reports {
 
-void NestedPieChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const {
+void NestedPieChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                                     epoch_tearsheet::DashboardBuilder &dashboard) const {
   try {
     // Get column names from input mapping
     auto innerLabelColumn = m_config.GetInput("inner_label");
@@ -35,7 +36,7 @@ void NestedPieChartReport::generateTearsheet(const epoch_frame::DataFrame &norma
     chartBuilder.addSeries(innerLabelColumn, inner_pie_data, epoch_tearsheet::PieSize{45},
                       epoch_tearsheet::PieInnerSize{0});
 
-    m_dashboard.addChart(chartBuilder.build());
+    dashboard.addChart(chartBuilder.build());
 
   } catch (const std::exception& e) {
     std::cerr << "Error: NestedPieChartReport execution failed: " << e.what() << std::endl;

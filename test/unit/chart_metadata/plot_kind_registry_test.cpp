@@ -439,7 +439,7 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
     auto close_cfg = [&]() {
       YAML::Node inputs;
       YAML::Node options;
-      options["index"] = "SP500";
+      options["ticker"] = "SPX";
       return transform::run_op("common_indices", "1", inputs, options, tf);
     }();
 

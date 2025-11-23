@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sstream>
 #include <spdlog/spdlog.h>
+#include <epoch_frame/series.h>
 
 namespace epoch_script::runtime::test {
 

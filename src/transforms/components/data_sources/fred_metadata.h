@@ -19,13 +19,14 @@ MakeFREDDataSource() {
   // Build outputs from SDK metadata
   auto outputs = BuildOutputsFromSDKMetadata(sdkMetadata);
 
-  // Build required data sources from SDK metadata
-  auto requiredDataSources = BuildRequiredDataSourcesFromSDKMetadata(sdkMetadata);
+  // Build required data sources from SDK metadata with template placeholder
+  // This creates strings like "ECON:{category}:observation_date"
+  auto requiredDataSources = BuildRequiredDataSourcesFromSDKMetadata(sdkMetadata, "category");
 
   // Single FRED transform with category SelectOption
   metadataList.emplace_back(
       epoch_script::transforms::TransformsMetaData{
-          .id = "economic_indicator",
+          .id = epoch_script::fred::ECONOMIC_INDICATOR,
           .category = epoch_core::TransformCategory::DataSource,
           .plotKind = epoch_core::TransformPlotKind::flag,
           .name = "Economic Indicator",

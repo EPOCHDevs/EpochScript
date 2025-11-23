@@ -70,11 +70,15 @@ TEST_CASE("FinBERT Sentiment Transform - Configuration", "[ml][finbert][config]"
     REQUIRE(metadata.plotKind == TransformPlotKind::sentiment);
 
     // Verify outputs
-    REQUIRE(metadata.outputs.size() == 2);
-    REQUIRE(metadata.outputs[0].id == "sentiment");
-    REQUIRE(metadata.outputs[0].type == IODataType::String);
-    REQUIRE(metadata.outputs[1].id == "score");
-    REQUIRE(metadata.outputs[1].type == IODataType::Decimal);
+    REQUIRE(metadata.outputs.size() == 4);
+    REQUIRE(metadata.outputs[0].id == "positive");
+    REQUIRE(metadata.outputs[0].type == IODataType::Boolean);
+    REQUIRE(metadata.outputs[1].id == "neutral");
+    REQUIRE(metadata.outputs[1].type == IODataType::Boolean);
+    REQUIRE(metadata.outputs[2].id == "negative");
+    REQUIRE(metadata.outputs[2].type == IODataType::Boolean);
+    REQUIRE(metadata.outputs[3].id == "confidence");
+    REQUIRE(metadata.outputs[3].type == IODataType::Decimal);
   }
 }
 
@@ -101,34 +105,44 @@ TEST_CASE("FinBERT Sentiment Transform - Integration Test",
     DataFrame output = transform->TransformData(input);
 
     // Verify output structure
-    REQUIRE(output.num_cols() == 2);
-    REQUIRE(output.contains(config.GetOutputId("sentiment")));
-    REQUIRE(output.contains(config.GetOutputId("score")));
+    REQUIRE(output.num_cols() == 4);
+    REQUIRE(output.contains(config.GetOutputId("positive")));
+    REQUIRE(output.contains(config.GetOutputId("neutral")));
+    REQUIRE(output.contains(config.GetOutputId("negative")));
+    REQUIRE(output.contains(config.GetOutputId("confidence")));
     REQUIRE(output.size() == 5);
 
-    // Get sentiment and score columns
-    auto sentiment_col = output[config.GetOutputId("sentiment")];
-    auto score_col = output[config.GetOutputId("score")];
+    // Get output columns
+    auto positive_col = output[config.GetOutputId("positive")];
+    auto neutral_col = output[config.GetOutputId("neutral")];
+    auto negative_col = output[config.GetOutputId("negative")];
+    auto confidence_col = output[config.GetOutputId("confidence")];
 
     // Verify first result (positive sentiment expected)
-    REQUIRE(sentiment_col.iloc(0).repr() == "positive");
-    REQUIRE(score_col.iloc(0).as_double() > 0.9);
+    REQUIRE(positive_col.iloc(0).as_bool() == true);
+    REQUIRE(neutral_col.iloc(0).as_bool() == false);
+    REQUIRE(negative_col.iloc(0).as_bool() == false);
+    REQUIRE(confidence_col.iloc(0).as_double() > 0.9);
 
     // Verify second result (negative sentiment expected)
-    REQUIRE(sentiment_col.iloc(1).repr() == "negative");
-    REQUIRE(score_col.iloc(1).as_double() > 0.9);
+    REQUIRE(positive_col.iloc(1).as_bool() == false);
+    REQUIRE(neutral_col.iloc(1).as_bool() == false);
+    REQUIRE(negative_col.iloc(1).as_bool() == true);
+    REQUIRE(confidence_col.iloc(1).as_double() > 0.9);
 
-    // Verify all scores are in valid range
+    // Verify all results have valid structure
     for (size_t i = 0; i < output.size(); ++i) {
-      double score = score_col.iloc(i).as_double();
-      REQUIRE(score >= 0.0);
-      REQUIRE(score <= 1.0);
+      // Confidence score should be in valid range
+      double confidence = confidence_col.iloc(i).as_double();
+      REQUIRE(confidence >= 0.0);
+      REQUIRE(confidence <= 1.0);
 
-      // Verify sentiment is one of the valid labels
-      std::string sentiment = sentiment_col.iloc(i).repr();
-      REQUIRE((sentiment == "positive" ||
-               sentiment == "neutral" ||
-               sentiment == "negative"));
+      // Exactly one sentiment flag should be true
+      bool pos = positive_col.iloc(i).as_bool();
+      bool neu = neutral_col.iloc(i).as_bool();
+      bool neg = negative_col.iloc(i).as_bool();
+      int count = (pos ? 1 : 0) + (neu ? 1 : 0) + (neg ? 1 : 0);
+      REQUIRE(count == 1);
     }
   }
 }

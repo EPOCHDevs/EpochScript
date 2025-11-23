@@ -12,26 +12,23 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakePolygonIndi
   using namespace epoch_script::data_sources;
   std::vector<epoch_script::transforms::TransformsMetaData> metadataList;
 
-  // Get metadata from MetadataRegistry for market bars (indices use same schema as stocks)
-  // Note: Indices can be either DailyBars or MinuteBars depending on timeframe
-  auto dailyBarsMeta = data_sdk::dataloader::MetadataRegistry::GetMetadataForCategory(DataCategory::DailyBars);
-  auto minuteBarsMeta = data_sdk::dataloader::MetadataRegistry::GetMetadataForCategory(DataCategory::MinuteBars);
+  // Get metadata from MetadataRegistry for indices (is_eod=true for daily bars)
+  auto indicesMetadata = data_sdk::dataloader::MetadataRegistry::GetIndicesMetadata(true);
 
   // Build outputs from SDK metadata
-  auto outputs = BuildOutputsFromSDKMetadata(dailyBarsMeta);
+  auto outputs = BuildOutputsFromSDKMetadata(indicesMetadata);
 
   // Common Indices with SelectOption dropdown
-  // Note: Uses DailyBars metadata by default, but actual category is determined at runtime based on timeframe
   metadataList.emplace_back(epoch_script::transforms::TransformsMetaData{
-      .id = "common_indices",
+      .id = epoch_script::polygon::COMMON_INDICES,
       .category = epoch_core::TransformCategory::DataSource,
       .plotKind = epoch_core::TransformPlotKind::close_line,
       .name = "Common Indices",
       .options =
           {
               MetaDataOption{
-                  .id = "index",
-                  .name = "Index",
+                  .id = "ticker",
+                  .name = "Index Ticker",
                   .type = epoch_core::MetaDataOptionType::Select,
                   .defaultValue = MetaDataOptionDefinition(std::string("SPX")),
                   .selectOption =
@@ -49,11 +46,11 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakePolygonIndi
                       },
                   .desc = "Select the market index"},
           },
-      .desc = dailyBarsMeta.description,
+      .desc = indicesMetadata.description,
       .inputs = {},
       .outputs = outputs,
       .requiresTimeFrame = true,
-      .requiredDataSources = {"c"},  // Indices load data internally, "c" is just to get proper index
+      .requiredDataSources = {"IDX:{ticker}:c", "IDX:{ticker}:o", "IDX:{ticker}:h", "IDX:{ticker}:l"},
       .intradayOnly = false,
       .allowNullInputs = false,
       .strategyTypes = {"market-regime", "index-analysis", "correlation", "hedge"},
@@ -67,9 +64,8 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakePolygonIndi
   });
 
   // Dynamic Indices with ticker parameter
-  // Note: Uses DailyBars metadata by default, but actual category is determined at runtime based on timeframe
   metadataList.emplace_back(epoch_script::transforms::TransformsMetaData{
-      .id = "indices",
+      .id = epoch_script::polygon::INDICES,
       .category = epoch_core::TransformCategory::DataSource,
       .plotKind = epoch_core::TransformPlotKind::close_line,
       .name = "Indices",
@@ -82,11 +78,11 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakePolygonIndi
                   .defaultValue = MetaDataOptionDefinition(std::string("SPX")),
                   .desc = "Index ticker symbol (e.g., SPX, DJI, NDX, DAX, FTSE)"},
           },
-      .desc = dailyBarsMeta.description,
+      .desc = indicesMetadata.description,
       .inputs = {},
       .outputs = outputs,
       .requiresTimeFrame = true,
-      .requiredDataSources = {"c"},  // Indices load data internally, "c" is just to get proper index
+      .requiredDataSources = {"IDX:{ticker}:c", "IDX:{ticker}:o", "IDX:{ticker}:h", "IDX:{ticker}:l"},
       .intradayOnly = false,
       .allowNullInputs = false,
       .strategyTypes = {"market-regime", "index-analysis", "correlation", "hedge"},

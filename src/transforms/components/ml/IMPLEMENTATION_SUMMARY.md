@@ -130,11 +130,11 @@ static constexpr size_t BATCH_SIZE = 100;
 ```cpp
 // In EpochScript DSL
 news = polygon_news()
-sentiment = finbert_sentiment(news.headline)
+sentiment = finbert_sentiment(news.description)
 
 // Access outputs
-positive_news = sentiment.sentiment == text('positive')
-high_confidence = sentiment.score > number(0.8)
+positive_news = sentiment.positive
+high_conf_positive = sentiment.positive and sentiment.confidence > number(0.8)
 ```
 
 ## Performance

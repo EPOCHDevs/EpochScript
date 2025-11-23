@@ -17,6 +17,14 @@ public:
     for (auto const &outputMetaData : config.GetOutputs()) {
       m_replacements[outputMetaData.id] = config.GetOutputId(outputMetaData.id);
     }
+
+    // Extract ticker for indices transforms (for early validation)
+    auto transformName = config.GetTransformName();
+    if (transformName == epoch_script::polygon::COMMON_INDICES) {
+      m_ticker = config.GetOptionValue("ticker").GetSelectOption();
+    } else if (transformName == epoch_script::polygon::INDICES) {
+      m_ticker = config.GetOptionValue("ticker").GetString();
+    }
   }
 
   [[nodiscard]] epoch_frame::DataFrame
@@ -27,7 +35,25 @@ public:
     return data.rename(m_replacements);
   }
 
+  // Override to expand {ticker} placeholder for indices transforms
+  std::vector<std::string> GetRequiredDataSources() const override {
+    auto requiredDataSources = ITransform::GetRequiredDataSources();
+
+    // If ticker is set (indices transforms), replace placeholder
+    if (!m_ticker.empty()) {
+      for (auto& dataSource : requiredDataSources) {
+        size_t pos = dataSource.find("{ticker}");
+        if (pos != std::string::npos) {
+          dataSource.replace(pos, 8, m_ticker);  // 8 = length of "{ticker}"
+        }
+      }
+    }
+
+    return requiredDataSources;
+  }
+
 private:
+  std::string m_ticker;
   std::unordered_map<std::string, std::string> m_replacements;
 };
 

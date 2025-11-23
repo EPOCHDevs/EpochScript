@@ -15,6 +15,14 @@
 
 // Sentiment result structure (internal to implementation)
 struct SentimentItem {
+  bool positive;
+  bool neutral;
+  bool negative;
+  double confidence;
+};
+
+// Raw sentiment item for JSON parsing (matches API response format)
+struct RawSentimentItem {
   std::string label;
   double score;
 };
@@ -52,7 +60,8 @@ SageMakerFinBERTTransform::InvokeFinBERTBatch(
     auto payload_result = glz::write_json(req_data);
     if (!payload_result) {
       spdlog::error("Failed to serialize FinBERT request");
-      return std::vector<SentimentItem>(texts.size(), SentimentItem{"neutral", 0.0});
+      return std::vector<SentimentItem>(texts.size(),
+                                       SentimentItem{false, true, false, 0.0});
     }
     std::string payload_str = payload_result.value();
 
@@ -68,7 +77,7 @@ SageMakerFinBERTTransform::InvokeFinBERTBatch(
                     outcome.GetError().GetMessage());
       // Return neutral sentiment for all on error
       return std::vector<SentimentItem>(
-          texts.size(), SentimentItem{"neutral", 0.0});
+          texts.size(), SentimentItem{false, true, false, 0.0});
     }
 
     // Parse response
@@ -84,7 +93,7 @@ SageMakerFinBERTTransform::InvokeFinBERTBatch(
     spdlog::error("Exception during FinBERT batch inference: {}", e.what());
     // Return neutral sentiment for all on error
     return std::vector<SentimentItem>(
-        texts.size(), SentimentItem{"neutral", 0.0});
+        texts.size(), SentimentItem{false, true, false, 0.0});
   }
 }
 
@@ -97,8 +106,8 @@ SageMakerFinBERTTransform::ParseFinBERTBatchResponse(
     // FinBERT batch returns: [{'label': 'positive', 'score': 0.948}, ...]
     // Flat array of results, one per input
 
-    std::vector<SentimentItem> batch_results;
-    auto parse_error = glz::read_json(batch_results, response_body);
+    std::vector<RawSentimentItem> raw_results;
+    auto parse_error = glz::read_json(raw_results, response_body);
 
     if (parse_error) {
       spdlog::error("Failed to parse FinBERT batch response: {}",
@@ -106,19 +115,30 @@ SageMakerFinBERTTransform::ParseFinBERTBatchResponse(
       return {};
     }
 
-    // Normalize labels to lowercase and validate
-    for (auto &result : batch_results) {
-      std::string label = result.label;
+    // Convert to boolean flag format
+    std::vector<SentimentItem> batch_results;
+    batch_results.reserve(raw_results.size());
+
+    for (const auto &raw : raw_results) {
+      std::string label = raw.label;
       std::transform(label.begin(), label.end(), label.begin(), ::tolower);
 
-      // Validate label
-      if (label != "positive" && label != "negative" && label != "neutral") {
-        spdlog::warn("Unexpected FinBERT label: {}, defaulting to neutral",
-                     label);
-        result.label = "neutral";
-      } else {
-        result.label = label;
+      // Convert string label to boolean flags
+      SentimentItem item{
+        .positive = (label == "positive"),
+        .neutral = (label == "neutral"),
+        .negative = (label == "negative"),
+        .confidence = raw.score
+      };
+
+      // Validate that exactly one flag is set
+      if (!item.positive && !item.neutral && !item.negative) {
+        spdlog::warn("Unexpected FinBERT label: {}, defaulting to neutral", label);
+        item.neutral = true;
+        item.confidence = 0.0;
       }
+
+      batch_results.push_back(item);
     }
 
     return batch_results;
@@ -139,11 +159,15 @@ epoch_frame::DataFrame SageMakerFinBERTTransform::TransformData(
   Series input = bars[GetInputId()];
   const size_t total_size = input.size();
 
-  // Reserve output vectors
-  std::vector<std::string> all_sentiments;
-  std::vector<double> all_scores;
-  all_sentiments.reserve(total_size);
-  all_scores.reserve(total_size);
+  // Reserve output vectors for 4 columns
+  std::vector<bool> all_positive;
+  std::vector<bool> all_neutral;
+  std::vector<bool> all_negative;
+  std::vector<double> all_confidence;
+  all_positive.reserve(total_size);
+  all_neutral.reserve(total_size);
+  all_negative.reserve(total_size);
+  all_confidence.reserve(total_size);
 
   // Process in batches
   for (size_t batch_start = 0; batch_start < total_size; batch_start += BATCH_SIZE) {
@@ -167,16 +191,20 @@ epoch_frame::DataFrame SageMakerFinBERTTransform::TransformData(
                     batch_size, batch_results.size());
       // Fill with neutral for this batch
       for (size_t i = 0; i < batch_size; ++i) {
-        all_sentiments.push_back("neutral");
-        all_scores.push_back(0.0);
+        all_positive.push_back(false);
+        all_neutral.push_back(true);
+        all_negative.push_back(false);
+        all_confidence.push_back(0.0);
       }
       continue;
     }
 
     // Append results
     for (const auto &result : batch_results) {
-      all_sentiments.push_back(result.label);
-      all_scores.push_back(result.score);
+      all_positive.push_back(result.positive);
+      all_neutral.push_back(result.neutral);
+      all_negative.push_back(result.negative);
+      all_confidence.push_back(result.confidence);
     }
 
 #ifndef NDEBUG
@@ -186,14 +214,16 @@ epoch_frame::DataFrame SageMakerFinBERTTransform::TransformData(
   }
 
   // Create output series using factory
-  auto sentiment_array = factory::array::make_array(all_sentiments);
-  auto score_array = factory::array::make_array(all_scores);
+  auto positive_array = factory::array::make_array(all_positive);
+  auto neutral_array = factory::array::make_array(all_neutral);
+  auto negative_array = factory::array::make_array(all_negative);
+  auto confidence_array = factory::array::make_array(all_confidence);
 
-  // Return DataFrame with two columns: sentiment and score
+  // Return DataFrame with four columns: positive, neutral, negative, confidence
   return make_dataframe(
       bars.index(),
-      {sentiment_array, score_array},
-      {GetOutputId("sentiment"), GetOutputId("score")});
+      {positive_array, neutral_array, negative_array, confidence_array},
+      {GetOutputId("positive"), GetOutputId("neutral"), GetOutputId("negative"), GetOutputId("confidence")});
 }
 
 } // namespace epoch_script::transform

@@ -28,7 +28,8 @@ public:
        m_vertical(m_config.GetOptionValue("vertical").GetBoolean()) {}
 
 protected:
- void generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const override;
+ void generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                          epoch_tearsheet::DashboardBuilder &dashboard) const override;
 
 private:
  const epoch_core::BarChartAgg m_agg;

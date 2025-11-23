@@ -2,46 +2,48 @@
 
 #include <epoch_script/transforms/core/itransform.h>
 #include <epoch_frame/dataframe.h>
-#include <epoch_frame/factory/dataframe_factory.h>
-#include <epoch_frame/factory/index_factory.h>
-#include <epoch_data_sdk/dataloader/options.hpp>
 #include <unordered_map>
 
 namespace epoch_script::transform {
 
 // Transform for FRED economic indicators
-// Auto-derives date range from input DataFrame and returns publication events
-// Requires external loader to provide FRED data via TransformData input parameter
+// Cross-sectional transform: receives data for all assets, returns single-column broadcast
+// External loader fetches FRED data based on date range from input data
 class FREDTransform final : public ITransform {
 public:
   explicit FREDTransform(const TransformConfiguration &config)
       : ITransform(config),
-        m_indicator(config.GetOptionValue("category")
-                        .GetSelectOption<epoch_core::MacroEconomicsIndicator>()) {
+        m_category(config.GetOptionValue("category").GetSelectOption()) {
     // Build column rename mapping from FRED API field names to output IDs
     for (auto const &outputMetaData : config.GetOutputs()) {
       m_replacements[outputMetaData.id] = config.GetOutputId(outputMetaData.id);
     }
   }
 
-  [[nodiscard]] epoch_core::MacroEconomicsIndicator GetIndicator() const {
-    return m_indicator;
-  }
-
   [[nodiscard]] epoch_frame::DataFrame
   TransformData(epoch_frame::DataFrame const &fred_data) const override {
-    // External loader has already:
-    // 1. Extracted backtest date range from market data
-    // 2. Called FRED API with published_from/published_to = backtest range
-    // 3. Returned DataFrame indexed by published_at with columns: observation_date, value
-    // 4. Reindexed to match market data timeline (values only on publication dates)
-    //
-    // We just rename columns to match the node's output IDs
+    // External loader provides FRED data already indexed and formatted
+    // Just rename columns to match the node's output IDs
     return fred_data.rename(m_replacements);
   }
 
+  // Override to expand {category} placeholder in requiredDataSources
+  std::vector<std::string> GetRequiredDataSources() const override {
+    auto requiredDataSources = ITransform::GetRequiredDataSources();
+
+    // Replace {category} with actual category value
+    for (auto& dataSource : requiredDataSources) {
+      size_t pos = dataSource.find("{category}");
+      if (pos != std::string::npos) {
+        dataSource.replace(pos, 10, m_category);  // 10 = length of "{category}"
+      }
+    }
+
+    return requiredDataSources;
+  }
+
 private:
-  epoch_core::MacroEconomicsIndicator m_indicator;
+  std::string m_category;
   std::unordered_map<std::string, std::string> m_replacements;
 };
 

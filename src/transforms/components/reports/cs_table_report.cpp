@@ -9,7 +9,8 @@
 
 namespace epoch_script::reports {
 
-void CSTableReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf) const {
+void CSTableReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
+                                     epoch_tearsheet::DashboardBuilder &dashboard) const {
   using namespace epoch_frame;
 
   if (normalizedDf.empty() || normalizedDf.num_cols() == 0) {
@@ -111,7 +112,7 @@ void CSTableReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf
               .fromDataFrame(df);
 
   // Add table to dashboard
-  m_dashboard.addTable(tableBuilder.build());
+  dashboard.addTable(tableBuilder.build());
 }
 
 } // namespace epoch_script::reports

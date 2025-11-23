@@ -181,7 +181,7 @@ vwap_daily = vwap(timeframe="1D")
 trades_daily = trade_count(timeframe="1D")
 
 # Index data
-spy_index = common_indices(index="SPX", timeframe="1D")
+spy_index = common_indices(ticker="SPX", timeframe="1D")
 vix_index = indices(ticker="VIX", timeframe="1D")
 
 # Fundamental data (quarterly/annual)
@@ -232,6 +232,7 @@ vix_index = indices(ticker="VIX", timeframe="1Min")
 
 # News (intraday timestamps)
 news_data = news(timeframe="1Min")
+sentiment = finbert_sentiment(timeframe="1Min")(news_data.description)
 )";
         } else if (config.profile == "mixed") {
             // Profile 3: Mixed timeframes - combination of intraday and lower-frequency data

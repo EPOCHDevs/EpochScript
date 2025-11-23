@@ -43,8 +43,8 @@ TEST_CASE("Common Indices Configuration", "[polygon_indices][common_indices]") {
     REQUIRE(commonIndices.options.size() == 1);
     auto& indexOption = commonIndices.options[0];
 
-    REQUIRE(indexOption.id == "index");
-    REQUIRE(indexOption.name == "Index");
+    REQUIRE(indexOption.id == "ticker");
+    REQUIRE(indexOption.name == "Index Ticker");
     REQUIRE(indexOption.type == epoch_core::MetaDataOptionType::Select);
     REQUIRE(indexOption.desc == "Select the market index");
   }
@@ -70,10 +70,10 @@ TEST_CASE("Common Indices Configuration", "[polygon_indices][common_indices]") {
   }
 
   SECTION("Has correct output fields") {
-    // SDK returns 7 outputs: o, h, l, c, v, vw, n
-    REQUIRE(commonIndices.outputs.size() == 7);
+    // SDK returns 4 OHLC outputs (v is in requiredDataSources)
+    REQUIRE(commonIndices.outputs.size() == 4);
 
-    // Verify core OHLC outputs are present
+    // Verify core OHLC outputs are present (SDK returns them as o, h, l, c)
     REQUIRE(commonIndices.outputs[0].id == "o");
     REQUIRE(commonIndices.outputs[0].name == "Open");
     REQUIRE(commonIndices.outputs[0].type == epoch_core::IODataType::Decimal);
@@ -95,10 +95,13 @@ TEST_CASE("Common Indices Configuration", "[polygon_indices][common_indices]") {
     REQUIRE(commonIndices.inputs.empty());
   }
 
-  SECTION("Has requiredDataSources set to c") {
-    // Indices load data internally, requiredDataSources just has "c" to get proper DataFrame index
-    REQUIRE(commonIndices.requiredDataSources.size() == 1);
-    REQUIRE(commonIndices.requiredDataSources[0] == "c");
+  SECTION("Has requiredDataSources for OHLC") {
+    // Indices load data internally using template patterns (no volume)
+    REQUIRE(commonIndices.requiredDataSources.size() == 4);
+    REQUIRE(commonIndices.requiredDataSources[0] == "IDX:{ticker}:c");
+    REQUIRE(commonIndices.requiredDataSources[1] == "IDX:{ticker}:o");
+    REQUIRE(commonIndices.requiredDataSources[2] == "IDX:{ticker}:h");
+    REQUIRE(commonIndices.requiredDataSources[3] == "IDX:{ticker}:l");
   }
 
   SECTION("Has strategy metadata") {
@@ -127,10 +130,10 @@ TEST_CASE("Dynamic Indices Configuration", "[polygon_indices][indices]") {
   }
 
   SECTION("Has same output fields as common_indices") {
-    // SDK returns 7 outputs: o, h, l, c, v, vw, n
-    REQUIRE(indices.outputs.size() == 7);
+    // SDK returns 4 OHLC outputs
+    REQUIRE(indices.outputs.size() == 4);
 
-    // Verify core OHLC outputs are present
+    // Verify core OHLC outputs are present (SDK returns them as o, h, l, c)
     REQUIRE(indices.outputs[0].id == "o");
     REQUIRE(indices.outputs[0].name == "Open");
     REQUIRE(indices.outputs[0].type == epoch_core::IODataType::Decimal);
@@ -152,10 +155,13 @@ TEST_CASE("Dynamic Indices Configuration", "[polygon_indices][indices]") {
     REQUIRE(indices.inputs.empty());
   }
 
-  SECTION("Has requiredDataSources set to c") {
-    // Indices load data internally, requiredDataSources just has "c" to get proper DataFrame index
-    REQUIRE(indices.requiredDataSources.size() == 1);
-    REQUIRE(indices.requiredDataSources[0] == "c");
+  SECTION("Has requiredDataSources for OHLC") {
+    // Indices load data internally using template patterns (no volume)
+    REQUIRE(indices.requiredDataSources.size() == 4);
+    REQUIRE(indices.requiredDataSources[0] == "IDX:{ticker}:c");
+    REQUIRE(indices.requiredDataSources[1] == "IDX:{ticker}:o");
+    REQUIRE(indices.requiredDataSources[2] == "IDX:{ticker}:h");
+    REQUIRE(indices.requiredDataSources[3] == "IDX:{ticker}:l");
   }
 
   SECTION("Has comprehensive descriptions") {
