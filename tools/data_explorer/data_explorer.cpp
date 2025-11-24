@@ -227,13 +227,13 @@ sentiment = finbert_sentiment(timeframe="1D")(news_data.description)
             // Profile 2: Intraday only - minute-level market data + news
             epochscript_code = R"(
 # Market data at 1-minute timeframe
-# market_data = market_data_source(timeframe="1Min")
-# vwap_intraday = vwap(timeframe="1Min")
-# trades_intraday = trade_count(timeframe="1Min")
+market_data = market_data_source(timeframe="1Min")
+vwap_intraday = vwap(timeframe="1Min")
+trades_intraday = trade_count(timeframe="1Min")
 
 # Index data
-# spy_index = common_indices(ticker="SPX", timeframe="1Min")
-# vix_index = indices(ticker="VIX", timeframe="1Min")
+spy_index = common_indices(ticker="SPX", timeframe="1Min")
+vix_index = indices(ticker="VIX", timeframe="1Min")
 )";
         } else if (config.profile == "mixed") {
             // Profile 3: Mixed timeframes - combination of intraday and lower-frequency data
@@ -260,7 +260,7 @@ vwap_quarterly = vwap(timeframe="1QE")
 trades_quarterly = trade_count(timeframe="1QE")
 
 # Index data at various timeframes
-spy_daily = common_indices(index="SPX", timeframe="1D")
+spy_daily = common_indices(ticker="SPX", timeframe="1D")
 vix_daily = indices(ticker="VIX", timeframe="1D")
 
 # Economic indicators at various frequencies

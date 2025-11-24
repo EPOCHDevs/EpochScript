@@ -27,7 +27,6 @@ namespace epoch_script::transform
       auto schema = group_df.column_names();
       for (const auto& col_name : schema) {
         auto field = df.table()->schema()->GetFieldByName(col_name);
-        auto type_id = field->type()->id();
         arrow::ScalarPtr aggregated_value;
 
         // Priority 1: Check for OHLCV column names (using predefined constants)
@@ -52,29 +51,6 @@ namespace epoch_script::transform
         }
         else if (col_name == "n") { // count/number
           aggregated_value = group_df[col_name].sum().value(); // sum
-        }
-        // Priority 3: Type-based aggregation for all other columns
-        else if (arrow::is_floating(type_id)) {
-          aggregated_value = group_df[col_name].mean().value(); // float → average
-        }
-        else if (arrow::is_integer(type_id)) {
-          aggregated_value = group_df[col_name].sum().value(); // integer → sum
-        }
-        else if (arrow::is_binary_like(type_id) || arrow::is_large_binary_like(type_id)) {
-          // String → comma-separated concatenation
-          std::string concatenated;
-          auto series = group_df[col_name];
-          for (uint64_t i = 0; i < series.size(); ++i) {
-            auto scalar = series.iloc(i).value();
-            if (!scalar->is_valid) continue;
-            auto str_scalar = std::static_pointer_cast<arrow::StringScalar>(scalar);
-            if (!concatenated.empty()) concatenated += ",";
-            concatenated += str_scalar->ToString();
-          }
-          aggregated_value = arrow::MakeScalar(concatenated);
-        }
-        else if (arrow::is_temporal(type_id)) {
-          aggregated_value = group_df[col_name].max().value(); // timestamp → max
         }
         else {
           // Default: take last value
