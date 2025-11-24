@@ -16,11 +16,10 @@ MakeFREDDataSource() {
   // Get metadata from MetadataRegistry for ALFRED (FRED with revision tracking)
   auto sdkMetadata = data_sdk::dataloader::MetadataRegistry::GetAlfredMetadata();
 
-  // Build outputs from SDK metadata
+  // Build outputs with simple IDs (e.g., "value", "observation_date") for AST compiler validation
   auto outputs = BuildOutputsFromSDKMetadata(sdkMetadata);
 
-  // Build required data sources from SDK metadata with template placeholder
-  // This creates strings like "ECON:{category}:observation_date"
+  // Build requiredDataSources with {category} placeholder for data loading
   auto requiredDataSources = BuildRequiredDataSourcesFromSDKMetadata(sdkMetadata, "category");
 
   // Single FRED transform with category SelectOption
@@ -88,7 +87,7 @@ MakeFREDDataSource() {
           .requiresTimeFrame = true,
           .requiredDataSources = requiredDataSources,
           .intradayOnly = false,
-          .allowNullInputs = false,
+          .allowNullInputs = true,  // Economic data is sparse (monthly/quarterly) - keep null rows
           .flagSchema = epoch_script::transforms::FlagSchema{
               .icon = epoch_core::Icon::LineChart,
               .text = "Economic Indicator<br/>Value: {value}",

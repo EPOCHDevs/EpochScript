@@ -26,12 +26,18 @@ epoch_frame::DataFrame IntermediateResultStorage::GatherInputs(
     const AssetID &asset_id,
     const epoch_script::transform::ITransformBase &transformer) const {
   const auto targetTimeframe = transformer.GetTimeframe().ToString();
-  const auto dataSources = transformer.GetConfiguration()
-                               .GetTransformDefinition()
-                               .GetMetadata()
-                               .requiredDataSources;
+  const auto dataSources = transformer.GetRequiredDataSources();  // Use interface method for template expansion
 
   const auto transformInputs = transformer.GetInputIds();
+
+#ifndef NDEBUG
+  // DEBUG: Log what data sources this transform needs
+  SPDLOG_DEBUG("Transform {} requesting {} data sources for asset {}",
+               transformer.GetId(), dataSources.size(), asset_id);
+  for (const auto& ds [[maybe_unused]] : dataSources) {
+    SPDLOG_DEBUG("  - Requested data source: {}", ds);
+  }
+#endif
 
   if (transformInputs.empty()) {
     SPDLOG_DEBUG(
@@ -39,7 +45,6 @@ epoch_frame::DataFrame IntermediateResultStorage::GatherInputs(
         asset_id, targetTimeframe, transformer.GetId());
     std::shared_lock lock(m_baseDataMutex);
     auto result = epoch_core::lookup(epoch_core::lookup(m_baseData, targetTimeframe), asset_id);
-
     // If requiredDataSources is specified, filter to only those columns
     if (!dataSources.empty()) {
       std::vector<std::string> availableCols;
@@ -156,6 +161,17 @@ epoch_frame::DataFrame IntermediateResultStorage::GatherInputs(
     auto& assetData = assetIt->second;
 
     if (!assetData.contains(dataSource)) {
+      // DEBUG: Log what columns ARE available for this asset
+      auto availableCols = assetData.column_names();
+      SPDLOG_INFO("Transform {} looking for '{}' in asset {} - NOT FOUND",
+                  transformer.GetId(), dataSource, asset_id);
+      SPDLOG_INFO("  Available columns in base data ({} total):", availableCols.size());
+      for (size_t i = 0; i < std::min(availableCols.size(), size_t(10)); ++i) {
+        SPDLOG_INFO("    - {}", availableCols[i]);
+      }
+      if (availableCols.size() > 10) {
+        SPDLOG_INFO("    ... and {} more", availableCols.size() - 10);
+      }
       continue; // Skip missing columns entirely - don't waste space with full null columns
     }
 
@@ -171,10 +187,7 @@ bool IntermediateResultStorage::ValidateInputsAvailable(
     const AssetID &asset_id,
     const epoch_script::transform::ITransformBase &transformer) const {
   const auto targetTimeframe = transformer.GetTimeframe().ToString();
-  const auto dataSources = transformer.GetConfiguration()
-                               .GetTransformDefinition()
-                               .GetMetadata()
-                               .requiredDataSources;
+  const auto dataSources = transformer.GetRequiredDataSources();  // Use interface method for template expansion
   const auto transformInputs = transformer.GetInputIds();
 
   // If no inputs required, validation passes
@@ -266,8 +279,19 @@ bool IntermediateResultStorage::ValidateInputsAvailable(
 
     auto& assetData = assetIt->second;
     if (!assetData.contains(dataSource)) {
+#ifndef NDEBUG
+      // DEBUG: Show what columns ARE available
+      auto availableCols = assetData.column_names();
       SPDLOG_DEBUG("Validation failed: base data missing column '{}' for asset '{}', timeframe '{}'",
                    dataSource, asset_id, targetTimeframe);
+      SPDLOG_DEBUG("  Available columns ({} total):", availableCols.size());
+      for (size_t i = 0; i < std::min(availableCols.size(), size_t(20)); ++i) {
+        SPDLOG_DEBUG("    - {}", availableCols[i]);
+      }
+      if (availableCols.size() > 20) {
+        SPDLOG_DEBUG("    ... and {} more", availableCols.size() - 20);
+      }
+#endif
       return false;
     }
   }

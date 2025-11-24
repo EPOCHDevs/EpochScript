@@ -91,27 +91,8 @@ namespace epoch_script
 
     struct glaze_json_schema {
       // Helper to build icon enumeration from IconWrapper (always up-to-date)
-      // Returns vector of string_view pointing to static strings to ensure proper lifetime
-      static std::vector<std::string_view> BuildIconEnumeration() {
-        // Static vector built once - persists for lifetime of program
-        static const std::vector<std::string> icons = []() {
-          std::vector<std::string> result;
-          for (const auto& iconStr : epoch_core::IconWrapper::GetAllAsStrings()) {
-            if (iconStr != "Null") {  // Exclude the Null sentinel value
-              result.emplace_back(iconStr);
-            }
-          }
-          return result;
-        }();
-
-        // Return views to the static strings
-        std::vector<std::string_view> views;
-        views.reserve(icons.size());
-        for (const auto& icon : icons) {
-          views.emplace_back(icon);
-        }
-        return views;
-      }
+      // Implementation moved to .cpp file to avoid static initialization order fiasco
+      static const std::vector<std::string_view>& GetIconEnumeration();
 
       glz::schema title{
         .description = "Title displayed above the card selector widget",
@@ -119,7 +100,7 @@ namespace epoch_script
       };
       glz::schema icon{
         .description = "Icon displayed in collapsed sidebar view to identify card type (see: https://lucide.dev/icons)",
-        .enumeration = BuildIconEnumeration()  // Dynamically built from IconWrapper
+        .enumeration = GetIconEnumeration()  // Now safely returns cached result
       };
       glz::schema select_key{
         .description = "Name of boolean DataFrame column used to filter rows (only rows where this column is true will be shown as cards)",

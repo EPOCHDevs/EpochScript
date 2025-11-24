@@ -39,7 +39,7 @@ MakeTickerEventsDataSource() {
           .requiresTimeFrame = false,
           .requiredDataSources = requiredDataSources,
           .intradayOnly = IsIntradayOnlyCategory(dataCategory),  // Auto-computed from registry
-          .allowNullInputs = false,
+          .allowNullInputs = true,  // Ticker events are sparse - keep null rows for dates without events
           .flagSchema = epoch_script::transforms::FlagSchema{
               .icon = epoch_core::Icon::Bell,
               .text = "Ticker Event: {event_type}<br/>{ticker}",

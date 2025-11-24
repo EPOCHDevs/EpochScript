@@ -40,7 +40,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeReferenceSt
       .requiresTimeFrame = true,
       .requiredDataSources = BuildRequiredDataSourcesFromSDKMetadata(dailyBarsMeta),
       .intradayOnly = false,
-      .allowNullInputs = false,
+      .allowNullInputs = true,  // Data sources should preserve null rows
       .strategyTypes = {"pairs-trading", "relative-strength", "beta-hedging", "correlation"},
       .assetRequirements = {"multi-asset"},
       .usageContext =

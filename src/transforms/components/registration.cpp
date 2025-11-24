@@ -55,11 +55,10 @@
 #include "ml/sagemaker_sentiment.h"
 
 // Data Source includes
-#include "data_sources/polygon_data_source.h"
+#include "data_sources/parametric_data_source.h"  // Unified transform for all data sources
 #include "data_sources/polygon_metadata.h"
 #include "data_sources/polygon_indices_metadata.h"
 #include "data_sources/fred_metadata.h"
-#include "data_sources/fred_transform.h"
 #include "data_sources/sec_data_source.h"
 #include "data_sources/sec_metadata.h"
 #include "data_sources/reference_stocks_metadata.h"

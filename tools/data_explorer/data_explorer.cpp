@@ -111,6 +111,7 @@ void SaveTransformedDataAsParquet(
             epoch_frame::ParquetWriteOptions options;
             options.compression = arrow::Compression::GZIP;
             options.include_index = true;
+            options.index_label = "index";
 
             // Write DataFrame as parquet using epoch_frame serialization
             auto status = epoch_frame::write_parquet(dataframe, output_path, options);
@@ -217,22 +218,22 @@ stock_splits = splits(timeframe="1D")
 ticker_changes = ticker_events(timeframe="1D")
 short_int = short_interest(timeframe="1D")
 short_vol = short_volume(timeframe="1D")
+
+# News (intraday timestamps)
+news_data = news(timeframe="1D")
+sentiment = finbert_sentiment(timeframe="1D")(news_data.description)
 )";
         } else if (config.profile == "intraday") {
             // Profile 2: Intraday only - minute-level market data + news
             epochscript_code = R"(
 # Market data at 1-minute timeframe
-market_data = market_data_source(timeframe="1Min")
-vwap_intraday = vwap(timeframe="1Min")
-trades_intraday = trade_count(timeframe="1Min")
+# market_data = market_data_source(timeframe="1Min")
+# vwap_intraday = vwap(timeframe="1Min")
+# trades_intraday = trade_count(timeframe="1Min")
 
 # Index data
-spy_index = common_indices(index="SPX", timeframe="1Min")
-vix_index = indices(ticker="VIX", timeframe="1Min")
-
-# News (intraday timestamps)
-news_data = news(timeframe="1Min")
-sentiment = finbert_sentiment(timeframe="1Min")(news_data.description)
+# spy_index = common_indices(ticker="SPX", timeframe="1Min")
+# vix_index = indices(ticker="VIX", timeframe="1Min")
 )";
         } else if (config.profile == "mixed") {
             // Profile 3: Mixed timeframes - combination of intraday and lower-frequency data

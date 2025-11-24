@@ -39,7 +39,7 @@ MakeSplitsDataSource() {
           .requiresTimeFrame = false,
           .requiredDataSources = requiredDataSources,
           .intradayOnly = IsIntradayOnlyCategory(dataCategory),  // Auto-computed from registry
-          .allowNullInputs = false,
+          .allowNullInputs = true,  // Splits are sparse - keep null rows for dates without splits
           .flagSchema = epoch_script::transforms::FlagSchema{
               .icon = epoch_core::Icon::Split,
               .text = "Stock Split: {split_from}:{split_to}",

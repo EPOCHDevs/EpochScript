@@ -73,7 +73,7 @@ MakeSECDataSources() {
           .requiresTimeFrame = true,
           .requiredDataSources = {"shares", "value", "security_type", "investment_discretion", "institution_name", "period_end"},
           .intradayOnly = false,
-          .allowNullInputs = false,
+          .allowNullInputs = true,  // SEC filings are sparse (quarterly/annually) - keep null rows
           .strategyTypes = {"fundamental-analysis", "follow-smart-money",
                             "institutional-flow", "ownership-analysis"},
           .assetRequirements = {"single-asset"},

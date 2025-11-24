@@ -54,6 +54,32 @@ static std::string YamlNodeToJsonString(const YAML::Node& node) {
 
   return json.str();
 }
+
+// Implementation of GetIconEnumeration moved from header to avoid static initialization issues
+const std::vector<std::string_view>& EventMarkerSchema::glaze_json_schema::GetIconEnumeration() {
+  static const std::vector<std::string_view> views = []() {
+    // Build icon vector on first access (not during static init)
+    static const std::vector<std::string> icons = []() {
+      std::vector<std::string> result;
+      for (const auto& iconStr : epoch_core::IconWrapper::GetAllAsStrings()) {
+        if (iconStr != "Null") {  // Exclude the Null sentinel value
+          result.emplace_back(iconStr);
+        }
+      }
+      return result;
+    }();
+
+    // Create views to the static strings
+    std::vector<std::string_view> icon_views;
+    icon_views.reserve(icons.size());
+    for (const auto& icon : icons) {
+      icon_views.emplace_back(icon);
+    }
+    return icon_views;
+  }();
+  return views;
+}
+
 using SequenceItem = std::variant<double, std::string>;
 using Sequence = std::vector<SequenceItem>;
 void MetaDataOptionDefinition::AssertType(

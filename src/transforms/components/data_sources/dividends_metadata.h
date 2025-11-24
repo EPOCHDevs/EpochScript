@@ -39,7 +39,7 @@ MakeDividendsDataSource() {
           .requiresTimeFrame = false,
           .requiredDataSources = requiredDataSources,
           .intradayOnly = IsIntradayOnlyCategory(dataCategory),  // Auto-computed from registry
-          .allowNullInputs = false,
+          .allowNullInputs = true,  // Dividends are sparse - keep null rows for dates without dividends
           .flagSchema = epoch_script::transforms::FlagSchema{
               .icon = epoch_core::Icon::DollarSign,
               .text = "Dividend: ${cash_amount}<br/>Declared: {declaration_date}<br/>Pay Date: {pay_date}",

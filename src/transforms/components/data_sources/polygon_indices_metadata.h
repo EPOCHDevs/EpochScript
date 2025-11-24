@@ -15,7 +15,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakePolygonIndi
   // Get metadata from MetadataRegistry for indices (is_eod=true for daily bars)
   auto indicesMetadata = data_sdk::dataloader::MetadataRegistry::GetIndicesMetadata(true);
 
-  // Build outputs from SDK metadata
+  // Build outputs with simple IDs (e.g., "c", "o", "h", "l") for AST compiler validation
   auto outputs = BuildOutputsFromSDKMetadata(indicesMetadata);
 
   // Common Indices with SelectOption dropdown
@@ -52,7 +52,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakePolygonIndi
       .requiresTimeFrame = true,
       .requiredDataSources = {"IDX:{ticker}:c", "IDX:{ticker}:o", "IDX:{ticker}:h", "IDX:{ticker}:l"},
       .intradayOnly = false,
-      .allowNullInputs = false,
+      .allowNullInputs = true,  // Data sources should preserve null rows
       .strategyTypes = {"market-regime", "index-analysis", "correlation", "hedge"},
       .assetRequirements = {"single-asset", "multi-asset"},
       .usageContext =
@@ -84,7 +84,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakePolygonIndi
       .requiresTimeFrame = true,
       .requiredDataSources = {"IDX:{ticker}:c", "IDX:{ticker}:o", "IDX:{ticker}:h", "IDX:{ticker}:l"},
       .intradayOnly = false,
-      .allowNullInputs = false,
+      .allowNullInputs = true,  // Data sources should preserve null rows
       .strategyTypes = {"market-regime", "index-analysis", "correlation", "hedge"},
       .assetRequirements = {"single-asset", "multi-asset"},
       .usageContext =

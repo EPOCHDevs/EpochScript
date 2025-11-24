@@ -2,16 +2,15 @@
 #include <epoch_script/core/constants.h>
 #include <epoch_script/transforms/core/transform_definition.h>
 #include <epoch_script/transforms/core/transform_configuration.h>
-#include "transforms/components/data_sources/fred_transform.h"
-#include "transforms/components/data_sources/polygon_data_source.h"
+#include "transforms/components/data_sources/parametric_data_source.h"
 
 using namespace epoch_script;
 using namespace epoch_script::transform;
 
 TEST_CASE("Template Expansion - FRED Transform") {
 
-    SECTION("FREDTransform expands {category} placeholder correctly") {
-        // Create metadata with template placeholders
+    SECTION("FREDTransform expands {category} placeholder in requiredDataSources") {
+        // Create metadata with template placeholders in requiredDataSources
         epoch_script::transforms::TransformsMetaData metadata;
         metadata.id = fred::ECONOMIC_INDICATOR;
         metadata.requiredDataSources = {
@@ -19,6 +18,7 @@ TEST_CASE("Template Expansion - FRED Transform") {
             "ECON:{category}:value",
             "ECON:{category}:published_at"
         };
+        // Outputs use simple IDs (no prefix) for AST compiler validation
         metadata.outputs = {
             {epoch_core::IODataType::Timestamp, "observation_date", "Observation Date"},
             {epoch_core::IODataType::Decimal, "value", "Value"},
@@ -50,13 +50,50 @@ TEST_CASE("Template Expansion - FRED Transform") {
         REQUIRE(requiredDataSources[2] == "ECON:CPI:published_at");
     }
 
-    SECTION("FREDTransform expands different categories correctly") {
+    SECTION("FREDTransform uses simple output IDs for AST compiler validation") {
+        // Create metadata with simple output IDs (no placeholders)
+        epoch_script::transforms::TransformsMetaData metadata;
+        metadata.id = fred::ECONOMIC_INDICATOR;
+        metadata.requiredDataSources = {
+            "ECON:{category}:observation_date",
+            "ECON:{category}:value"
+        };
+        // Outputs use simple IDs (no prefix) for AST compiler validation
+        metadata.outputs = {
+            {epoch_core::IODataType::Timestamp, "observation_date", "Observation Date"},
+            {epoch_core::IODataType::Decimal, "value", "Value"}
+        };
+
+        // Create transform configuration with category="GDP"
+        TransformDefinitionData data{
+            .type = fred::ECONOMIC_INDICATOR,
+            .id = "test_fred_gdp",
+            .options = {{"category", MetaDataOptionDefinition{std::string("GDP")}}},
+            .timeframe = TimeFrame("1D"),
+            .inputs = {},
+            .metaData = metadata
+        };
+
+        TransformDefinition def(data);
+        TransformConfiguration config(def);
+        FREDTransform transform(config);
+
+        // Get output IDs - should use simple handles (for graph wiring)
+        auto outputIds = transform.GetOutputIds();
+
+        REQUIRE(outputIds.size() == 2);
+        REQUIRE(outputIds[0] == "test_fred_gdp#observation_date");
+        REQUIRE(outputIds[1] == "test_fred_gdp#value");
+    }
+
+    SECTION("FREDTransform expands different categories in requiredDataSources with simple output IDs") {
         std::vector<std::string> categories = {"GDP", "Unemployment", "FedFunds", "CorePCE"};
 
         for (const auto& category : categories) {
             epoch_script::transforms::TransformsMetaData metadata;
             metadata.id = fred::ECONOMIC_INDICATOR;
             metadata.requiredDataSources = {"ECON:{category}:value"};
+            // Outputs use simple IDs (no prefix) for AST compiler validation
             metadata.outputs = {
                 {epoch_core::IODataType::Decimal, "value", "Value"}
             };
@@ -75,17 +112,20 @@ TEST_CASE("Template Expansion - FRED Transform") {
             FREDTransform transform(config);
 
             auto requiredDataSources = transform.GetRequiredDataSources();
-
             REQUIRE(requiredDataSources.size() == 1);
             REQUIRE(requiredDataSources[0] == "ECON:" + category + ":value");
+
+            auto outputIds = transform.GetOutputIds();
+            REQUIRE(outputIds.size() == 1);
+            REQUIRE(outputIds[0] == "test_fred_" + category + "#value");
         }
     }
 }
 
 TEST_CASE("Template Expansion - Indices Transform (common_indices)") {
 
-    SECTION("Common Indices expands {ticker} placeholder correctly") {
-        // Create metadata with template placeholders
+    SECTION("Common Indices expands {ticker} placeholder in requiredDataSources") {
+        // Create metadata with template placeholders in requiredDataSources
         epoch_script::transforms::TransformsMetaData metadata;
         metadata.id = polygon::COMMON_INDICES;
         metadata.requiredDataSources = {
@@ -95,6 +135,7 @@ TEST_CASE("Template Expansion - Indices Transform (common_indices)") {
             "IDX:{ticker}:l",
             "IDX:{ticker}:v"
         };
+        // Outputs use simple IDs (no prefix) for AST compiler validation
         metadata.outputs = {
             {epoch_core::IODataType::Decimal, "c", "Close"},
             {epoch_core::IODataType::Decimal, "o", "Open"},
@@ -130,13 +171,45 @@ TEST_CASE("Template Expansion - Indices Transform (common_indices)") {
         REQUIRE(requiredDataSources[4] == "IDX:SPX:v");
     }
 
-    SECTION("Common Indices expands multiple tickers correctly") {
+    SECTION("Common Indices uses simple output IDs for AST compiler validation") {
+        // Create metadata with simple output IDs (no placeholders)
+        epoch_script::transforms::TransformsMetaData metadata;
+        metadata.id = polygon::COMMON_INDICES;
+        metadata.requiredDataSources = {"IDX:{ticker}:c"};
+        // Outputs use simple IDs (no prefix) for AST compiler validation
+        metadata.outputs = {
+            {epoch_core::IODataType::Decimal, "c", "Close"}
+        };
+
+        // Create transform configuration with ticker="VIX"
+        TransformDefinitionData data{
+            .type = polygon::COMMON_INDICES,
+            .id = "test_common_indices_vix",
+            .options = {{"ticker", MetaDataOptionDefinition{std::string("VIX")}}},
+            .timeframe = TimeFrame("1D"),
+            .inputs = {},
+            .metaData = metadata
+        };
+
+        TransformDefinition def(data);
+        TransformConfiguration config(def);
+        PolygonDataSourceTransform transform(config);
+
+        // Get output IDs - should use simple handles (for graph wiring)
+        auto outputIds = transform.GetOutputIds();
+
+        REQUIRE(outputIds.size() == 1);
+        REQUIRE(outputIds[0] == "test_common_indices_vix#c");
+    }
+
+    SECTION("Common Indices expands multiple tickers in requiredDataSources with simple output IDs") {
         std::vector<std::string> tickers = {"SPX", "DJI", "NDX", "VIX"};
 
         for (const auto& ticker : tickers) {
             epoch_script::transforms::TransformsMetaData metadata;
             metadata.id = polygon::COMMON_INDICES;
             metadata.requiredDataSources = {"IDX:{ticker}:c"};
+            // Outputs use simple IDs (no prefix) for AST compiler validation
             metadata.outputs = {
                 {epoch_core::IODataType::Decimal, "c", "Close"}
             };
@@ -155,17 +228,20 @@ TEST_CASE("Template Expansion - Indices Transform (common_indices)") {
             PolygonDataSourceTransform transform(config);
 
             auto requiredDataSources = transform.GetRequiredDataSources();
-
             REQUIRE(requiredDataSources.size() == 1);
             REQUIRE(requiredDataSources[0] == "IDX:" + ticker + ":c");
+
+            auto outputIds = transform.GetOutputIds();
+            REQUIRE(outputIds.size() == 1);
+            REQUIRE(outputIds[0] == "test_common_indices_" + ticker + "#c");
         }
     }
 }
 
 TEST_CASE("Template Expansion - Indices Transform (indices)") {
 
-    SECTION("Indices expands {ticker} placeholder correctly") {
-        // Create metadata with template placeholders
+    SECTION("Indices expands {ticker} placeholder in requiredDataSources with simple output IDs") {
+        // Create metadata with template placeholders in requiredDataSources
         epoch_script::transforms::TransformsMetaData metadata;
         metadata.id = polygon::INDICES;
         metadata.requiredDataSources = {
@@ -175,6 +251,7 @@ TEST_CASE("Template Expansion - Indices Transform (indices)") {
             "IDX:{ticker}:l",
             "IDX:{ticker}:v"
         };
+        // Outputs use simple IDs (no prefix) for AST compiler validation
         metadata.outputs = {
             {epoch_core::IODataType::Decimal, "c", "Close"},
             {epoch_core::IODataType::Decimal, "o", "Open"},
@@ -208,6 +285,16 @@ TEST_CASE("Template Expansion - Indices Transform (indices)") {
         REQUIRE(requiredDataSources[2] == "IDX:FTSE:h");
         REQUIRE(requiredDataSources[3] == "IDX:FTSE:l");
         REQUIRE(requiredDataSources[4] == "IDX:FTSE:v");
+
+        // Get output IDs - should use simple handles (for graph wiring)
+        auto outputIds = transform.GetOutputIds();
+
+        REQUIRE(outputIds.size() == 5);
+        REQUIRE(outputIds[0] == "test_indices_ftse#c");
+        REQUIRE(outputIds[1] == "test_indices_ftse#o");
+        REQUIRE(outputIds[2] == "test_indices_ftse#h");
+        REQUIRE(outputIds[3] == "test_indices_ftse#l");
+        REQUIRE(outputIds[4] == "test_indices_ftse#v");
     }
 }
 

@@ -39,7 +39,7 @@ MakeShortInterestDataSource() {
           .requiresTimeFrame = false,
           .requiredDataSources = requiredDataSources,
           .intradayOnly = IsIntradayOnlyCategory(dataCategory),  // Auto-computed from registry
-          .allowNullInputs = false,
+          .allowNullInputs = true,  // Short interest is reported periodically - keep null rows
           .flagSchema = epoch_script::transforms::FlagSchema{
               .icon = epoch_core::Icon::Activity,
               .text = "Short Interest: {short_interest} shares",

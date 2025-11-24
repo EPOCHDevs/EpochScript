@@ -39,7 +39,7 @@ MakeNewsDataSource() {
           .requiresTimeFrame = false,  // News doesn't require explicit timeframe
           .requiredDataSources = requiredDataSources,
           .intradayOnly = IsIntradayOnlyCategory(dataCategory),  // Auto-computed from registry
-          .allowNullInputs = false,
+          .allowNullInputs = true,  // News is sparse - keep null rows for dates without news
           .flagSchema = epoch_script::transforms::FlagSchema{
               .icon = epoch_core::Icon::Newspaper,
               .text = "{title}<br/>{description}",

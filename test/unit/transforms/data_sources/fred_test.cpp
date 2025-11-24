@@ -9,7 +9,7 @@
 #include <epoch_script/transforms/core/registry.h>
 #include <epoch_script/transforms/core/transform_configuration.h>
 #include <epoch_script/transforms/core/transform_registry.h>
-#include "transforms/components/data_sources/fred_transform.h"
+#include "transforms/components/data_sources/parametric_data_source.h"
 #include <catch2/catch_test_macros.hpp>
 #include <epoch_core/catch_defs.h>
 #include <epoch_frame/factory/index_factory.h>
@@ -78,13 +78,13 @@ TEST_CASE("FRED Metadata is correctly registered", "[fred][metadata]") {
 
     SECTION("Required data sources includes ALFRED fields") {
       REQUIRE(metadata.requiresTimeFrame == true);
-      // SDK returns 3 requiredDataSources: observation_date, value, revision
+      // 3 requiredDataSources with ECON: prefix and {category} template pattern
       REQUIRE(metadata.requiredDataSources.size() == 3);
 
-      // Verify the core fields are present
-      REQUIRE(std::find(metadata.requiredDataSources.begin(), metadata.requiredDataSources.end(), "observation_date") != metadata.requiredDataSources.end());
-      REQUIRE(std::find(metadata.requiredDataSources.begin(), metadata.requiredDataSources.end(), "value") != metadata.requiredDataSources.end());
-      REQUIRE(std::find(metadata.requiredDataSources.begin(), metadata.requiredDataSources.end(), "revision") != metadata.requiredDataSources.end());
+      // Verify the core fields are present with template pattern: ECON:{category}:field
+      REQUIRE(std::find(metadata.requiredDataSources.begin(), metadata.requiredDataSources.end(), "ECON:{category}:observation_date") != metadata.requiredDataSources.end());
+      REQUIRE(std::find(metadata.requiredDataSources.begin(), metadata.requiredDataSources.end(), "ECON:{category}:value") != metadata.requiredDataSources.end());
+      REQUIRE(std::find(metadata.requiredDataSources.begin(), metadata.requiredDataSources.end(), "ECON:{category}:revision") != metadata.requiredDataSources.end());
     }
 
     SECTION("Output columns are correct") {

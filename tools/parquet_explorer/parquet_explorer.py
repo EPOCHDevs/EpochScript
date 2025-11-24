@@ -29,7 +29,7 @@ def find_parquet_files(root_dir):
 def load_parquet(file_path):
     """Load parquet file into pandas DataFrame."""
     print(f"\nLoading {file_path}...")
-    df = pd.read_parquet(file_path)
+    df = pd.read_parquet(file_path).set_index("index")
     print(f"Loaded {len(df)} rows, {len(df.columns)} columns")
     print(f"Columns: {', '.join(df.columns)}")
     return df

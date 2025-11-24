@@ -4,7 +4,7 @@
 #include <epoch_data_sdk/dataloader/metadata_registry.hpp>
 #include "data_category_mapper.h"
 #include "metadata_helper.h"
-#include "polygon_data_source.h"
+#include "parametric_data_source.h"
 
 namespace epoch_script::transform {
 
@@ -76,7 +76,7 @@ MakePolygonDataSources() {
           .requiresTimeFrame = true,
           .requiredDataSources = BuildRequiredDataSourcesFromSDKMetadata(balanceSheetMeta),
           .intradayOnly = IsIntradayOnlyCategory(DataCategory::BalanceSheets),
-          .allowNullInputs = false,
+          .allowNullInputs = true,  // Data sources should preserve null rows
           .flagSchema = epoch_script::transforms::FlagSchema{
               .icon = epoch_core::Icon::FileText,
               .text = "Q{fiscal_quarter} {fiscal_year} Balance Sheet<br/>Cash: ${cash}<br/>Debt: ${long_term_debt}",
@@ -158,7 +158,7 @@ MakePolygonDataSources() {
           .requiresTimeFrame = true,
           .requiredDataSources = BuildRequiredDataSourcesFromSDKMetadata(incomeStatementMeta),
           .intradayOnly = IsIntradayOnlyCategory(DataCategory::IncomeStatements),
-          .allowNullInputs = false,
+          .allowNullInputs = true,  // Data sources should preserve null rows
           .flagSchema = epoch_script::transforms::FlagSchema{
               .icon = epoch_core::Icon::Receipt,
               .text = "Q{fiscal_quarter} {fiscal_year} Earnings<br/>Revenue: ${revenue}<br/>EPS: ${diluted_eps}",
@@ -243,7 +243,7 @@ MakePolygonDataSources() {
           .requiresTimeFrame = true,
           .requiredDataSources = BuildRequiredDataSourcesFromSDKMetadata(cashFlowMeta),
           .intradayOnly = IsIntradayOnlyCategory(DataCategory::CashFlowStatements),
-          .allowNullInputs = false,
+          .allowNullInputs = true,  // Data sources should preserve null rows
           .flagSchema = epoch_script::transforms::FlagSchema{
               .icon = epoch_core::Icon::Wallet,
               .text = "Q{fiscal_quarter} {fiscal_year} Cash Flow<br/>Operating CF: ${cfo}<br/>CapEx: ${capex}",
@@ -323,7 +323,7 @@ MakePolygonDataSources() {
           .requiresTimeFrame = true,
           .requiredDataSources = BuildRequiredDataSourcesFromSDKMetadata(ratiosMeta),
           .intradayOnly = IsIntradayOnlyCategory(DataCategory::Ratios),
-          .allowNullInputs = false,
+          .allowNullInputs = true,  // Data sources should preserve null rows
           .flagSchema = epoch_script::transforms::FlagSchema{
               .icon = epoch_core::Icon::Calculator,
               .text = "Valuation Ratios<br/>P/E: {pe}<br/>ROE: {roe}%",

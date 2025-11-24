@@ -325,7 +325,7 @@ ExtractIndicesTickersFromTransforms(
       }
 
       // Validate: Check if asset "{ticker}-Indices" exists in AssetDatabase
-      std::string assetId = ticker + "-Indices";  // e.g., "SPX-Indices"
+      std::string assetId = std::format("^{}-Indices", ticker);  // e.g., "SPX-Indices"
 
       // Check if asset ID exists in the database
       const auto& specs = asset::AssetSpecificationDatabase::GetInstance().GetAssetSpecifications();
