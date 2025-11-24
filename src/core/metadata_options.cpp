@@ -57,27 +57,54 @@ static std::string YamlNodeToJsonString(const YAML::Node& node) {
 
 // Implementation of GetIconEnumeration moved from header to avoid static initialization issues
 const std::vector<std::string_view>& EventMarkerSchema::glaze_json_schema::GetIconEnumeration() {
-  // Function-local static ensures initialization on first use, avoiding SIOF
-  static const std::vector<std::string_view> cached_views = []() {
-    // Access IconWrapper's static data and materialize it immediately
-    // This forces initialization of IconWrapper's m_data if not already done
-    const auto& icon_map = epoch_core::IconWrapper::type::m_data.first;
+  // Hardcoded icon list to completely avoid static initialization order issues
+  // This list mirrors the Icon enum from constants.h (excluding Null)
+  static const std::vector<std::string_view> icons = {
+    // Charts & Analysis
+    "BarChart", "BarChart2", "BarChart3", "Chart", "LineChart", "AreaChart",
+    "PieChart", "CandlestickChart", "Activity", "TrendingUp", "TrendingDown",
 
-    // Pre-allocate to avoid reallocations
-    std::vector<std::string_view> views;
-    views.reserve(icon_map.size());
+    // Financial
+    "DollarSign", "Coins", "CreditCard", "Wallet", "TrendingUp", "TrendingDown",
+    "PercentSquare", "Receipt", "Landmark",
 
-    // Materialize all string keys immediately (not as a view)
-    for (const auto& [key, value] : icon_map) {
-      if (key != "Null") {  // Exclude the Null sentinel value
-        views.emplace_back(key);
-      }
-    }
+    // Alerts & Status
+    "AlertCircle", "AlertTriangle", "Info", "CheckCircle", "XCircle",
+    "AlertOctagon", "Bell", "Flag", "Zap", "Star",
 
-    return views;
-  }();
+    // Actions
+    "Play", "Pause", "StopCircle", "RefreshCw", "Download", "Upload",
+    "Send", "Share2", "Copy", "Trash2", "Edit", "Save",
 
-  return cached_views;
+    // Navigation & UI
+    "ChevronUp", "ChevronDown", "ChevronLeft", "ChevronRight",
+    "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+    "ExternalLink", "Link", "Maximize2", "Minimize2",
+
+    // Data & Content
+    "Database", "Server", "HardDrive", "FileText", "File", "Folder",
+    "Table", "List", "Grid", "Calendar", "Clock",
+
+    // Users & Social
+    "User", "Users", "UserPlus", "UserMinus", "UserCheck", "UserX",
+
+    // Settings & Tools
+    "Settings", "Tool", "Filter", "Search", "Eye", "EyeOff",
+    "Lock", "Unlock", "Key", "Shield", "ShieldAlert",
+
+    // Communication
+    "Mail", "MessageSquare", "MessageCircle", "Phone", "PhoneCall",
+
+    // Media
+    "Image", "Video", "Music", "Mic", "Camera",
+
+    // Other
+    "Home", "Package", "MapPin", "Map", "Globe", "Compass",
+    "Layers", "Box", "Archive", "Briefcase", "ShoppingCart",
+    "Tag", "Bookmark", "Heart", "ThumbsUp", "ThumbsDown"
+  };
+
+  return icons;
 }
 
 using SequenceItem = std::variant<double, std::string>;
