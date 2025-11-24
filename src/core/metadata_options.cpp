@@ -57,27 +57,27 @@ static std::string YamlNodeToJsonString(const YAML::Node& node) {
 
 // Implementation of GetIconEnumeration moved from header to avoid static initialization issues
 const std::vector<std::string_view>& EventMarkerSchema::glaze_json_schema::GetIconEnumeration() {
-  static const std::vector<std::string_view> views = []() {
-    // Build icon vector on first access (not during static init)
-    static const std::vector<std::string> icons = []() {
-      std::vector<std::string> result;
-      for (const auto& iconStr : epoch_core::IconWrapper::GetAllAsStrings()) {
-        if (iconStr != "Null") {  // Exclude the Null sentinel value
-          result.emplace_back(iconStr);
-        }
-      }
-      return result;
-    }();
+  // Function-local static ensures initialization on first use, avoiding SIOF
+  static const std::vector<std::string_view> cached_views = []() {
+    // Access IconWrapper's static data and materialize it immediately
+    // This forces initialization of IconWrapper's m_data if not already done
+    const auto& icon_map = epoch_core::IconWrapper::type::m_data.first;
 
-    // Create views to the static strings
-    std::vector<std::string_view> icon_views;
-    icon_views.reserve(icons.size());
-    for (const auto& icon : icons) {
-      icon_views.emplace_back(icon);
+    // Pre-allocate to avoid reallocations
+    std::vector<std::string_view> views;
+    views.reserve(icon_map.size());
+
+    // Materialize all string keys immediately (not as a view)
+    for (const auto& [key, value] : icon_map) {
+      if (key != "Null") {  // Exclude the Null sentinel value
+        views.emplace_back(key);
+      }
     }
-    return icon_views;
+
+    return views;
   }();
-  return views;
+
+  return cached_views;
 }
 
 using SequenceItem = std::variant<double, std::string>;
