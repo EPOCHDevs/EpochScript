@@ -11,6 +11,7 @@ using namespace epoch_core;
 TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][plot_kind_registry]") {
   const auto tf = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
   auto& registry = PlotKindBuilderRegistry::Instance();
+  auto src = transform::data_source("src", tf);
 
   SECTION("ALL PlotKind enum values are registered") {
     // This test iterates through ALL PlotKind values and ensures they are registered
@@ -100,15 +101,12 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Multi-line indicators - MACD") {
-    auto macd_cfg = [&]() {
-      YAML::Node inputs;
-      inputs[epoch_script::ARG] = "c";
-      YAML::Node options;
-      options["short_period"] = 12;
-      options["long_period"] = 26;
-      options["signal_period"] = 9;
-      return transform::run_op("macd", "1", inputs, options, tf);
-    }();
+    auto macd_cfg = transform::run_op("macd", "1",
+        {{epoch_script::ARG, {transform::input_ref("c")}}},
+        {{"short_period", MetaDataOptionDefinition{12.0}},
+         {"long_period", MetaDataOptionDefinition{26.0}},
+         {"signal_period", MetaDataOptionDefinition{9.0}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::macd));
 
@@ -121,12 +119,10 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Multi-line indicators - Aroon") {
-    auto aroon_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["period"] = 14;
-      return transform::run_op("aroon", "1", inputs, options, tf);
-    }();
+    auto aroon_cfg = transform::run_op("aroon", "1",
+        {},
+        {{"period", MetaDataOptionDefinition{14.0}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::aroon));
 
@@ -139,14 +135,12 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Multi-line indicators - Stochastic") {
-    auto stoch_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["k_period"] = 14;
-      options["k_slowing_period"] = 1;
-      options["d_period"] = 3;
-      return transform::run_op("stoch", "1", inputs, options, tf);
-    }();
+    auto stoch_cfg = transform::run_op("stoch", "1",
+        {},
+        {{"k_period", MetaDataOptionDefinition{14.0}},
+         {"k_slowing_period", MetaDataOptionDefinition{1.0}},
+         {"d_period", MetaDataOptionDefinition{3.0}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::stoch));
 
@@ -159,12 +153,10 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Multi-line indicators - Fisher Transform") {
-    auto fisher_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["period"] = 10;
-      return transform::run_op("fisher", "1", inputs, options, tf);
-    }();
+    auto fisher_cfg = transform::run_op("fisher", "1",
+        {},
+        {{"period", MetaDataOptionDefinition{10.0}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::fisher));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::fisher));
@@ -183,27 +175,22 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Multi-line indicators - Elder Ray") {
-    auto elders_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["period"] = 13;
-      options["buy_factor"] = 1.4;
-      options["sell_factor"] = 0.7;
-      return transform::run_op("elders_thermometer", "1", inputs, options, tf);
-    }();
+    auto elders_cfg = transform::run_op("elders_thermometer", "1",
+        {},
+        {{"period", MetaDataOptionDefinition{13.0}},
+         {"buy_factor", MetaDataOptionDefinition{1.4}},
+         {"sell_factor", MetaDataOptionDefinition{0.7}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::elders));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::elders));
   }
 
   SECTION("Multi-line indicators - Forecast Oscillator") {
-    auto fosc_cfg = [&]() {
-      YAML::Node inputs;
-      inputs[epoch_script::ARG] = "c";
-      YAML::Node options;
-      options["period"] = 5;
-      return transform::run_op("fosc", "1", inputs, options, tf);
-    }();
+    auto fosc_cfg = transform::run_op("fosc", "1",
+        {{epoch_script::ARG, {transform::input_ref("c")}}},
+        {{"period", MetaDataOptionDefinition{5.0}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::fosc));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::fosc));
@@ -221,16 +208,14 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Multi-line indicators - Awesome Oscillator") {
-    YAML::Node inputs;
-    YAML::Node options;
-    auto ao_cfg = transform::run_op("ao", "1", inputs, options, tf);
+    auto ao_cfg = transform::run_op("ao", "1", {}, {}, tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::ao));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::ao));
   }
 
   SECTION("Bands - Bollinger Bands") {
-    auto bbands_cfg = transform::bbands("1", 20, 2, "c", tf);
+    auto bbands_cfg = transform::bbands("1", 20, 2, strategy::NodeReference("", "c"), tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::bbands));
 
@@ -243,27 +228,23 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Bands - Bollinger %B") {
-    auto bb_percent_b_cfg = [&]() {
-      YAML::Node inputs;
-      inputs["bbands_lower"] = "lower";
-      inputs["bbands_upper"] = "upper";
-      YAML::Node options;
-      return transform::run_op("bband_percent", "1", inputs, options, tf);
-    }();
+    auto bb_percent_b_cfg = transform::run_op("bband_percent", "1",
+        {{"bbands_lower", {transform::input_ref("lower")}},
+         {"bbands_upper", {transform::input_ref("upper")}}},
+        {},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::bb_percent_b));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::bb_percent_b));
   }
 
   SECTION("Complex indicators - Ichimoku Cloud") {
-    auto ichimoku_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["p_tenkan"] = 9;
-      options["p_kijun"] = 26;
-      options["p_senkou_b"] = 52;
-      return transform::run_op("ichimoku", "1", inputs, options, tf);
-    }();
+    auto ichimoku_cfg = transform::run_op("ichimoku", "1",
+        {},
+        {{"p_tenkan", MetaDataOptionDefinition{9.0}},
+         {"p_kijun", MetaDataOptionDefinition{26.0}},
+         {"p_senkou_b", MetaDataOptionDefinition{52.0}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::ichimoku));
 
@@ -301,19 +282,20 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Complex indicators - Retracements") {
-    auto retracement_cfg = transform::retracements("1", "high_low", "level", tf);
+    auto retracement_cfg = transform::retracements("1",
+      strategy::NodeReference{"", "high_low"},
+      strategy::NodeReference{"", "level"},
+      tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::retracements));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::retracements));
   }
 
   SECTION("Complex indicators - Gap") {
-    auto gap_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["fill_percent"] = 100;
-      return transform::run_op("session_gap", "1", inputs, options, tf);
-    }();
+    auto gap_cfg = transform::run_op("session_gap", "1",
+        {},
+        {{"fill_percent", MetaDataOptionDefinition{100.0}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::gap));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::gap));
@@ -327,14 +309,18 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Complex indicators - BOS/CHOCH") {
-    auto bos_cfg = transform::bos_choch("1", "high_low", "level", true, tf);
+    auto bos_cfg = transform::bos_choch("1",
+      strategy::NodeReference{"", "high_low"},
+      strategy::NodeReference{"", "level"}, true, tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::bos_choch));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::bos_choch));
   }
 
   SECTION("Complex indicators - Order Blocks") {
-    auto ob_cfg = transform::order_blocks("1", "high_low", false, tf);
+    auto ob_cfg = transform::order_blocks("1",
+      strategy::NodeReference{"", "high_low"},
+      false, tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::order_blocks));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::order_blocks));
@@ -348,7 +334,9 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Complex indicators - Liquidity") {
-    auto liquidity_cfg = transform::liquidity("1", "high_low", "level", 0.5, tf);
+    auto liquidity_cfg = transform::liquidity("1",
+      strategy::NodeReference{"", "high_low"},
+      strategy::NodeReference{"", "level"}, 0.5, tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::liquidity));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::liquidity));
@@ -362,13 +350,11 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Complex indicators - Pivot Point Detector") {
-    auto pivot_detector_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["left_count"] = 5;
-      options["right_count"] = 5;
-      return transform::run_op("flexible_pivot_detector", "1", inputs, options, tf);
-    }();
+    auto pivot_detector_cfg = transform::run_op("flexible_pivot_detector", "1",
+        {},
+        {{"left_count", MetaDataOptionDefinition{5.0}},
+         {"right_count", MetaDataOptionDefinition{5.0}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::pivot_point_detector));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::pivot_point_detector));
@@ -424,7 +410,7 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Single-value indicators - Line (generic overlay)") {
-    auto sma_cfg = transform::ma("sma", "1", "c", 20, tf);
+    auto sma_cfg = transform::ma("sma", "1", strategy::NodeReference("", "c"), 20, tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::line));
 
@@ -436,12 +422,10 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Single-value indicators - Close Line") {
-    auto close_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["ticker"] = "SPX";
-      return transform::run_op("common_indices", "1", inputs, options, tf);
-    }();
+    auto close_cfg = transform::run_op("common_indices", "1",
+        {},
+        {{"ticker", MetaDataOptionDefinition{std::string{"SPX"}}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::close_line));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::close_line));
@@ -449,19 +433,14 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
 
   SECTION("Single-value indicators - Horizontal Line") {
     // h_line is a generic line PlotKind - test with SMA
-    auto hline_cfg = transform::ma("sma", "1", "c", 20, tf);
+    auto hline_cfg = transform::ma("sma", "1", src.GetOutputId("c"), 20, tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::h_line));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::h_line));
   }
 
   SECTION("Single-value indicators - VWAP") {
-    auto vwap_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      // VWAP has no options - it uses provider data
-      return transform::run_op("vwap", "1", inputs, options, tf);
-    }();
+    auto vwap_cfg = transform::run_op("vwap", "1", {}, {}, tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::vwap));
 
@@ -470,30 +449,24 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Single-value indicators - Column") {
-    auto col_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      return transform::run_op("marketfi", "1", inputs, options, tf);
-    }();
+    auto col_cfg = transform::run_op("marketfi", "1", {}, {}, tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::column));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::column));
   }
 
   SECTION("Single-value indicators - QStick") {
-    auto qstick_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["period"] = 14;
-      return transform::run_op("qstick", "1", inputs, options, tf);
-    }();
+    auto qstick_cfg = transform::run_op("qstick", "1",
+        {},
+        {{"period", MetaDataOptionDefinition{14.0}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::qstick));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::qstick));
   }
 
   SECTION("Single-value indicators - PSAR") {
-    auto psar_cfg = transform::psar("1", 0.02, 0.2, "c", tf);
+    auto psar_cfg = transform::psar("1", 0.02, 0.2, src.GetOutputId("c"), tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::psar));
 
@@ -502,13 +475,10 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Single-value indicators - Panel Line") {
-    auto panel_cfg = [&]() {
-      YAML::Node inputs;
-      inputs[epoch_script::ARG] = "c";
-      YAML::Node options;
-      options["period"] = 1;
-      return transform::run_op("forward_returns", "1", inputs, options, tf);
-    }();
+    auto panel_cfg = transform::run_op("forward_returns", "1",
+        {{epoch_script::ARG, {transform::input_ref("c")}}},
+        {{"period", MetaDataOptionDefinition{1.0}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::panel_line));
 
@@ -527,7 +497,7 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Single-value indicators - RSI") {
-    auto rsi_cfg = transform::single_operand_period_op("rsi", "1", 14, "c", tf);
+    auto rsi_cfg = transform::single_operand_period_op("rsi", "1", 14, src.GetOutputId("c"), tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::rsi));
 
@@ -536,10 +506,10 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Single-value indicators - CCI") {
-    YAML::Node inputs;
-    YAML::Node options;
-    options["period"] = 20;
-    auto cci_cfg = transform::run_op("cci", "1", inputs, options, tf);
+    auto cci_cfg = transform::run_op("cci", "1",
+        {},
+        {{"period", MetaDataOptionDefinition{20.0}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::cci));
 
@@ -557,26 +527,22 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("Special purpose - Flag") {
-    auto flag_cfg = [&]() {
-      YAML::Node inputs;
-      inputs[epoch_script::ARG] = "c";
-      YAML::Node options;
-      return transform::run_op("flag", "1", inputs, options, tf);
-    }();
+    auto flag_cfg = transform::run_op("flag", "1",
+        {{epoch_script::ARG, {transform::input_ref("c")}}},
+        {},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::flag));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::flag));
   }
 
   SECTION("Special purpose - Zone") {
-    auto zone_cfg = [&]() {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["session_type"] = "NewYork";
-      options["minute_offset"] = 30;
-      options["boundary_type"] = "start";
-      return transform::run_op("session_time_window", "1", inputs, options, tf);
-    }();
+    auto zone_cfg = transform::run_op("session_time_window", "1",
+        {},
+        {{"session_type", MetaDataOptionDefinition{std::string{"NewYork"}}},
+         {"minute_offset", MetaDataOptionDefinition{30.0}},
+         {"boundary_type", MetaDataOptionDefinition{std::string{"start"}}}},
+        tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::zone));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::zone));
@@ -584,8 +550,8 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
 
   SECTION("Special purpose - Trade Signal") {
     auto signal_cfg = transform::trade_signal_executor_cfg("1", {
-      {"entry", "entry_signal"},
-      {"exit", "exit_signal"}
+      {"entry", transform::NodeRef{"", "entry_signal"}},
+      {"exit", transform::NodeRef{"", "exit_signal"}}
     }, tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::trade_signal));
@@ -593,14 +559,15 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
   }
 
   SECTION("ML/AI indicators - Hidden Markov Model") {
-    auto hmm_cfg = transform::hmm_single_cfg("1", "c", tf, 3, 1000, 1e-5, true, 100, 0);
+    auto hmm_cfg = transform::hmm_single_cfg("1", src.GetOutputId("c"), tf, 3, 1000, 1e-5, true, 100, 0);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::hmm));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::hmm));
   }
 
   SECTION("ML/AI indicators - Sentiment Analysis") {
-    auto sentiment_cfg = transform::finbert_sentiment_cfg("1", "text_input", tf);
+    auto news = transform::news("news_src", tf);
+    auto sentiment_cfg = transform::finbert_sentiment_cfg("1", news.GetOutputId("title"), tf);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::sentiment));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::sentiment));

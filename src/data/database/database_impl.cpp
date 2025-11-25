@@ -167,7 +167,9 @@ namespace epoch_script::data {
                   epoch_frame::Scalar(currentTime),
                   epoch_script::EpochStratifyXConstants::instance().CONTRACT());
       return frontContracts.value<std::string>();
-    } catch (std::exception const &) {
+    } catch (std::exception const &exp) {
+      SPDLOG_WARN("Failed to get front contract for asset {}: {}. Returning nullopt.",
+                  asset.GetSymbolStr(), exp.what());
     }
     return std::nullopt;
   }

@@ -26,6 +26,7 @@
 #include <epoch_frame/serialization.h>
 #include <arrow/compute/initialize.h>
 #include <google/protobuf/stubs/common.h>
+#include <google/protobuf/json/json.h>
 #include <absl/log/initialize.h>
 #include <epoch_data_sdk/model/asset/asset_database.hpp>
 #include <epoch_core/macros.h>
@@ -159,6 +160,120 @@ void SaveTransformedDataAsParquet(
   }
 }
 
+// Convert TearSheet (protobuf) to JSON
+std::string TearSheetToJson(const epoch_proto::TearSheet& tearsheet) {
+  std::string jsonStr;
+
+  google::protobuf::json::PrintOptions options;
+  options.add_whitespace = true;
+  options.preserve_proto_field_names = true;
+
+  auto status = google::protobuf::json::MessageToJsonString(tearsheet, &jsonStr, options);
+
+  if (!status.ok()) {
+    throw std::runtime_error("Failed to convert TearSheet to JSON: " + std::string(status.message()));
+  }
+
+  return jsonStr;
+}
+
+// Save reports as JSON for each asset
+void SaveReportsAsJson(
+    const std::string& output_dir,
+    const std::string& profile_name,
+    const epoch_script::runtime::AssetReportMap& reports
+) {
+  if (reports.empty()) {
+    return;
+  }
+
+  // Create directory: output_dir/{profile}/reports/
+  std::string reports_dir = output_dir + "/" + profile_name + "/reports/";
+  fs::create_directories(reports_dir);
+
+  // Save each asset's report as JSON
+  for (const auto& [asset_id, tearsheet] : reports) {
+    std::string report_filename = asset_id + ".json";
+    std::string output_path = std::filesystem::path(reports_dir) / report_filename;
+
+    std::string json_content = TearSheetToJson(tearsheet);
+    WriteToFile(json_content, output_path);
+  }
+}
+
+// Serialize EventMarkerData to JSON using Glaze
+struct EventMarkerDataJson {
+  std::string title;
+  std::string icon;
+  std::vector<epoch_script::CardColumnSchema> schemas;
+  std::map<std::string, std::vector<std::string>> data;  // Simplified data representation
+  std::optional<size_t> pivot_index;
+};
+
+std::string EventMarkerDataToJson(const epoch_script::transform::EventMarkerData& event_marker) {
+  EventMarkerDataJson json_data;
+  json_data.title = event_marker.title;
+  json_data.icon = epoch_core::IconWrapper::ToString(event_marker.icon);
+  json_data.schemas = event_marker.schemas;
+  json_data.pivot_index = event_marker.pivot_index;
+
+  // Convert DataFrame to simple map representation
+  for (const auto& col_name : event_marker.data.column_names()) {
+    json_data.data[col_name] = {};
+    // Store column info (just indicating it exists)
+    json_data.data[col_name].push_back("<" + std::string(event_marker.data[col_name].dtype()->ToString()) + ">");
+  }
+
+  std::string json_str;
+  auto ec = glz::write<glz::opts{.prettify = true}>(json_data, json_str);
+  if (ec) {
+    throw std::runtime_error("Failed to serialize EventMarkerData to JSON");
+  }
+
+  return json_str;
+}
+
+// Save event markers as JSON for each asset
+void SaveEventMarkersAsJson(
+    const std::string& output_dir,
+    const std::string& profile_name,
+    const epoch_script::runtime::AssetEventMarkerMap& event_markers
+) {
+  if (event_markers.empty()) {
+    return;
+  }
+
+  // Create directory: output_dir/{profile}/event_markers/
+  std::string markers_dir = output_dir + "/" + profile_name + "/event_markers/";
+  fs::create_directories(markers_dir);
+
+  // Save each asset's event markers as JSON array
+  for (const auto& [asset_id, markers] : event_markers) {
+    std::string marker_filename = asset_id + ".json";
+    std::string output_path = std::filesystem::path(markers_dir) / marker_filename;
+
+    // Serialize vector of event markers
+    std::vector<std::string> marker_jsons;
+    for (const auto& marker : markers) {
+      marker_jsons.push_back(EventMarkerDataToJson(marker));
+    }
+
+    // Create JSON array
+    std::string json_array = "[\n  " +
+      [&]() {
+        std::string result;
+        for (size_t i = 0; i < marker_jsons.size(); ++i) {
+          if (i > 0) result += ",\n  ";
+          result += marker_jsons[i];
+        }
+        return result;
+      }() +
+      "\n]";
+
+    WriteToFile(json_array, output_path);
+  }
+}
+
 // Run test on EpochScript source with output directory
 void RunTest(const std::string& source, const std::string& output_dir, const std::string& selected_asset_config) {
   // Compile EpochScript source
@@ -227,8 +342,10 @@ void RunTest(const std::string& source, const std::string& output_dir, const std
     throw std::runtime_error("Runtime execution produced no outputs for asset config: " + asset_config.name);
   }
 
-  // 6. Save transformed data as parquet files
+  // 6. Save all outputs
   SaveTransformedDataAsParquet(output_dir, asset_config.name, db_output_data);
+  SaveReportsAsJson(output_dir, asset_config.name, reports);
+  SaveEventMarkersAsJson(output_dir, asset_config.name, event_markers);
 }
 
 // Read code from code.epochscript file

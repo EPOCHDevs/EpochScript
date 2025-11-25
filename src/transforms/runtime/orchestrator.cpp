@@ -18,7 +18,7 @@
 
 namespace {
   // Helper to check if transform metadata indicates it's a reporter
-  bool IsReporterTransform(const epoch_script::transform::ITransformBase& transform) {
+  [[maybe_unused]] bool IsReporterTransform(const epoch_script::transform::ITransformBase& transform) {
     const auto metadata = transform.GetConfiguration().GetTransformDefinition().GetMetadata();
     return metadata.category == epoch_core::TransformCategory::Reporter;
   }
@@ -81,8 +81,13 @@ DataFlowRuntimeOrchestrator::ResolveInputDependencies(
     const epoch_script::strategy::InputMapping &inputs) const {
   std::vector<TransformExecutionNode *> result;
   std::ranges::for_each(inputs | std::views::values,
-                        [&](std::vector<std::string> const &inputList) {
-                          for (const auto &s : inputList) {
+                        [&](const auto &inputList) {
+                          for (const auto &input_value : inputList) {
+                            // Skip literal values - they don't have dependencies
+                            if (!input_value.IsNodeReference()) {
+                              continue;
+                            }
+                            const std::string s = input_value.GetNodeReference().GetRef();
                             auto it = m_outputHandleToNode.find(s);
                             if (it == m_outputHandleToNode.end()) {
                               throw std::runtime_error(std::format(
@@ -98,25 +103,17 @@ void DataFlowRuntimeOrchestrator::RegisterTransform(
     std::unique_ptr<epoch_script::transform::ITransformBase> transform) {
   auto& transformRef = *transform;
   auto node = CreateTransformNode(transformRef);
-  auto inputs = transformRef.GetInputIds();
 
   // Store the transform before creating node
   m_transforms.push_back(std::move(transform));
 
-  if (inputs.empty()) {
+  // Resolve input dependencies using InputMapping (skips literals)
+  const auto& input_mapping = transformRef.GetConfiguration().GetInputs();
+  auto handles = ResolveInputDependencies(input_mapping);
+
+  if (handles.empty()) {
     m_independentNodes.emplace_back(std::move(node));
     return;
-  }
-
-  // Resolve input dependencies - find the nodes that produce the required handles
-  std::vector<TransformExecutionNode*> handles;
-  for (const auto& inputHandle : inputs) {
-    auto it = m_outputHandleToNode.find(inputHandle);
-    if (it == m_outputHandleToNode.end()) {
-      throw std::runtime_error(std::format(
-          "Handle {} was not previously hashed.", inputHandle));
-    }
-    handles.push_back(it->second);
   }
 
   for (auto &handle : handles) {
@@ -151,13 +148,35 @@ DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
     throw std::runtime_error(std::format("Transform pipeline failed: {}", error));
   }
 
-  // Cache reports from reporter transforms
-  for (const auto& transform : m_transforms) {
-    CacheEventMarkerFromTransform(*transform);
-    if (IsReporterTransform(*transform)) {
-      CacheReportFromTransform(*transform);
+  // Transfer cached reports from storage to orchestrator's report cache
+  // Reports are captured in execution nodes during TransformData() calls
+  auto cachedReports = m_executionContext.cache->GetCachedReports();
+  {
+    std::lock_guard<std::mutex> lock(m_reportCacheMutex);
+    for (const auto& [key, report] : cachedReports) {
+      if (m_reportCache.contains(key)) {
+        MergeReportInPlace(m_reportCache[key], report, "FinalTransfer");
+      } else {
+        m_reportCache[key] = report;
+      }
     }
   }
+  SPDLOG_DEBUG("Transferred {} reports from storage to orchestrator cache", cachedReports.size());
+
+  // Transfer cached event markers from storage to orchestrator's event marker cache
+  auto cachedEventMarkers = m_executionContext.cache->GetCachedEventMarkers();
+  {
+    std::lock_guard<std::mutex> lock(m_eventMarkerCacheMutex);
+    for (const auto& [key, markers] : cachedEventMarkers) {
+      if (m_eventMarkerCache.contains(key)) {
+        m_eventMarkerCache[key].insert(
+            m_eventMarkerCache[key].end(), markers.begin(), markers.end());
+      } else {
+        m_eventMarkerCache[key] = markers;
+      }
+    }
+  }
+  SPDLOG_DEBUG("Transferred {} event marker entries from storage to orchestrator cache", cachedEventMarkers.size());
 
   SPDLOG_DEBUG("Transform pipeline completed successfully");
 
@@ -169,7 +188,7 @@ DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
   SPDLOG_DEBUG("FLOW DEBUG - Transform pipeline completed with {} timeframes", result.size());
   for (const auto& [timeframe, assetMap] : result) {
     for (const auto& [asset_id, dataframe] : assetMap) {
-      SPDLOG_INFO("FLOW DEBUG - Output data: {} {} has {} rows",
+      SPDLOG_DEBUG("FLOW DEBUG - Output data: {} {} has {} rows",
                    timeframe, asset_id, dataframe.num_rows());
     }
   }

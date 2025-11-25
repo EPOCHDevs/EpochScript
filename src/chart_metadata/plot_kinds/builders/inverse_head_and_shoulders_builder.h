@@ -17,9 +17,9 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"pattern_detected", cfg.GetOutputId("pattern_detected")},
-      {"neckline_level", cfg.GetOutputId("neckline_level")},
-      {"target", cfg.GetOutputId("target")}
+      {"pattern_detected", cfg.GetOutputId("pattern_detected").GetColumnName()},
+      {"neckline_level", cfg.GetOutputId("neckline_level").GetColumnName()},
+      {"target", cfg.GetOutputId("target").GetColumnName()}
     };
   }
 

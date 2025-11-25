@@ -29,25 +29,29 @@ TEST_CASE("ZScore rolling", "[hosseinmoein][zscore]") {
   auto index = factory::index::make_index(
       index_arr.value(), MonotonicDirection::Increasing, "Date");
 
+  // Column name must match NodeReference format: "src#c" for NodeReference("src", "c")
+  const std::string kSrcNodeId = "src";
+  auto col = input_ref(kSrcNodeId, C.CLOSE());
   auto input_df = make_dataframe<double>(
-      index, {df.get_column<double>("IBM_Close")}, {C.CLOSE()});
+      index, {df.get_column<double>("IBM_Close")}, {col.GetColumnIdentifier()});
 
   const auto tf =
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
   const int64_t window = 20;
-
-  YAML::Node inputs_yaml;
-  inputs_yaml["SLOT"] = C.CLOSE();
-  YAML::Node options_yaml;
-  options_yaml["window"] = window;
-  auto cfg = run_op("zscore", "zscore_id", inputs_yaml, options_yaml, tf);
+  std::unordered_map<std::string, std::vector<InputVal>> inputs{
+      {"SLOT", {col}}
+  };
+  std::unordered_map<std::string, epoch_script::MetaDataOptionDefinition> options{
+      {"window", epoch_script::MetaDataOptionDefinition{static_cast<double>(window)}}
+  };
+  auto cfg = run_op("zscore", "zscore_id", inputs, options, tf);
 
   ZScore z{cfg};
   auto out = z.TransformData(input_df);
 
   // Expected rolling z-score: for each window, use HMDF ZScoreVisitor over the
   // window and take the last value
-  const auto vals = input_df[C.CLOSE()].contiguous_array().to_vector<double>();
+  const auto vals = input_df[col.GetColumnIdentifier()].contiguous_array().to_vector<double>();
   std::vector<double> exp(vals.size(),
                           std::numeric_limits<double>::quiet_NaN());
   for (size_t i = 0; i < vals.size(); ++i) {
@@ -65,7 +69,7 @@ TEST_CASE("ZScore rolling", "[hosseinmoein][zscore]") {
     exp[i] = vec.back();
   }
 
-  auto lhs = out[cfg.GetOutputId("result")].contiguous_array().slice(
+  auto lhs = out[cfg.GetOutputId("result").GetColumnName()].contiguous_array().slice(
       window, vals.size() - window);
   auto rhs = Array{factory::array::make_contiguous_array(exp)}.slice(
       window, vals.size() - window);

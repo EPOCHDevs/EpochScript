@@ -18,7 +18,7 @@ void BarChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedD
   auto valueColumn = m_config.GetInput("value");
 
   // Group by label and aggregate values - preserve original order
-  auto df = normalizedDf[{labelColumn, valueColumn}];
+  auto df = normalizedDf[epoch_frame::StringVector{labelColumn.GetColumnIdentifier(), valueColumn.GetColumnIdentifier()}];
 
   // TODO: Ideally we want to fill null labels with "null" string for visibility in charts
   // (Option A from original design), but this causes type casting errors downstream:
@@ -30,9 +30,9 @@ void BarChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedD
   // Future fix: Either fix at source (percentile_select) or update epochframe's
   // group_by_agg to handle nulls without schema changes.
   // Drop only rows where label is null (preserving rows with null values)
-  df = epoch_script::transform::utils::drop_by_key(df, labelColumn);
+  df = epoch_script::transform::utils::drop_by_key(df, labelColumn.GetColumnIdentifier());
 
-  auto grouped = df.group_by_agg(labelColumn)
+  auto grouped = df.group_by_agg(labelColumn.GetColumnIdentifier())
                    .agg(epoch_core::BarChartAggWrapper::ToString(m_agg))
                    .to_series();
 
@@ -50,7 +50,7 @@ void BarChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedD
   std::set<std::string> seen_labels;
 
   // Reuse the filled dataframe to get labels
-  auto filled_label_series = df[labelColumn];
+  auto filled_label_series = df[labelColumn.GetColumnIdentifier()];
   for (int64_t i = 0; i < static_cast<int64_t>(filled_label_series.size()); ++i) {
     std::string label = filled_label_series.iloc(i).repr();
     if (seen_labels.find(label) == seen_labels.end()) {

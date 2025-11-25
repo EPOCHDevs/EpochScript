@@ -44,7 +44,9 @@ MakeShortInterestDataSource() {
               .icon = epoch_core::Icon::Activity,
               .text = "Short Interest: {short_interest} shares",
               .textIsTemplate = true,
-              .color = epoch_core::Color::Error
+              .color = epoch_core::Color::Error,
+              .title = std::nullopt,
+              .valueKey = "short_interest"
           },
           .strategyTypes = {"short-squeeze", "sentiment", "contrarian"},
           .assetRequirements = {"single-asset"},

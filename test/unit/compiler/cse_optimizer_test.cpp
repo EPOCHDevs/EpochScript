@@ -28,12 +28,12 @@ TEST_CASE("CSE Optimizer - Basic Deduplication", "[cse_optimizer]")
         ema1.id = "ema_0";
         ema1.type = "ema";
         ema1.options["period"] = MetaDataOptionDefinition(20.0);
-        ema1.inputs["src"].push_back("src#c");
+        ema1.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         ema2.id = "ema_1";
         ema2.type = "ema";
         ema2.options["period"] = MetaDataOptionDefinition(20.0);
-        ema2.inputs["src"].push_back("src#c");
+        ema2.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         std::vector<AlgorithmNode> algorithms = {input, ema1, ema2};
         context.used_node_ids = {"src", "ema_0", "ema_1"};
@@ -62,12 +62,12 @@ TEST_CASE("CSE Optimizer - Basic Deduplication", "[cse_optimizer]")
         ema20.id = "ema_0";
         ema20.type = "ema";
         ema20.options["period"] = MetaDataOptionDefinition(20.0);
-        ema20.inputs["src"].push_back("src#c");
+        ema20.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         ema50.id = "ema_1";
         ema50.type = "ema";
         ema50.options["period"] = MetaDataOptionDefinition(50.0);
-        ema50.inputs["src"].push_back("src#c");
+        ema50.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         std::vector<AlgorithmNode> algorithms = {input, ema20, ema50};
         context.used_node_ids = {"src", "ema_0", "ema_1"};
@@ -93,12 +93,12 @@ TEST_CASE("CSE Optimizer - Basic Deduplication", "[cse_optimizer]")
         ema_close.id = "ema_0";
         ema_close.type = "ema";
         ema_close.options["period"] = MetaDataOptionDefinition(20.0);
-        ema_close.inputs["src"].push_back("src#c");
+        ema_close.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         ema_high.id = "ema_1";
         ema_high.type = "ema";
         ema_high.options["period"] = MetaDataOptionDefinition(20.0);
-        ema_high.inputs["src"].push_back("src#h");
+        ema_high.inputs["src"].push_back(strategy::NodeReference{"src", "h"});
 
         std::vector<AlgorithmNode> algorithms = {input, ema_close, ema_high};
         context.used_node_ids = {"src", "ema_0", "ema_1"};
@@ -127,17 +127,17 @@ TEST_CASE("CSE Optimizer - Reference Rewriting", "[cse_optimizer]")
         ema0.id = "ema_0";
         ema0.type = "ema";
         ema0.options["period"] = MetaDataOptionDefinition(20.0);
-        ema0.inputs["src"].push_back("src#c");
+        ema0.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         ema1.id = "ema_1";
         ema1.type = "ema";
         ema1.options["period"] = MetaDataOptionDefinition(20.0);
-        ema1.inputs["src"].push_back("src#c");
+        ema1.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         add_node.id = "add_0";
         add_node.type = "add";
-        add_node.inputs["lhs"].push_back("ema_1#result");  // References ema_1
-        add_node.inputs["rhs"].push_back("ema_0#result");
+        add_node.inputs["lhs"].push_back(strategy::NodeReference{"ema_1", "result"});  // References ema_1
+        add_node.inputs["rhs"].push_back(strategy::NodeReference{"ema_0", "result"});
 
         std::vector<AlgorithmNode> algorithms = {src, ema0, ema1, add_node};
         context.used_node_ids = {"src", "ema_0", "ema_1", "add_0"};
@@ -151,8 +151,8 @@ TEST_CASE("CSE Optimizer - Reference Rewriting", "[cse_optimizer]")
         REQUIRE(add_it != algorithms.end());
 
         // The reference to ema_1 should be rewritten to ema_0
-        REQUIRE(add_it->inputs["lhs"][0] == "ema_0#result");
-        REQUIRE(add_it->inputs["rhs"][0] == "ema_0#result");
+        REQUIRE(add_it->inputs["lhs"][0].GetColumnIdentifier() == "ema_0#result");
+        REQUIRE(add_it->inputs["rhs"][0].GetColumnIdentifier() == "ema_0#result");
     }
 }
 
@@ -172,12 +172,12 @@ TEST_CASE("CSE Optimizer - Executor Exclusion", "[cse_optimizer]")
         exec1.id = "executor_0";
         exec1.type = "trade_signal_executor";
         exec1.options["name"] = MetaDataOptionDefinition(std::string("Signal1"));
-        exec1.inputs["signal"].push_back("signal_0#result");
+        exec1.inputs["signal"].push_back(strategy::NodeReference{"signal_0", "result"});
 
         exec2.id = "executor_1";
         exec2.type = "trade_signal_executor";
         exec2.options["name"] = MetaDataOptionDefinition(std::string("Signal1"));
-        exec2.inputs["signal"].push_back("signal_0#result");
+        exec2.inputs["signal"].push_back(strategy::NodeReference{"signal_0", "result"});
 
         std::vector<AlgorithmNode> algorithms = {signal, exec1, exec2};
         context.used_node_ids = {"signal_0", "executor_0", "executor_1"};
@@ -207,25 +207,25 @@ TEST_CASE("CSE Optimizer - Multi-Output Deduplication", "[cse_optimizer]")
         bbands1.type = "bbands";
         bbands1.options["period"] = MetaDataOptionDefinition(20.0);
         bbands1.options["stddev"] = MetaDataOptionDefinition(2.0);
-        bbands1.inputs["src"].push_back("src#c");
+        bbands1.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         bbands2.id = "bbands_1";
         bbands2.type = "bbands";
         bbands2.options["period"] = MetaDataOptionDefinition(20.0);
         bbands2.options["stddev"] = MetaDataOptionDefinition(2.0);
-        bbands2.inputs["src"].push_back("src#c");
+        bbands2.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         // One node uses upper from bbands_0
         use_upper1.id = "gt_0";
         use_upper1.type = "gt";
-        use_upper1.inputs["lhs"].push_back("src#c");
-        use_upper1.inputs["rhs"].push_back("bbands_0#upper");
+        use_upper1.inputs["lhs"].push_back(strategy::NodeReference{"src", "c"});
+        use_upper1.inputs["rhs"].push_back(strategy::NodeReference{"bbands_0", "upper"});
 
         // Another node uses middle from bbands_1
         use_middle2.id = "lt_0";
         use_middle2.type = "lt";
-        use_middle2.inputs["lhs"].push_back("src#c");
-        use_middle2.inputs["rhs"].push_back("bbands_1#middle");
+        use_middle2.inputs["lhs"].push_back(strategy::NodeReference{"src", "c"});
+        use_middle2.inputs["rhs"].push_back(strategy::NodeReference{"bbands_1", "middle"});
 
         std::vector<AlgorithmNode> algorithms = {src, bbands1, bbands2, use_upper1, use_middle2};
         context.used_node_ids = {"src", "bbands_0", "bbands_1", "gt_0", "lt_0"};
@@ -240,7 +240,7 @@ TEST_CASE("CSE Optimizer - Multi-Output Deduplication", "[cse_optimizer]")
             [](const AlgorithmNode& n) { return n.id == "lt_0"; });
 
         REQUIRE(lt_it != algorithms.end());
-        REQUIRE(lt_it->inputs["rhs"][0] == "bbands_0#middle");
+        REQUIRE(lt_it->inputs["rhs"][0].GetColumnIdentifier() == "bbands_0#middle");
     }
 }
 
@@ -260,12 +260,12 @@ TEST_CASE("CSE Optimizer - Lag Operation Deduplication", "[cse_optimizer]")
         lag1.id = "lag_0";
         lag1.type = "lag";
         lag1.options["periods"] = MetaDataOptionDefinition(10.0);
-        lag1.inputs["src"].push_back("src#c");
+        lag1.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         lag2.id = "lag_1";
         lag2.type = "lag";
         lag2.options["periods"] = MetaDataOptionDefinition(10.0);
-        lag2.inputs["src"].push_back("src#c");
+        lag2.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         std::vector<AlgorithmNode> algorithms = {src, lag1, lag2};
         context.used_node_ids = {"src", "lag_0", "lag_1"};
@@ -305,39 +305,39 @@ TEST_CASE("CSE Optimizer - Complex Scenario", "[cse_optimizer]")
         ema20_a.id = "ema_0";
         ema20_a.type = "ema";
         ema20_a.options["period"] = MetaDataOptionDefinition(20.0);
-        ema20_a.inputs["src"].push_back("src#c");
+        ema20_a.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         ema20_b.id = "ema_1";
         ema20_b.type = "ema";
         ema20_b.options["period"] = MetaDataOptionDefinition(20.0);
-        ema20_b.inputs["src"].push_back("src#c");
+        ema20_b.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         ema20_c.id = "ema_2";
         ema20_c.type = "ema";
         ema20_c.options["period"] = MetaDataOptionDefinition(20.0);
-        ema20_c.inputs["src"].push_back("src#c");
+        ema20_c.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         // One ema(50) node
         ema50.id = "ema_3";
         ema50.type = "ema";
         ema50.options["period"] = MetaDataOptionDefinition(50.0);
-        ema50.inputs["src"].push_back("src#c");
+        ema50.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         // Three comparison nodes
         gt1.id = "gt_0";
         gt1.type = "gt";
-        gt1.inputs["lhs"].push_back("ema_0#result");
-        gt1.inputs["rhs"].push_back("number_0#result");
+        gt1.inputs["lhs"].push_back(strategy::NodeReference{"ema_0", "result"});
+        gt1.inputs["rhs"].push_back(strategy::NodeReference{"number_0", "result"});
 
         gt2.id = "gt_1";
         gt2.type = "gt";
-        gt2.inputs["lhs"].push_back("ema_1#result");
-        gt2.inputs["rhs"].push_back("ema_3#result");
+        gt2.inputs["lhs"].push_back(strategy::NodeReference{"ema_1", "result"});
+        gt2.inputs["rhs"].push_back(strategy::NodeReference{"ema_3", "result"});
 
         gt3.id = "gt_2";
         gt3.type = "gt";
-        gt3.inputs["lhs"].push_back("src#c");
-        gt3.inputs["rhs"].push_back("ema_2#result");
+        gt3.inputs["lhs"].push_back(strategy::NodeReference{"src", "c"});
+        gt3.inputs["rhs"].push_back(strategy::NodeReference{"ema_2", "result"});
 
         std::vector<AlgorithmNode> algorithms = {
             src, num100, ema20_a, ema20_b, ema20_c, ema50, gt1, gt2, gt3
@@ -368,8 +368,8 @@ TEST_CASE("CSE Optimizer - Complex Scenario", "[cse_optimizer]")
         REQUIRE(gt1_it != algorithms.end());
         REQUIRE(gt2_it != algorithms.end());
 
-        REQUIRE(gt1_it->inputs["lhs"][0] == "ema_0#result");  // Rewritten from ema_1
-        REQUIRE(gt2_it->inputs["rhs"][0] == "ema_0#result");  // Rewritten from ema_2
+        REQUIRE(gt1_it->inputs["lhs"][0].GetColumnIdentifier() == "ema_0#result");  // Rewritten from ema_1
+        REQUIRE(gt2_it->inputs["rhs"][0].GetColumnIdentifier() == "ema_0#result");  // Rewritten from ema_2
     }
 }
 
@@ -390,12 +390,12 @@ TEST_CASE("CSE Optimizer - Hash Collisions", "[cse_optimizer]")
         ema20.id = "ema_0";
         ema20.type = "ema";
         ema20.options["period"] = MetaDataOptionDefinition(20.0);
-        ema20.inputs["src"].push_back("src#c");
+        ema20.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         sma20.id = "sma_0";
         sma20.type = "sma";  // Different type
         sma20.options["period"] = MetaDataOptionDefinition(20.0);
-        sma20.inputs["src"].push_back("src#c");
+        sma20.inputs["src"].push_back(strategy::NodeReference{"src", "c"});
 
         std::vector<AlgorithmNode> algorithms = {src, ema20, sma20};
         context.used_node_ids = {"src", "ema_0", "sma_0"};
@@ -508,15 +508,15 @@ TEST_CASE("CSE Optimizer - Text Node Deduplication", "[cse_optimizer]")
 
         cond1.id = "conditional_select_string_0";
         cond1.type = "conditional_select_string";
-        cond1.inputs["condition"].push_back("bool_true_0#result");
-        cond1.inputs["true_value"].push_back("text_0#result");
-        cond1.inputs["false_value"].push_back("text_2#result");
+        cond1.inputs["condition"].push_back(strategy::NodeReference{"bool_true_0", "result"});
+        cond1.inputs["true_value"].push_back(strategy::NodeReference{"text_0", "result"});
+        cond1.inputs["false_value"].push_back(strategy::NodeReference{"text_2", "result"});
 
         cond2.id = "conditional_select_string_1";
         cond2.type = "conditional_select_string";
-        cond2.inputs["condition"].push_back("bool_false_0#result");
-        cond2.inputs["true_value"].push_back("text_1#result");
-        cond2.inputs["false_value"].push_back("text_3#result");
+        cond2.inputs["condition"].push_back(strategy::NodeReference{"bool_false_0", "result"});
+        cond2.inputs["true_value"].push_back(strategy::NodeReference{"text_1", "result"});
+        cond2.inputs["false_value"].push_back(strategy::NodeReference{"text_3", "result"});
 
         std::vector<AlgorithmNode> algorithms = {
             bool_true, bool_false,
@@ -544,7 +544,7 @@ TEST_CASE("CSE Optimizer - Text Node Deduplication", "[cse_optimizer]")
             [](const AlgorithmNode& n) { return n.id == "conditional_select_string_1"; });
 
         REQUIRE(cond2_it != algorithms.end());
-        REQUIRE(cond2_it->inputs["false_value"][0] == "text_2#result");
+        REQUIRE(cond2_it->inputs["false_value"][0].GetColumnIdentifier() == "text_2#result");
     }
 
     SECTION("Deduplicates text nodes even with different timeframes")

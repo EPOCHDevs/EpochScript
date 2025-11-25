@@ -11,6 +11,10 @@ namespace epoch_script::runtime {
         GatherInputs(const AssetID &asset_id,
                      const epoch_script::transform::ITransformBase &transformer) const override;
 
+        epoch_frame::DataFrame
+        GatherInputsForScalar(const AssetID &asset_id,
+                             const epoch_script::transform::ITransformBase &transformer) const override;
+
         // Validate that all inputs are available for an asset before gathering
         // Returns true if all inputs exist, false if any are missing
         bool ValidateInputsAvailable(
@@ -33,6 +37,14 @@ namespace epoch_script::runtime {
             return m_asset_ids;
         }
 
+        // ===== Report Caching =====
+        void StoreReport(const AssetID& key, const epoch_proto::TearSheet& report) override;
+        [[nodiscard]] AssetReportMap GetCachedReports() const override;
+
+        // ===== Event Marker Caching =====
+        void StoreEventMarker(const AssetID& key, const epoch_script::transform::EventMarkerData& marker) override;
+        [[nodiscard]] AssetEventMarkerMap GetCachedEventMarkers() const override;
+
     private:
         TimeFrameCache m_cache;
         TimeFrameAssetDataFrameMap m_baseData;
@@ -44,11 +56,19 @@ namespace epoch_script::runtime {
         ScalarCache m_scalarCache;                     // outputId -> scalar value
         std::unordered_set<std::string> m_scalarOutputs; // Track which outputs are scalars
 
+        // Report cache for reporter transforms
+        AssetReportMap m_reportCache;
+
+        // Event marker cache for event_marker transforms
+        AssetEventMarkerMap m_eventMarkerCache;
+
         // Thread-safety: Separate mutexes for different data structures to minimize contention
         mutable std::shared_mutex m_cacheMutex;        // Protects m_cache (hot path)
         mutable std::shared_mutex m_baseDataMutex;     // Protects m_baseData
         mutable std::shared_mutex m_transformMapMutex; // Protects m_ioIdToTransform
         mutable std::shared_mutex m_assetIDsMutex;     // Protects m_asset_ids
         mutable std::shared_mutex m_scalarCacheMutex;  // Protects m_scalarCache and m_scalarOutputs
+        mutable std::shared_mutex m_reportCacheMutex;  // Protects m_reportCache
+        mutable std::shared_mutex m_eventMarkerCacheMutex; // Protects m_eventMarkerCache
     };
 } // namespace epoch_script::runtime

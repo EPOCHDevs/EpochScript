@@ -91,7 +91,7 @@ private:
     if (requiredSources.size() != outputs.size()) {
       // Mismatch - fallback to simple 1:1 mapping
       for (const auto& output : outputs) {
-        std::string outputId = GetConfiguration().GetOutputId(output.id);
+        std::string outputId = GetConfiguration().GetOutputId(output.id).GetColumnName();
         m_replacements[output.id] = outputId;
       }
       return;
@@ -109,7 +109,7 @@ private:
 
       // Map: loader column name → graph output ID
       // Example: "ECON:CPI:value" → "fred_cpi#value"
-      std::string graphOutputId = GetConfiguration().GetOutputId(outputs[i].id);
+      std::string graphOutputId = GetConfiguration().GetOutputId(outputs[i].id).GetColumnName();
       m_replacements[loaderColumnName] = graphOutputId;
     }
   }

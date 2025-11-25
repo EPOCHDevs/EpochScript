@@ -44,7 +44,9 @@ MakeTickerEventsDataSource() {
               .icon = epoch_core::Icon::Bell,
               .text = "Ticker Event: {event_type}<br/>{ticker}",
               .textIsTemplate = true,
-              .color = epoch_core::Color::Warning
+              .color = epoch_core::Color::Warning,
+              .title = std::nullopt,
+              .valueKey = "event_type"  // UI will check if valid to determine when to show flag
           },
           .strategyTypes = {"event-driven", "corporate-actions"},
           .assetRequirements = {"single-asset"},

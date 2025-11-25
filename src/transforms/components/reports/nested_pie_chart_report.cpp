@@ -18,9 +18,9 @@ void NestedPieChartReport::generateTearsheet(const epoch_frame::DataFrame &norma
 
     // Normalize both inner and outer series as percentages using utility function
     auto inner_data = ReportUtils::normalizeSeriesAsPercentage(
-        normalizedDf, innerLabelColumn, valueColumn);
+        normalizedDf, innerLabelColumn.GetColumnIdentifier(), valueColumn.GetColumnIdentifier());
     auto outer_data = ReportUtils::normalizeSeriesAsPercentage(
-        normalizedDf, outerLabelColumn, valueColumn);
+        normalizedDf, outerLabelColumn.GetColumnIdentifier(), valueColumn.GetColumnIdentifier());
 
     // Build nested pie chart
     epoch_tearsheet::PieChartBuilder chartBuilder;
@@ -29,11 +29,11 @@ void NestedPieChartReport::generateTearsheet(const epoch_frame::DataFrame &norma
 
     // Convert series to pie data using utility function
     auto outer_pie_data = ReportUtils::createPieDataFromSeries(outer_data);
-    chartBuilder.addSeries(outerLabelColumn, outer_pie_data, epoch_tearsheet::PieSize{80},
+    chartBuilder.addSeries(outerLabelColumn.GetColumnIdentifier(), outer_pie_data, epoch_tearsheet::PieSize{80},
                     epoch_tearsheet::PieInnerSize{60});
 
     auto inner_pie_data = ReportUtils::createPieDataFromSeries(inner_data);
-    chartBuilder.addSeries(innerLabelColumn, inner_pie_data, epoch_tearsheet::PieSize{45},
+    chartBuilder.addSeries(innerLabelColumn.GetColumnIdentifier(), inner_pie_data, epoch_tearsheet::PieSize{45},
                       epoch_tearsheet::PieInnerSize{0});
 
     dashboard.addChart(chartBuilder.build());

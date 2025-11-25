@@ -8,7 +8,8 @@ namespace epoch_script::transform {
 MovingAverage::MovingAverage(const TransformConfiguration &config)
     : ITransform(config),
       m_model(ma(config.GetOptionValue("type").GetSelectOption(),
-                 config.GetId(), config.GetInput(),
+                 config.GetId(),
+                 config.GetInput(),
                  config.GetOptionValue("period").GetInteger(),
                  config.GetTimeframe())) {}
 } // namespace epoch_script::transform

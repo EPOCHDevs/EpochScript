@@ -21,9 +21,9 @@ using namespace epoch_frame;
 
 TEST_CASE("Tulip Indicator Transforms") {
   SECTION("Moving Average Test") {
-    // E.g. an SMA with period=4 on column "x"
+    // E.g. an SMA with period=4 on column "src#x"
     TransformConfiguration config = sma(
-        0, "x", 4,
+        "0", input_ref("src", "x"), 4,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
     // Use registry to create the transform
@@ -31,7 +31,7 @@ TEST_CASE("Tulip Indicator Transforms") {
     auto model = dynamic_cast<ITransform *>(transformBase.get());
 
     SECTION("Successful run") {
-      // DataFrame input: x => [2, 4, 6, 8, 10]
+      // DataFrame input: src#x => [2, 4, 6, 8, 10]
       // If period=4 => first row of output at index=3 => (2+4+6+8)/4 = 20/4=5,
       // next row= (4+6+8+10)/4=28/4=7
       auto index = epoch_frame::factory::index::make_datetime_index(
@@ -42,14 +42,14 @@ TEST_CASE("Tulip Indicator Transforms") {
            epoch_frame::DateTime{2020y, std::chrono::January, 5d}});
 
       epoch_frame::DataFrame input =
-          make_dataframe<double>(index, {{2.0, 4.0, 6.0, 8.0, 10.0}}, {"x"});
+          make_dataframe<double>(index, {{2.0, 4.0, 6.0, 8.0, 10.0}}, {"src#x"});
 
       auto expectedIndex = epoch_frame::factory::index::make_datetime_index(
           {epoch_frame::DateTime{2020y, std::chrono::January, 4d},
            epoch_frame::DateTime{2020y, std::chrono::January, 5d}});
 
       epoch_frame::DataFrame expected = make_dataframe<double>(
-          expectedIndex, {{5.0, 7.0}}, {config.GetOutputId()});
+          expectedIndex, {{5.0, 7.0}}, {config.GetOutputId().GetColumnName()});
 
       auto result = model->TransformData(input);
       INFO("Comparing output with expected values\n"
@@ -66,13 +66,13 @@ TEST_CASE("Tulip Indicator Transforms") {
            epoch_frame::DateTime{2020y, std::chrono::January, 3d}});
 
       epoch_frame::DataFrame input =
-          make_dataframe<double>(index, {{2.0, 4.0, 6.0}}, {"x"});
+          make_dataframe<double>(index, {{2.0, 4.0, 6.0}}, {"src#x"});
 
       // Empty DataFrame with the correct column
       auto emptyIndex = epoch_frame::factory::index::make_datetime_index(
           std::vector<arrow::TimestampScalar>{});
       epoch_frame::DataFrame expected =
-          make_dataframe<double>(emptyIndex, {{}}, {config.GetOutputId()});
+          make_dataframe<double>(emptyIndex, {{}}, {config.GetOutputId().GetColumnName()});
 
       auto result = model->TransformData(input);
       INFO("Comparing output with expected values\n"
@@ -83,7 +83,7 @@ TEST_CASE("Tulip Indicator Transforms") {
   }
 
   SECTION("CrossOver and CrossAny Test") {
-    // DataFrame example
+    // DataFrame example with node#column format
     auto index = epoch_frame::factory::index::make_datetime_index(
         {epoch_frame::DateTime{2020y, std::chrono::January, 1d},
          epoch_frame::DateTime{2020y, std::chrono::January, 2d},
@@ -93,16 +93,18 @@ TEST_CASE("Tulip Indicator Transforms") {
     epoch_frame::DataFrame input =
         make_dataframe<double>(index,
                                {
-                                   {81.59, 81.06, 82.87, 83.00}, // x
-                                   {81.85, 81.20, 81.55, 82.91}  // y
+                                   {81.59, 81.06, 82.87, 83.00}, // src#x
+                                   {81.85, 81.20, 81.55, 82.91}  // src#y
                                },
-                               {"x", "y"});
+                               {"src#x", "src#y"});
 
     for (auto const &op : {"over", "any"}) {
       DYNAMIC_SECTION(std::format("Cross{} Successful run", op)) {
-        // Build transform config: cross + op => crossany or crossover
-        TransformConfiguration config = double_operand_op(
-            "cross", op, 0, "x", "y",
+          // Build transform config: cross + op => crossany or crossover
+          TransformConfiguration config = double_operand_op(
+              "cross", op, "0",
+              input_ref("src", "x"),
+              input_ref("src", "y"),
             epoch_script::EpochStratifyXConstants::instance()
                 .DAILY_FREQUENCY);
 
@@ -120,7 +122,7 @@ TEST_CASE("Tulip Indicator Transforms") {
              epoch_frame::DateTime{2020y, std::chrono::January, 4d}});
 
         epoch_frame::DataFrame expected = make_dataframe<bool>(
-            outputIndex, {{false, true, false}}, {config.GetOutputId()});
+            outputIndex, {{false, true, false}}, {config.GetOutputId().GetColumnName()});
 
         auto result = model->TransformData(input);
         INFO("Comparing output with expected values\n"
@@ -134,7 +136,9 @@ TEST_CASE("Tulip Indicator Transforms") {
       // Crossunder should detect when x crosses BELOW y
       // Using the same input data, crossunder(x, y) should be the opposite of crossover(x, y)
       TransformConfiguration config = crossunder(
-          "0", "x", "y",
+          "0",
+          input_ref("src", "x"),
+          input_ref("src", "y"),
           epoch_script::EpochStratifyXConstants::instance()
               .DAILY_FREQUENCY);
 
@@ -153,7 +157,7 @@ TEST_CASE("Tulip Indicator Transforms") {
            epoch_frame::DateTime{2020y, std::chrono::January, 4d}});
 
       epoch_frame::DataFrame expected = make_dataframe<bool>(
-          outputIndex, {{false, false, false}}, {config.GetOutputId()});
+          outputIndex, {{false, false, false}}, {config.GetOutputId().GetColumnName()});
 
       auto result = model->TransformData(input);
       INFO("Comparing crossunder output with expected values\n"
@@ -164,19 +168,14 @@ TEST_CASE("Tulip Indicator Transforms") {
   }
 
   SECTION("MACD Indicator Test") {
-    // Example config building for "macd" with periods 12,26,9
-    // If your usage is different, adjust accordingly
-    TransformConfiguration config{TransformDefinition{YAML::Load(R"(
-type: macd
-id: 1
-timeframe: {interval: 1, type: day}
-inputs:
-  "SLOT": c
-options:
-  short_period: 5
-  long_period: 10
-  signal_period: 2
-)")}};
+    // MACD with periods 5,10,2
+    auto &C = epoch_script::EpochStratifyXConstants::instance();
+    auto config = run_op("macd", "1",
+        {{"SLOT", {input_ref("mds", "c")}}},
+        {{"short_period", MetaDataOptionDefinition{5.0}},
+         {"long_period", MetaDataOptionDefinition{10.0}},
+         {"signal_period", MetaDataOptionDefinition{2.0}}},
+        C.DAILY_FREQUENCY);
 
     // Use registry to create the transform
     auto transformBase = MAKE_TRANSFORM(config);
@@ -192,9 +191,10 @@ options:
 
     std::vector<double> closeValues = {35, 36, 37, 38, 39, 40, 41,
                                        42, 43, 44, 45, 46, 47};
+    // Use node#column format for input
     epoch_frame::DataFrame input = make_dataframe<double>(
         index, {closeValues},
-        {epoch_script::EpochStratifyXConstants::instance().CLOSE()});
+        {"mds#c"});
 
     // For demonstration, we won't calculate real MACD values manually.
     // Just check that the result has 3 columns matching the Tulip naming.
@@ -207,19 +207,14 @@ options:
   }
 
   SECTION("MACD Indicator Test with empty result") {
-    // Example config building for "macd" with periods 12,26,9 - not enough data
-    // to produce result
-    TransformConfiguration config{TransformDefinition{YAML::Load(R"(
-type: macd
-id: 1
-timeframe: {interval: 1, type: day}
-inputs:
-  "SLOT": c
-options:
-  short_period: 12
-  long_period: 26
-  signal_period: 9
-)")}};
+    // MACD with periods 12,26,9 - not enough data to produce result
+    auto &C = epoch_script::EpochStratifyXConstants::instance();
+    auto config = run_op("macd", "1",
+        {{"SLOT", {input_ref("mds", "c")}}},
+        {{"short_period", MetaDataOptionDefinition{12.0}},
+         {"long_period", MetaDataOptionDefinition{26.0}},
+         {"signal_period", MetaDataOptionDefinition{9.0}}},
+        C.DAILY_FREQUENCY);
 
     // Use registry to create the transform
     auto transformBase = MAKE_TRANSFORM(config);
@@ -235,9 +230,10 @@ options:
 
     std::vector<double> closeValues = {35, 36, 37, 38, 39, 40, 41,
                                        42, 43, 44, 45, 46, 47};
+    // Use node#column format for input
     epoch_frame::DataFrame input = make_dataframe<double>(
         index, {closeValues},
-        {epoch_script::EpochStratifyXConstants::instance().CLOSE()});
+        {"mds#c"});
 
     auto output = model->TransformData(input);
 
@@ -250,21 +246,17 @@ options:
 
   SECTION("CandleStick Test") {
     auto &C = epoch_script::EpochStratifyXConstants::instance();
-    // Example config building for "macd" with periods 12,26,9
-    // If your usage is different, adjust accordingly
-    TransformConfiguration config{TransformDefinition{YAML::Load(R"(
-type: doji
-id: 1
-options:
-  period: 10
-  body_none: 0.05
-  body_short: 0.5
-  body_long: 1.4
-  wick_none: 0.05
-  wick_long: 0.6
-  near: 0.3
-timeframe: {interval: 1, type: day}
-)")}};
+    // Doji candlestick pattern detection
+    auto config = run_op("doji", "1",
+        {},
+        {{"period", MetaDataOptionDefinition{10.0}},
+         {"body_none", MetaDataOptionDefinition{0.05}},
+         {"body_short", MetaDataOptionDefinition{0.5}},
+         {"body_long", MetaDataOptionDefinition{1.4}},
+         {"wick_none", MetaDataOptionDefinition{0.05}},
+         {"wick_long", MetaDataOptionDefinition{0.6}},
+         {"near", MetaDataOptionDefinition{0.3}}},
+        C.DAILY_FREQUENCY);
 
     // Use registry to create the transform
     auto transformBase = MAKE_TRANSFORM(config);

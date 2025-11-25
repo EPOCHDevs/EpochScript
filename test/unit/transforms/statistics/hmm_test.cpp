@@ -25,8 +25,13 @@ DataFrame read_hmm_input(const std::string &file) {
   auto path = std::filesystem::path(HMM_TEST_DATA_DIR) / file;
   auto df_res = epoch_frame::read_csv_file(path, epoch_frame::CSVReadOptions{});
   REQUIRE(df_res.ok());
-  auto df = df_res.ValueOrDie();
-  return df.set_index("index");
+  auto df = df_res.ValueOrDie().set_index("index");
+  // Rename columns to use "src#" prefix for node#column format
+  std::unordered_map<std::string, std::string> rename_map;
+  for (const auto& col : df.column_names()) {
+    rename_map[col] = "src#" + col;
+  }
+  return df.rename(rename_map);
 }
 
 } // namespace
@@ -43,18 +48,14 @@ TEST_CASE("HMMTransform detects correlated features (2 states)", "[hmm]") {
       // Build config for hmm transform with n_states option
       std::string type = "hmm_2";
 
-      YAML::Node inputs_yaml;
-      inputs_yaml[epoch_script::ARG] =
-          std::vector<std::string>{"x", "y", "z"};
-      YAML::Node options_yaml;
-      // Note: n_states is NOT an option for hmm_2 - it's built into the type
-      options_yaml["max_iterations"] = 1000;
-      options_yaml["tolerance"] = 1e-5;
-      options_yaml["compute_zscore"] = true;
-      options_yaml["min_training_samples"] = 100;
-      options_yaml["lookback_window"] = 0;
       auto cfg = run_op(type, std::string("hmm_test_") + std::to_string(states),
-                        inputs_yaml, options_yaml, tf);
+          {{epoch_script::ARG, {input_ref("src", "x"), input_ref("src", "y"), input_ref("src", "z")}}},
+          {{"max_iterations", MetaDataOptionDefinition{1000.0}},
+           {"tolerance", MetaDataOptionDefinition{1e-5}},
+           {"compute_zscore", MetaDataOptionDefinition{true}},
+           {"min_training_samples", MetaDataOptionDefinition{100.0}},
+           {"lookback_window", MetaDataOptionDefinition{0.0}}},
+          tf);
 
       auto tbase = MAKE_TRANSFORM(cfg);
       auto t = dynamic_cast<ITransform *>(tbase.get());
@@ -80,22 +81,19 @@ TEST_CASE("HMMTransform with lookback window", "[hmm]") {
   if (base.num_rows() > 150) {
     base = base.head(150);
   }
-  // Build single-column input "x"
-  auto df = base["x"].to_frame();
+  // Build single-column input "src#x"
+  auto df = base["src#x"].to_frame();
 
   // hmm_2 with lookback_window=100
   // NEW BEHAVIOR: Train on first 100 rows, predict on remaining 50 rows
-  YAML::Node inputs_yaml;
-  inputs_yaml[epoch_script::ARG].push_back("x");
-  YAML::Node options_yaml;
-  options_yaml["lookback_window"] = 100;
-  // Note: n_states is NOT an option for hmm_2 - it's built into the type
-  options_yaml["min_training_samples"] = 100; // satisfy constraint
-  options_yaml["max_iterations"] = 1000;
-  options_yaml["tolerance"] = 1e-5;
-  options_yaml["compute_zscore"] = true;
-
-  auto cfg = run_op("hmm_2", "hmm_lb", inputs_yaml, options_yaml, tf);
+  auto cfg = run_op("hmm_2", "hmm_lb",
+      {{epoch_script::ARG, {input_ref("src", "x")}}},
+      {{"lookback_window", MetaDataOptionDefinition{100.0}},
+       {"min_training_samples", MetaDataOptionDefinition{100.0}},
+       {"max_iterations", MetaDataOptionDefinition{1000.0}},
+       {"tolerance", MetaDataOptionDefinition{1e-5}},
+       {"compute_zscore", MetaDataOptionDefinition{true}}},
+      tf);
   auto tbase = MAKE_TRANSFORM(cfg);
   auto t = dynamic_cast<ITransform *>(tbase.get());
   REQUIRE(t != nullptr);
@@ -114,19 +112,16 @@ TEST_CASE("HMMTransform insufficient samples throws", "[hmm]") {
   // Fewer than default min_training_samples (100)
   // Use first 20 rows from input for consistent index/build
   auto base = read_hmm_input("hmm_input_2.csv");
-  auto df = base["x"].iloc({0, 50}).to_frame();
+  auto df = base["src#x"].iloc({0, 50}).to_frame();
 
-  YAML::Node inputs_yaml;
-  inputs_yaml[epoch_script::ARG].push_back("x");
-  YAML::Node options_yaml; // keep defaults
-  // Note: n_states is NOT an option for hmm_2 - it's built into the type
-  options_yaml["max_iterations"] = 1000;
-  options_yaml["tolerance"] = 1e-5;
-  options_yaml["compute_zscore"] = true;
-  options_yaml["min_training_samples"] = 100;
-  options_yaml["lookback_window"] = 0;
-
-  auto cfg = run_op("hmm_2", "hmm_small", inputs_yaml, options_yaml, tf);
+  auto cfg = run_op("hmm_2", "hmm_small",
+      {{epoch_script::ARG, {input_ref("src", "x")}}},
+      {{"max_iterations", MetaDataOptionDefinition{1000.0}},
+       {"tolerance", MetaDataOptionDefinition{1e-5}},
+       {"compute_zscore", MetaDataOptionDefinition{true}},
+       {"min_training_samples", MetaDataOptionDefinition{100.0}},
+       {"lookback_window", MetaDataOptionDefinition{0.0}}},
+      tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
   auto t = dynamic_cast<ITransform *>(tbase.get());
@@ -150,20 +145,14 @@ TEST_CASE("HMMTransform with uncorrelated features", "[hmm]") {
     DYNAMIC_SECTION("Uncorrelated features with states=" << states) {
       std::string type = "hmm_" + std::to_string(states);
 
-      YAML::Node inputs_yaml;
-      // Use x, y, z as proxies for volatility, trend, and momentum features
-      inputs_yaml[epoch_script::ARG] =
-          std::vector<std::string>{"x", "y", "z"};
-
-      YAML::Node options_yaml;
-      options_yaml["max_iterations"] = 1000;
-      options_yaml["tolerance"] = 1e-5;
-      options_yaml["compute_zscore"] = true;
-      options_yaml["min_training_samples"] = 100;
-      options_yaml["lookback_window"] = 0;
-
       auto cfg = run_op(type, std::string("hmm_uncorr_") + std::to_string(states),
-                        inputs_yaml, options_yaml, tf);
+          {{epoch_script::ARG, {input_ref("src", "x"), input_ref("src", "y"), input_ref("src", "z")}}},
+          {{"max_iterations", MetaDataOptionDefinition{1000.0}},
+           {"tolerance", MetaDataOptionDefinition{1e-5}},
+           {"compute_zscore", MetaDataOptionDefinition{true}},
+           {"min_training_samples", MetaDataOptionDefinition{100.0}},
+           {"lookback_window", MetaDataOptionDefinition{0.0}}},
+          tf);
 
       auto tbase = MAKE_TRANSFORM(cfg);
       auto t = dynamic_cast<ITransform *>(tbase.get());
@@ -179,7 +168,7 @@ TEST_CASE("HMMTransform with uncorrelated features", "[hmm]") {
       REQUIRE(out.num_cols() == expected_cols);
 
       // Verify state column is valid
-      auto state_col = out[cfg.GetOutputId("state")]
+      auto state_col = out[cfg.GetOutputId("state").GetColumnName()]
                            .contiguous_array()
                            .to_vector<int64_t>();
       REQUIRE(state_col.size() == df.num_rows());
@@ -189,8 +178,8 @@ TEST_CASE("HMMTransform with uncorrelated features", "[hmm]") {
       }
 
       // Verify probability columns exist and are valid
-      for (size_t i = 0; i < states; ++i) {
-        auto prob_col_name = cfg.GetOutputId("state_" + std::to_string(i) + "_prob");
+      for (int i = 0; i < states; ++i) {
+        auto prob_col_name = cfg.GetOutputId("state_" + std::to_string(i) + "_prob").GetColumnName();
         REQUIRE(out.contains(prob_col_name));
 
         constexpr double epsilon = 1e-9;

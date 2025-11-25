@@ -18,7 +18,7 @@ namespace epoch_script::runtime {
 // Helper function to broadcast a scalar value to a target index size (DRY principle)
 // SRP: Responsible only for creating a broadcasted array from a scalar
 static arrow::ChunkedArrayPtr BroadcastScalar(const epoch_frame::Scalar& scalar, size_t target_size) {
-    auto broadcastedArray = arrow::MakeArrayFromScalar(*scalar.value(), target_size).ValueOrDie();
+    auto broadcastedArray = arrow::MakeArrayFromScalar(*scalar.value(), target_size).MoveValueUnsafe();
     return std::make_shared<arrow::ChunkedArray>(broadcastedArray);
 }
 
@@ -27,7 +27,6 @@ epoch_frame::DataFrame IntermediateResultStorage::GatherInputs(
     const epoch_script::transform::ITransformBase &transformer) const {
   const auto targetTimeframe = transformer.GetTimeframe().ToString();
   const auto dataSources = transformer.GetRequiredDataSources();  // Use interface method for template expansion
-
   const auto transformInputs = transformer.GetInputIds();
 
 #ifndef NDEBUG
@@ -77,68 +76,148 @@ epoch_frame::DataFrame IntermediateResultStorage::GatherInputs(
   std::vector<arrow::ChunkedArrayPtr> arrayList;
 
   std::unordered_set<std::string> columIdSet;
-  for (const auto &inputId : transformInputs) {
-    if (columIdSet.contains(inputId)) {
-      continue;
+
+  // ===========================================================================
+  // UNIFIED INPUT GATHERING: Process all inputs (literals and node references)
+  // ===========================================================================
+  // Iterate through slots from transform metadata to get InputValues directly.
+  // Each InputValue can be either:
+  // 1. A literal constant (embedded at compile time) - materialize and broadcast
+  // 2. A node reference (output from another transform) - fetch from cache
+  //
+  // NOTE: We iterate through slots (not column identifiers from GetInputIds())
+  // because GetInputs() looks up by slot ID, and column identifiers for literals
+  // (like "num_100") don't match slot IDs (like "SLOT0").
+
+  const auto& slots = transformer.GetConfiguration().GetTransformDefinition().GetMetadata().inputs;
+  for (const auto& slot : slots) {
+    const auto& input_values = transformer.GetConfiguration().GetInputs(slot.id);
+    if (input_values.empty()) {
+      continue;  // Slot not connected (allowed for trade_signal_executor)
     }
 
-    // Check if this input is a scalar (SRP: decision point for scalar vs regular path)
-    if (m_scalarOutputs.contains(inputId)) {
-      // Scalar path: Broadcast from global scalar cache
-      auto scalarIt = m_scalarCache.find(inputId);
-      if (scalarIt == m_scalarCache.end()) {
-        throw std::runtime_error(
-            "Scalar cache missing entry for '" + inputId +
-            "'. Asset: " + asset_id + ", Timeframe: " + targetTimeframe +
-            ". This indicates the scalar was registered but never populated.");
+    for (const auto& input_value : input_values) {
+      std::string inputId = input_value.GetColumnIdentifier();
+
+      if (columIdSet.contains(inputId)) {
+        continue;
       }
-      const auto& scalarValue = scalarIt->second;
-      arrayList.emplace_back(BroadcastScalar(scalarValue, targetIndex->size()));
+
+      // Check if this is a literal input (compile-time constant)
+      if (input_value.IsLiteral()) {
+        // LITERAL PATH: Materialize and broadcast compile-time constant
+        const auto& constant_value = input_value.GetLiteral();
+
+        SPDLOG_DEBUG("Materializing literal input {} = {} for transform {} (asset {})",
+                     inputId, constant_value.ToString(), transformer.GetId(), asset_id);
+
+        // Create Arrow scalar from ConstantValue
+        std::shared_ptr<arrow::Scalar> arrow_scalar;
+
+        if (constant_value.IsDecimal()) {
+          arrow_scalar = arrow::MakeScalar(constant_value.GetDecimal());
+        } else if (constant_value.IsString()) {
+          arrow_scalar = arrow::MakeScalar(constant_value.GetString());
+        } else if (constant_value.IsBoolean()) {
+          arrow_scalar = arrow::MakeScalar(constant_value.GetBoolean());
+        } else if (constant_value.IsTimestamp()) {
+          arrow_scalar = std::make_shared<arrow::TimestampScalar>(constant_value.GetTimestamp().timestamp());
+        } else if (constant_value.IsNull()) {
+          // Create typed null scalar
+          auto null_type = constant_value.GetNull().type;
+          switch (null_type) {
+            case epoch_core::IODataType::Decimal:
+            case epoch_core::IODataType::Number:
+              arrow_scalar = arrow::MakeNullScalar(arrow::float64());
+              break;
+            case epoch_core::IODataType::String:
+              arrow_scalar = arrow::MakeNullScalar(arrow::utf8());
+              break;
+            case epoch_core::IODataType::Boolean:
+              arrow_scalar = arrow::MakeNullScalar(arrow::boolean());
+              break;
+            case epoch_core::IODataType::Integer:
+              arrow_scalar = arrow::MakeNullScalar(arrow::int64());
+              break;
+            case epoch_core::IODataType::Timestamp:
+              arrow_scalar = arrow::MakeNullScalar(arrow::timestamp(arrow::TimeUnit::NANO, "UTC"));
+              break;
+            default:
+              arrow_scalar = arrow::MakeNullScalar(arrow::null());
+          }
+        } else {
+          throw std::runtime_error("Unknown constant value type in literal input: " + inputId);
+        }
+
+        // Broadcast the scalar to the target index size
+        auto broadcasted_array = arrow::MakeArrayFromScalar(*arrow_scalar, targetIndex->size()).MoveValueUnsafe();
+        auto chunked_array = std::make_shared<arrow::ChunkedArray>(broadcasted_array);
+
+        arrayList.emplace_back(chunked_array);
+        columns.emplace_back(inputId);
+        columIdSet.emplace(inputId);
+        continue;
+      }
+
+      // NODE REFERENCE PATH: Fetch output from another transform
+      // Check if this input is a scalar (SRP: decision point for scalar vs regular path)
+      if (m_scalarOutputs.contains(inputId)) {
+        // Scalar path: Broadcast from global scalar cache
+        auto scalarIt = m_scalarCache.find(inputId);
+        if (scalarIt == m_scalarCache.end()) {
+          throw std::runtime_error(
+              "Scalar cache missing entry for '" + inputId +
+              "'. Asset: " + asset_id + ", Timeframe: " + targetTimeframe +
+              ". This indicates the scalar was registered but never populated.");
+        }
+        const auto& scalarValue = scalarIt->second;
+        arrayList.emplace_back(BroadcastScalar(scalarValue, targetIndex->size()));
+        columns.emplace_back(inputId);
+        columIdSet.emplace(inputId);
+        SPDLOG_DEBUG("Broadcasting scalar {} to {} rows for asset: {}, timeframe {}",
+                     inputId, targetIndex->size(), asset_id, targetTimeframe);
+        continue;
+      }
+
+      // Regular (non-scalar) path: Retrieve from timeframe-specific cache
+      auto transform = m_ioIdToTransform.find(inputId);
+      if (transform == m_ioIdToTransform.end()) {
+        throw std::runtime_error("Cannot find transform for input: " +
+                                 inputId);
+      }
+      auto tf = transform->second->GetTimeframe().ToString();
+      SPDLOG_DEBUG(
+          "Gathering input {} for transform {}, asset: {}, timeframe {}. from {}",
+          inputId, transform->second->GetId(), asset_id, tf,
+          transformer.GetId());
+
+      // Defensive cache access with clear error messages
+      auto tfIt = m_cache.find(tf);
+      if (tfIt == m_cache.end()) {
+        throw std::runtime_error(
+            "Cache missing timeframe '" + tf + "' for input '" + inputId +
+            "'. Asset: " + asset_id);
+      }
+      auto assetIt = tfIt->second.find(asset_id);
+      if (assetIt == tfIt->second.end()) {
+        throw std::runtime_error(
+            "Cache missing asset '" + asset_id + "' for input '" + inputId +
+            "'. Timeframe: " + tf);
+      }
+      auto inputIt = assetIt->second.find(inputId);
+      if (inputIt == assetIt->second.end()) {
+        throw std::runtime_error(
+            "Cache missing input '" + inputId + "' for asset '" + asset_id +
+            "'. Timeframe: " + tf);
+      }
+      auto result = inputIt->second;
+      arrayList.emplace_back(tf == targetTimeframe
+                                 ? result.array()
+                                 : result.reindex(targetIndex).array());
       columns.emplace_back(inputId);
       columIdSet.emplace(inputId);
-      SPDLOG_DEBUG("Broadcasting scalar {} to {} rows for asset: {}, timeframe {}",
-                   inputId, targetIndex->size(), asset_id, targetTimeframe);
-      continue;
-    }
-
-    // Regular (non-scalar) path: Retrieve from timeframe-specific cache
-    auto transform = m_ioIdToTransform.find(inputId);
-    if (transform == m_ioIdToTransform.end()) {
-      throw std::runtime_error("Cannot find transform for input: " +
-                               inputId);
-    }
-    auto tf = transform->second->GetTimeframe().ToString();
-    SPDLOG_DEBUG(
-        "Gathering input {} for transform {}, asset: {}, timeframe {}. from {}",
-        inputId, transform->second->GetId(), asset_id, tf,
-        transformer.GetId());
-
-    // Defensive cache access with clear error messages
-    auto tfIt = m_cache.find(tf);
-    if (tfIt == m_cache.end()) {
-      throw std::runtime_error(
-          "Cache missing timeframe '" + tf + "' for input '" + inputId +
-          "'. Asset: " + asset_id);
-    }
-    auto assetIt = tfIt->second.find(asset_id);
-    if (assetIt == tfIt->second.end()) {
-      throw std::runtime_error(
-          "Cache missing asset '" + asset_id + "' for input '" + inputId +
-          "'. Timeframe: " + tf);
-    }
-    auto inputIt = assetIt->second.find(inputId);
-    if (inputIt == assetIt->second.end()) {
-      throw std::runtime_error(
-          "Cache missing input '" + inputId + "' for asset '" + asset_id +
-          "'. Timeframe: " + tf);
-    }
-    auto result = inputIt->second;
-    arrayList.emplace_back(tf == targetTimeframe
-                               ? result.array()
-                               : result.reindex(targetIndex).array());
-    columns.emplace_back(inputId);
-    columIdSet.emplace(inputId);
-  }
+    }  // end for input_values
+  }  // end for slots
 
   for (const auto &dataSource : dataSources) {
     if (columIdSet.contains(dataSource)) {
@@ -161,17 +240,8 @@ epoch_frame::DataFrame IntermediateResultStorage::GatherInputs(
     auto& assetData = assetIt->second;
 
     if (!assetData.contains(dataSource)) {
-      // DEBUG: Log what columns ARE available for this asset
-      auto availableCols = assetData.column_names();
-      SPDLOG_INFO("Transform {} looking for '{}' in asset {} - NOT FOUND",
-                  transformer.GetId(), dataSource, asset_id);
-      SPDLOG_INFO("  Available columns in base data ({} total):", availableCols.size());
-      for (size_t i = 0; i < std::min(availableCols.size(), size_t(10)); ++i) {
-        SPDLOG_INFO("    - {}", availableCols[i]);
-      }
-      if (availableCols.size() > 10) {
-        SPDLOG_INFO("    ... and {} more", availableCols.size() - 10);
-      }
+      SPDLOG_DEBUG("Transform {} looking for '{}' in asset {} - NOT FOUND",
+                   transformer.GetId(), dataSource, asset_id);
       continue; // Skip missing columns entirely - don't waste space with full null columns
     }
 
@@ -183,15 +253,41 @@ epoch_frame::DataFrame IntermediateResultStorage::GatherInputs(
   return epoch_frame::make_dataframe(targetIndex, arrayList, columns);
 }
 
+epoch_frame::DataFrame IntermediateResultStorage::GatherInputsForScalar(
+    const AssetID &asset_id,
+    const epoch_script::transform::ITransformBase &transformer) const {
+  // Scalar transforms need any non-empty DataFrame just for index extraction
+  // They don't care about timeframe or specific data - just need a valid index
+  // See scalar.h:34 (CreateScalarIndex) which calls bars.index()->iat(-1)
+
+  std::shared_lock lock(m_baseDataMutex);
+
+  // Return the first non-empty DataFrame we can find for this asset
+  // Iterate through all timeframes until we find data for this asset
+  for (const auto& [timeframe, assetMap] : m_baseData) {
+    auto assetIt = assetMap.find(asset_id);
+    if (assetIt != assetMap.end() && !assetIt->second.empty()) {
+      SPDLOG_DEBUG("GatherInputsForScalar: Using timeframe '{}' data for scalar transform {} (asset {})",
+                   timeframe, transformer.GetId(), asset_id);
+      return assetIt->second;
+    }
+  }
+
+  // No data found for this asset at all
+  SPDLOG_WARN("GatherInputsForScalar: No base data found for asset {} to execute scalar transform {}",
+              asset_id, transformer.GetId());
+  return epoch_frame::DataFrame{};
+}
+
 bool IntermediateResultStorage::ValidateInputsAvailable(
     const AssetID &asset_id,
     const epoch_script::transform::ITransformBase &transformer) const {
   const auto targetTimeframe = transformer.GetTimeframe().ToString();
   const auto dataSources = transformer.GetRequiredDataSources();  // Use interface method for template expansion
-  const auto transformInputs = transformer.GetInputIds();
+  const auto& slots = transformer.GetConfiguration().GetTransformDefinition().GetMetadata().inputs;
 
   // If no inputs required, validation passes
-  if (transformInputs.empty() && dataSources.empty()) {
+  if (slots.empty() && dataSources.empty()) {
     return true;
   }
 
@@ -202,7 +298,7 @@ bool IntermediateResultStorage::ValidateInputsAvailable(
   std::shared_lock scalarLock(m_scalarCacheMutex);
 
   // Check if base data exists for this asset/timeframe (needed for target index)
-  if (!transformInputs.empty()) {
+  if (!slots.empty()) {
     auto baseDataTfIt = m_baseData.find(targetTimeframe);
     if (baseDataTfIt == m_baseData.end()) {
       SPDLOG_DEBUG("Validation failed: base data missing timeframe '{}' for asset '{}'",
@@ -218,48 +314,63 @@ bool IntermediateResultStorage::ValidateInputsAvailable(
   }
 
   // Validate all transform inputs are available
-  for (const auto &inputId : transformInputs) {
-    // Check if this is a scalar (always available globally)
-    if (m_scalarOutputs.contains(inputId)) {
-      auto scalarIt = m_scalarCache.find(inputId);
-      if (scalarIt == m_scalarCache.end()) {
-        SPDLOG_DEBUG("Validation failed: scalar cache missing '{}' for asset '{}'",
+  // Iterate through slots from metadata to get InputValues directly
+  for (const auto& slot : slots) {
+    const auto& input_values = transformer.GetConfiguration().GetInputs(slot.id);
+    if (input_values.empty()) {
+      continue;  // Slot not connected (allowed for trade_signal_executor)
+    }
+
+    for (const auto& input_value : input_values) {
+      // Literal inputs are always available (embedded at compile time)
+      if (input_value.IsLiteral()) {
+        continue;
+      }
+
+      std::string inputId = input_value.GetColumnIdentifier();
+
+      // Check if this is a scalar (always available globally)
+      if (m_scalarOutputs.contains(inputId)) {
+        auto scalarIt = m_scalarCache.find(inputId);
+        if (scalarIt == m_scalarCache.end()) {
+          SPDLOG_DEBUG("Validation failed: scalar cache missing '{}' for asset '{}'",
+                       inputId, asset_id);
+          return false;
+        }
+        continue;
+      }
+
+      // Check regular (non-scalar) input
+      auto transform = m_ioIdToTransform.find(inputId);
+      if (transform == m_ioIdToTransform.end()) {
+        SPDLOG_DEBUG("Validation failed: cannot find transform for input '{}', asset '{}'",
                      inputId, asset_id);
         return false;
       }
-      continue;
-    }
 
-    // Check regular (non-scalar) input
-    auto transform = m_ioIdToTransform.find(inputId);
-    if (transform == m_ioIdToTransform.end()) {
-      SPDLOG_DEBUG("Validation failed: cannot find transform for input '{}', asset '{}'",
-                   inputId, asset_id);
-      return false;
-    }
+      auto tf = transform->second->GetTimeframe().ToString();
+      auto tfIt = m_cache.find(tf);
+      if (tfIt == m_cache.end()) {
+        SPDLOG_DEBUG("Validation failed: cache missing timeframe '{}' for input '{}', asset '{}'",
+                     tf, inputId, asset_id);
+        return false;
+      }
 
-    auto tf = transform->second->GetTimeframe().ToString();
-    auto tfIt = m_cache.find(tf);
-    if (tfIt == m_cache.end()) {
-      SPDLOG_DEBUG("Validation failed: cache missing timeframe '{}' for input '{}', asset '{}'",
-                   tf, inputId, asset_id);
-      return false;
-    }
+      auto assetIt = tfIt->second.find(asset_id);
+      if (assetIt == tfIt->second.end()) {
+        SPDLOG_DEBUG("Validation failed: cache missing asset '{}' for input '{}', timeframe '{}'",
+                     asset_id, inputId, tf);
+        return false;
+      }
 
-    auto assetIt = tfIt->second.find(asset_id);
-    if (assetIt == tfIt->second.end()) {
-      SPDLOG_DEBUG("Validation failed: cache missing asset '{}' for input '{}', timeframe '{}'",
-                   asset_id, inputId, tf);
-      return false;
-    }
-
-    auto inputIt = assetIt->second.find(inputId);
-    if (inputIt == assetIt->second.end()) {
-      SPDLOG_DEBUG("Validation failed: cache missing input '{}' for asset '{}', timeframe '{}'",
-                   inputId, asset_id, tf);
-      return false;
-    }
-  }
+      auto inputIt = assetIt->second.find(inputId);
+      if (inputIt == assetIt->second.end()) {
+        SPDLOG_DEBUG("Validation failed: cache missing input '{}' for asset '{}', timeframe '{}'",
+                     inputId, asset_id, tf);
+        return false;
+      }
+    }  // end for input_values
+  }  // end for slots
 
   // Validate all required data sources are available
   for (const auto &dataSource : dataSources) {
@@ -279,19 +390,8 @@ bool IntermediateResultStorage::ValidateInputsAvailable(
 
     auto& assetData = assetIt->second;
     if (!assetData.contains(dataSource)) {
-#ifndef NDEBUG
-      // DEBUG: Show what columns ARE available
-      auto availableCols = assetData.column_names();
       SPDLOG_DEBUG("Validation failed: base data missing column '{}' for asset '{}', timeframe '{}'",
                    dataSource, asset_id, targetTimeframe);
-      SPDLOG_DEBUG("  Available columns ({} total):", availableCols.size());
-      for (size_t i = 0; i < std::min(availableCols.size(), size_t(20)); ++i) {
-        SPDLOG_DEBUG("    - {}", availableCols[i]);
-      }
-      if (availableCols.size() > 20) {
-        SPDLOG_DEBUG("    ... and {} more", availableCols.size() - 20);
-      }
-#endif
       return false;
     }
   }
@@ -330,7 +430,7 @@ void IntermediateResultStorage::InitializeBaseData(
           auto index_array = index->as_chunked_array();
           auto vc_result = arrow::compute::ValueCounts(index_array);
           if (vc_result.ok()) {
-            auto vc_struct = vc_result.ValueOrDie();
+            auto vc_struct = vc_result.MoveValueUnsafe();
             auto counts = std::static_pointer_cast<arrow::Int64Array>(
                 vc_struct->GetFieldByName("counts"));
 
@@ -401,11 +501,18 @@ TimeFrameAssetDataFrameMap IntermediateResultStorage::BuildFinalOutput() {
         continue;
       }
       const auto targetTimeframe = transform->GetTimeframe().ToString();
-      const auto &assetBucket = m_cache.at(targetTimeframe);
+
+      // Check if timeframe exists in cache
+      auto tfIt = m_cache.find(targetTimeframe);
+      if (tfIt == m_cache.end()) {
+        continue;
+      }
+      const auto &assetBucket = tfIt->second;
       auto bucket = assetBucket.find(asset_id);
       if (bucket == assetBucket.end()) {
         continue;
       }
+
       // we only export cseries with plot kinds
       auto target = bucket->second.find(ioId);
       if (target == bucket->second.end()) {
@@ -533,7 +640,7 @@ void IntermediateResultStorage::StoreTransformOutput(
       if (!m_scalarCache.contains(outputId)) {
         if (data.contains(outputId) && data[outputId].size() > 0) {
           // Extract scalar value from first element of the Series
-          m_scalarCache[outputId] = epoch_frame::Scalar(data[outputId].array()->GetScalar(0).ValueOrDie());
+          m_scalarCache[outputId] = epoch_frame::Scalar(data[outputId].array()->GetScalar(0).MoveValueUnsafe());
           SPDLOG_DEBUG("Stored scalar {} globally (single copy, no timeframe/asset)", outputId);
         } else {
           // Store null scalar
@@ -566,7 +673,7 @@ void IntermediateResultStorage::StoreTransformOutput(
         auto index_array = targetIndex->as_chunked_array();
         auto vc_result = arrow::compute::ValueCounts(index_array);
         if (vc_result.ok()) {
-          auto vc_struct = vc_result.ValueOrDie();
+          auto vc_struct = vc_result.MoveValueUnsafe();
           auto counts = std::static_pointer_cast<arrow::Int64Array>(
               vc_struct->GetFieldByName("counts"));
 
@@ -609,12 +716,6 @@ void IntermediateResultStorage::StoreTransformOutput(
     if (data.contains(outputId)) {
       SPDLOG_DEBUG("Storing output {} for asset: {}, timeframe {}", outputId,
                    asset_id, timeframe);
-      // TODO: Save guide for duplicate index(Futures)
-      if (outputId == "ret_d#result" && asset_id == "AAPL-Stocks") {
-        SPDLOG_INFO("data[outputId]:\n{}", data[outputId].repr());
-        SPDLOG_INFO("targetIndex:\n{}", targetIndex->repr());
-      }
-
       m_cache[timeframe][asset_id][outputId] = data[outputId].reindex(targetIndex);
       continue;
     }
@@ -623,11 +724,75 @@ void IntermediateResultStorage::StoreTransformOutput(
 
     size_t index_size = targetIndex->size();
     auto null_array_result = arrow::MakeArrayOfNull(GetArrowTypeFromIODataType(outputMetaData.type), index_size);
-    auto null_array = null_array_result.ValueOrDie();
+    auto null_array = null_array_result.MoveValueUnsafe();
     m_cache[timeframe][asset_id][outputId] = epoch_frame::Series(
         targetIndex,
         std::make_shared<arrow::ChunkedArray>(null_array),
         std::optional<std::string>(outputId));
   }
 }
+// ===== Report Caching Implementation =====
+
+void IntermediateResultStorage::StoreReport(
+    const AssetID& key,
+    const epoch_proto::TearSheet& report) {
+  // Skip empty reports
+  if (report.ByteSizeLong() == 0) {
+    SPDLOG_DEBUG("Skipping empty report for key '{}'", key);
+    return;
+  }
+
+  std::unique_lock lock(m_reportCacheMutex);
+
+  if (m_reportCache.contains(key)) {
+    // Merge with existing report using protobuf's MergeFrom
+    auto& existing = m_reportCache[key];
+    [[maybe_unused]] size_t originalSize = existing.ByteSizeLong();
+    existing.MergeFrom(report);
+    SPDLOG_DEBUG("Merged report for key '{}': {} + {} = {} bytes",
+                 key, originalSize, report.ByteSizeLong(), existing.ByteSizeLong());
+  } else {
+    // First report for this key
+    m_reportCache[key] = report;
+    SPDLOG_DEBUG("Cached first report for key '{}' ({} bytes)",
+                 key, report.ByteSizeLong());
+  }
+}
+
+AssetReportMap IntermediateResultStorage::GetCachedReports() const {
+  std::shared_lock lock(m_reportCacheMutex);
+  return m_reportCache;  // Return a copy for thread safety
+}
+
+// ===== Event Marker Caching Implementation =====
+
+void IntermediateResultStorage::StoreEventMarker(
+    const AssetID& key,
+    const epoch_script::transform::EventMarkerData& marker) {
+  // Skip invalid event markers
+  if (marker.title.empty() || marker.schemas.empty()) {
+    SPDLOG_DEBUG("Skipping invalid event marker for key '{}': empty title or schemas", key);
+    return;
+  }
+
+  std::unique_lock lock(m_eventMarkerCacheMutex);
+
+  if (m_eventMarkerCache.contains(key)) {
+    // Append to existing vector
+    m_eventMarkerCache[key].push_back(marker);
+    SPDLOG_DEBUG("Appended event marker for key '{}' (total: {})",
+                 key, m_eventMarkerCache[key].size());
+  } else {
+    // First event marker for this key
+    m_eventMarkerCache[key] = {marker};
+    SPDLOG_DEBUG("Cached first event marker for key '{}' (title: '{}')",
+                 key, marker.title);
+  }
+}
+
+AssetEventMarkerMap IntermediateResultStorage::GetCachedEventMarkers() const {
+  std::shared_lock lock(m_eventMarkerCacheMutex);
+  return m_eventMarkerCache;  // Return a copy for thread safety
+}
+
 } // namespace epoch_script::runtime

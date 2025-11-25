@@ -11,6 +11,7 @@
 #include <epoch_frame/factory/dataframe_factory.h>
 #include <epoch_frame/index.h>
 #include <epoch_script/core/time_frame.h>
+#include <epoch_script/core/constants.h>
 #include <epoch_script/transforms/core/sessions_utils.h>
 #include <unordered_map>
 #include <vector>
@@ -169,6 +170,40 @@ void ApplyDefaultTransform(
 
       if (!result.empty()) {
         result = transformer.TransformData(result);
+
+        // Capture reports from reporter transforms
+        const auto meta = transformer.GetConfiguration().GetTransformDefinition().GetMetadata();
+        if (meta.category == epoch_core::TransformCategory::Reporter) {
+          try {
+            auto dashboardOpt = transformer.GetDashboard(result);
+            if (dashboardOpt.has_value()) {
+              auto tearsheet = dashboardOpt->build();
+              if (tearsheet.ByteSizeLong() > 0) {
+                msg.cache->StoreReport(asset_id, tearsheet);
+                SPDLOG_DEBUG("Captured report from {} for asset {} ({} bytes)",
+                             transformer.GetId(), asset_id, tearsheet.ByteSizeLong());
+              }
+            }
+          } catch (const std::exception& e) {
+            SPDLOG_WARN("Failed to capture report from {} for asset {}: {}",
+                        transformer.GetId(), asset_id, e.what());
+          }
+        }
+
+        // Capture event markers from event_marker transforms
+        if (meta.category == epoch_core::TransformCategory::EventMarker) {
+          try {
+            auto eventMarkerOpt = transformer.GetEventMarkers(result);
+            if (eventMarkerOpt.has_value()) {
+              msg.cache->StoreEventMarker(asset_id, *eventMarkerOpt);
+              SPDLOG_DEBUG("Captured event marker from {} for asset {}",
+                           transformer.GetId(), asset_id);
+            }
+          } catch (const std::exception& e) {
+            SPDLOG_WARN("Failed to capture event marker from {} for asset {}: {}",
+                        transformer.GetId(), asset_id, e.what());
+          }
+        }
       } else {
         SPDLOG_WARN(
             "Asset({}): Empty DataFrame provided to {}. Skipping transform",
@@ -334,8 +369,23 @@ void ApplyCrossSectionTransform(
     const auto meta =
         transformer.GetConfiguration().GetTransformDefinition().GetMetadata();
     if (meta.category == epoch_core::TransformCategory::Reporter) {
-      // Reporter transforms generate tearsheets internally via TransformData()
-      // They don't produce outputs for downstream consumption, so skip distribution
+      // Cross-sectional reporters generate a single report for all assets
+      // Capture the report under GROUP_KEY before returning
+      try {
+        auto dashboardOpt = transformer.GetDashboard(crossResult);
+        if (dashboardOpt.has_value()) {
+          auto tearsheet = dashboardOpt->build();
+          if (tearsheet.ByteSizeLong() > 0) {
+            msg.cache->StoreReport(epoch_script::GROUP_KEY, tearsheet);
+            SPDLOG_DEBUG("Captured cross-sectional report from {} under GROUP_KEY ({} bytes)",
+                         transformer.GetConfiguration().GetId(), tearsheet.ByteSizeLong());
+          }
+        }
+      } catch (const std::exception& e) {
+        SPDLOG_WARN("Failed to capture cross-sectional report from {}: {}",
+                    transformer.GetConfiguration().GetId(), e.what());
+      }
+
       SPDLOG_DEBUG("Cross-sectional reporter {} - skipping output distribution",
                    transformer.GetConfiguration().GetId());
       return;

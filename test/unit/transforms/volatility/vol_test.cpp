@@ -49,7 +49,7 @@ TEST_CASE("ReturnVolatility Transform", "[Indicator]") {
   };
 
   epoch_frame::DataFrame expected = epoch_frame::make_dataframe<double>(
-      input.index(), {expectedVol}, {config.GetOutputId()});
+      input.index(), {expectedVol}, {config.GetOutputId().GetColumnName()});
 
   // Run transform & compare
   epoch_frame::DataFrame output = model->TransformData(input);
@@ -81,7 +81,7 @@ TEST_CASE("PriceDiffVolatility Transform", "[Indicator]") {
   };
 
   epoch_frame::DataFrame expected = epoch_frame::make_dataframe<double>(
-      input.index(), {expectedVol}, {config.GetOutputId()});
+      input.index(), {expectedVol}, {config.GetOutputId().GetColumnName()});
 
   // Run transform & compare
   epoch_frame::DataFrame output = model->TransformData(input);

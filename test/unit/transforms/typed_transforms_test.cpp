@@ -37,7 +37,7 @@ TEST_CASE("Typed Lag - lag_number", "[typed][lag][functional]") {
 
     auto input_df = make_dataframe<double>(index, {{10.0, 20.0, 30.0, 40.0}}, {"value"});
 
-    TransformConfiguration config = single_operand_period_op("lag_number", 1, 1, "value", timeframe);
+    TransformConfiguration config = single_operand_period_op("lag_number", 1, 1, strategy::InputValue(strategy::NodeReference("", "value")), timeframe);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     REQUIRE(transform != nullptr);
@@ -45,7 +45,7 @@ TEST_CASE("Typed Lag - lag_number", "[typed][lag][functional]") {
     DataFrame result = transform->TransformData(input_df);
     REQUIRE(result.num_cols() == 1);
 
-    auto result_vec = result[config.GetOutputId()].contiguous_array().to_vector<double>();
+    auto result_vec = result[config.GetOutputId().GetColumnName()].contiguous_array().to_vector<double>();
     REQUIRE(result_vec.size() == 4);
     REQUIRE(std::isnan(result_vec[0]));  // First value is null
     REQUIRE(result_vec[1] == 10.0);      // Lagged from index 0
@@ -67,7 +67,7 @@ TEST_CASE("Typed Lag - lag_string", "[typed][lag][functional]") {
         {factory::array::make_array<std::string>({"A", "B", "C"})},
         {"value"});
 
-    TransformConfiguration config = single_operand_period_op("lag_string", 2, 1, "value", timeframe);
+    TransformConfiguration config = single_operand_period_op("lag_string", 2, 1, strategy::InputValue(strategy::NodeReference("", "value")), timeframe);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     REQUIRE(transform != nullptr);
@@ -76,7 +76,7 @@ TEST_CASE("Typed Lag - lag_string", "[typed][lag][functional]") {
 
     // Verify transform created successfully and produced output
     REQUIRE(result.num_cols() == 1);
-    REQUIRE(result[config.GetOutputId()].size() == 3);
+    REQUIRE(result[config.GetOutputId().GetColumnName()].size() == 3);
 }
 
 // ==================== TYPED NULL SCALAR TESTS ====================
@@ -96,7 +96,7 @@ TEST_CASE("Typed Null Scalars", "[typed][null][functional]") {
         auto input_df = make_dataframe<double>(index, {{1.0}}, {"dummy"});
         DataFrame result = transform->TransformData(input_df);
 
-        auto result_vec = result[config.GetOutputId()].contiguous_array().to_vector<double>();
+        auto result_vec = result[config.GetOutputId().GetColumnName()].contiguous_array().to_vector<double>();
         REQUIRE(std::isnan(result_vec[0]));
     }
 
@@ -110,7 +110,7 @@ TEST_CASE("Typed Null Scalars", "[typed][null][functional]") {
 
         // Just verify it produces an output
         REQUIRE(result.num_cols() == 1);
-        REQUIRE(result[config.GetOutputId()].size() == 1);
+        REQUIRE(result[config.GetOutputId().GetColumnName()].size() == 1);
     }
 }
 
@@ -155,7 +155,7 @@ timeframe: {}
     DataFrame result = transform->TransformData(input_df);
     REQUIRE(result.num_cols() == 1);
 
-    auto result_vec = result[config.GetOutputId()].contiguous_array().to_vector<double>();
+    auto result_vec = result[config.GetOutputId().GetColumnName()].contiguous_array().to_vector<double>();
     REQUIRE(result_vec.size() == 5);
     REQUIRE(result_vec[0] == 10.0);  // true -> true_val[0]
     REQUIRE(result_vec[1] == 2.0);   // false -> false_val[1]
@@ -198,7 +198,7 @@ timeframe: {}
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
     DataFrame result = transform->TransformData(input_df);
-    auto result_vec = result[config.GetOutputId()].contiguous_array().to_vector<std::string>();
+    auto result_vec = result[config.GetOutputId().GetColumnName()].contiguous_array().to_vector<std::string>();
 
     REQUIRE(result_vec.size() == 3);
     REQUIRE(result_vec[0] == "High");  // true
@@ -244,7 +244,7 @@ timeframe: {}
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
     DataFrame result = transform->TransformData(input_df);
-    auto result_vec = result[config.GetOutputId()].contiguous_array().to_vector<double>();
+    auto result_vec = result[config.GetOutputId().GetColumnName()].contiguous_array().to_vector<double>();
 
     REQUIRE(result_vec.size() == 5);
     REQUIRE(result_vec[0] == 100.0);  // index=0 -> slot0[0]
@@ -290,7 +290,7 @@ timeframe: {}
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
     DataFrame result = transform->TransformData(input_df);
-    auto result_vec = result[config.GetOutputId()].contiguous_array().to_vector<std::string>();
+    auto result_vec = result[config.GetOutputId().GetColumnName()].contiguous_array().to_vector<std::string>();
 
     REQUIRE(result_vec.size() == 3);
     REQUIRE(result_vec[0] == "A");  // index=0 -> slot0
@@ -363,7 +363,7 @@ timeframe: {}
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
     DataFrame result = transform->TransformData(input_df);
-    auto result_vec = result[config.GetOutputId()].contiguous_array().to_vector<double>();
+    auto result_vec = result[config.GetOutputId().GetColumnName()].contiguous_array().to_vector<double>();
 
     REQUIRE(result_vec.size() == 5);
     // First few values may be null/low due to rolling window
@@ -410,7 +410,7 @@ timeframe: {}
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
     DataFrame result = transform->TransformData(input_df);
-    auto result_vec = result[config.GetOutputId()].contiguous_array().to_vector<double>();
+    auto result_vec = result[config.GetOutputId().GetColumnName()].contiguous_array().to_vector<double>();
 
     REQUIRE(result_vec.size() == 3);
     REQUIRE(result_vec[0] == 100.0);

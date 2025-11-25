@@ -28,11 +28,11 @@ epoch_frame::DataFrame MakeMultiColumnTestData() {
 
   return make_dataframe<double>(index,
                                 {
-                                    {10.0, 20.0, 30.0, 40.0}, // col_1
-                                    {5.0, 15.0, 25.0, 35.0},  // col_2
-                                    {2.0, 4.0, 6.0, 8.0}      // col_3
+                                    {10.0, 20.0, 30.0, 40.0}, // node#col_1
+                                    {5.0, 15.0, 25.0, 35.0},  // node#col_2
+                                    {2.0, 4.0, 6.0, 8.0}      // node#col_3
                                 },
-                                {"col_1", "col_2", "col_3"});
+                                {"node#col_1", "node#col_2", "node#col_3"});
 }
 
 // Helper function to create a boolean test DataFrame
@@ -45,16 +45,20 @@ epoch_frame::DataFrame MakeBooleanTestData() {
 
   return make_dataframe<bool>(index,
                               {
-                                  {true, false, true, true},  // bool_1
-                                  {true, true, false, true},  // bool_2
-                                  {false, false, true, false} // bool_3
+                                  {true, false, true, true},  // node#bool_1
+                                  {true, true, false, true},  // node#bool_2
+                                  {false, false, true, false} // node#bool_3
                               },
-                              {"bool_1", "bool_2", "bool_3"});
+                              {"node#bool_1", "node#bool_2", "node#bool_3"});
 }
 
 TEST_CASE("Aggregate Transforms - Numeric Operations", "[aggregate]") {
   auto input = MakeMultiColumnTestData();
-  std::vector<std::string> columns = {"col_1", "col_2", "col_3"};
+  std::vector<strategy::InputValue> columns = {
+    strategy::InputValue(strategy::NodeReference("node", "col_1")),
+    strategy::InputValue(strategy::NodeReference("node", "col_2")),
+    strategy::InputValue(strategy::NodeReference("node", "col_3"))
+  };
   const auto &timeframe =
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
@@ -69,7 +73,7 @@ TEST_CASE("Aggregate Transforms - Numeric Operations", "[aggregate]") {
 
     auto output = transform->TransformData(input);
     auto expected = make_dataframe<double>(input.index(), {expectedSum},
-                                           {config.GetOutputId()});
+                                           {config.GetOutputId().GetColumnName()});
 
     INFO("Testing sum aggregate with helper function\n"
          << output << "\n!=\n"
@@ -88,7 +92,7 @@ TEST_CASE("Aggregate Transforms - Numeric Operations", "[aggregate]") {
 
     auto output = transform->TransformData(input);
     auto expected = make_dataframe<double>(input.index(), {expectedAvg},
-                                           {config.GetOutputId()});
+                                           {config.GetOutputId().GetColumnName()});
 
     INFO("Testing average aggregate with helper function\n"
          << output << "\n!=\n"
@@ -107,7 +111,7 @@ TEST_CASE("Aggregate Transforms - Numeric Operations", "[aggregate]") {
 
     auto output = transform->TransformData(input);
     auto expected = make_dataframe<double>(input.index(), {expectedMin},
-                                           {config.GetOutputId()});
+                                           {config.GetOutputId().GetColumnName()});
 
     INFO("Testing min aggregate with helper function\n"
          << output << "\n!=\n"
@@ -126,7 +130,7 @@ TEST_CASE("Aggregate Transforms - Numeric Operations", "[aggregate]") {
 
     auto output = transform->TransformData(input);
     auto expected = make_dataframe<double>(input.index(), {expectedMax},
-                                           {config.GetOutputId()});
+                                           {config.GetOutputId().GetColumnName()});
 
     INFO("Testing max aggregate with helper function\n"
          << output << "\n!=\n"
@@ -137,7 +141,11 @@ TEST_CASE("Aggregate Transforms - Numeric Operations", "[aggregate]") {
 
 TEST_CASE("Aggregate Transforms - Boolean Operations", "[aggregate]") {
   auto input = MakeBooleanTestData();
-  std::vector<std::string> columns = {"bool_1", "bool_2", "bool_3"};
+  std::vector<strategy::InputValue> columns = {
+    strategy::InputValue(strategy::NodeReference("node", "bool_1")),
+    strategy::InputValue(strategy::NodeReference("node", "bool_2")),
+    strategy::InputValue(strategy::NodeReference("node", "bool_3"))
+  };
   const auto &timeframe =
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
@@ -152,7 +160,7 @@ TEST_CASE("Aggregate Transforms - Boolean Operations", "[aggregate]") {
 
     auto output = transform->TransformData(input);
     auto expected = make_dataframe<bool>(input.index(), {expectedAllOf},
-                                         {config.GetOutputId()});
+                                         {config.GetOutputId().GetColumnName()});
 
     INFO("Testing allof aggregate with helper function\n"
          << output << "\n!=\n"
@@ -171,7 +179,7 @@ TEST_CASE("Aggregate Transforms - Boolean Operations", "[aggregate]") {
 
     auto output = transform->TransformData(input);
     auto expected = make_dataframe<bool>(input.index(), {expectedAnyOf},
-                                         {config.GetOutputId()});
+                                         {config.GetOutputId().GetColumnName()});
 
     INFO("Testing anyof aggregate with helper function\n"
          << output << "\n!=\n"
@@ -190,7 +198,7 @@ TEST_CASE("Aggregate Transforms - Boolean Operations", "[aggregate]") {
 
     auto output = transform->TransformData(input);
     auto expected = make_dataframe<bool>(input.index(), {expectedNoneOf},
-                                         {config.GetOutputId()});
+                                         {config.GetOutputId().GetColumnName()});
 
     INFO("Testing noneof aggregate with helper function\n"
          << output << "\n!=\n"
@@ -201,7 +209,10 @@ TEST_CASE("Aggregate Transforms - Boolean Operations", "[aggregate]") {
 
 TEST_CASE("Aggregate Transforms - Comparison Operations", "[aggregate]") {
   auto input = MakeMultiColumnTestData();
-  std::vector<std::string> columns = {"col_1", "col_2"};
+  std::vector<strategy::InputValue> columns = {
+    strategy::InputValue(strategy::NodeReference("node", "col_1")),
+    strategy::InputValue(strategy::NodeReference("node", "col_2"))
+  };
   const auto &timeframe =
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
@@ -216,7 +227,7 @@ TEST_CASE("Aggregate Transforms - Comparison Operations", "[aggregate]") {
 
     auto output = transform->TransformData(input);
     auto expected = make_dataframe<bool>(input.index(), {expectedIsEqual},
-                                         {config.GetOutputId()});
+                                         {config.GetOutputId().GetColumnName()});
 
     INFO("Testing isequal aggregate with helper function\n"
          << output << "\n!=\n"
@@ -235,7 +246,7 @@ TEST_CASE("Aggregate Transforms - Comparison Operations", "[aggregate]") {
 
     auto output = transform->TransformData(input);
     auto expected = make_dataframe<bool>(input.index(), {expectedIsUnique},
-                                         {config.GetOutputId()});
+                                         {config.GetOutputId().GetColumnName()});
 
     INFO("Testing isunique aggregate with helper function\n"
          << output << "\n!=\n"

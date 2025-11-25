@@ -35,10 +35,7 @@ public:
      * @param transform Transform instance to add
      */
     void AddTransform(std::unique_ptr<epoch_script::transform::ITransformBase> transform) {
-        std::cerr << "DEBUG MockTransformManager: AddTransform called (before: " << m_transforms.size() << " transforms)\n";
-        // Just store transform instance - orchestrator will query it via interface methods
         m_transforms.push_back(std::move(transform));
-        std::cerr << "DEBUG MockTransformManager: AddTransform done (after: " << m_transforms.size() << " transforms)\n";
     }
 
     // ITransformManager interface implementation
@@ -59,10 +56,7 @@ public:
 
     [[nodiscard]] std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>>
     BuildTransforms() const override {
-        std::cerr << "DEBUG MockTransformManager: BuildTransforms() called with " << m_transforms.size() << " transforms\n";
-        auto result = std::move(m_transforms);
-        std::cerr << "DEBUG MockTransformManager: Returning " << result.size() << " transforms, m_transforms now has " << m_transforms.size() << "\n";
-        return result;
+        return std::move(m_transforms);
     }
 
     const epoch_script::transform::TransformConfiguration *

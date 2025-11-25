@@ -31,7 +31,8 @@ TEST_CASE("bar_chart_report with null labels", "[investigation][bar_chart]") {
     };
     std::vector<double> values = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
 
-    auto input = make_dataframe_with_nullable_strings(index, labels, values, "label", "value");
+    // Column names with # prefix to match GetInputId() format (node_id + "#" + handle)
+    auto input = make_dataframe_with_nullable_strings(index, labels, values, "#label", "#value");
 
     INFO("Input dataframe created");
     INFO("Rows: " << input.size());
@@ -49,8 +50,8 @@ options:
   x_axis_label: "Label"
   y_axis_label: "Count"
 inputs:
-  label: label
-  value: value
+  label: { type: ref, value: { node_id: "", handle: "label" } }
+  value: { type: ref, value: { node_id: "", handle: "value" } }
 outputs: []
 timeframe:
   interval: 1
@@ -76,7 +77,8 @@ timeframe:
     };
     std::vector<double> values = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
 
-    auto input = make_dataframe_with_nullable_strings(index, labels, values, "label", "value");
+    // Column names with # prefix to match GetInputId() format (node_id + "#" + handle)
+    auto input = make_dataframe_with_nullable_strings(index, labels, values, "#label", "#value");
 
     INFO("Input dataframe created (no nulls)");
 
@@ -93,8 +95,8 @@ options:
   x_axis_label: "Label"
   y_axis_label: "Count"
 inputs:
-  label: label
-  value: value
+  label: { type: ref, value: { node_id: "", handle: "label" } }
+  value: { type: ref, value: { node_id: "", handle: "value" } }
 outputs: []
 timeframe:
   interval: 1

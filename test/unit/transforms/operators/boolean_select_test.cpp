@@ -30,28 +30,23 @@ TEST_CASE("BooleanSelect typed transforms", "[transforms][operators][boolean_sel
             DateTime{2020y, std::chrono::January, 3d}
         });
 
-        // Create arrays for each column
+        // Create arrays for each column - use node#column format
         auto condition_array = factory::array::make_array<bool>({true, false, true});
         auto true_val_array = factory::array::make_array<std::string>({"ValuePick", "ValuePick", "ValuePick"});
         auto false_val_array = factory::array::make_array<std::string>({"Other", "Other", "Other"});
 
-        // Combine into input dataframe
+        // Combine into input dataframe with node#column naming
         std::vector<arrow::ChunkedArrayPtr> arrays = {condition_array, true_val_array, false_val_array};
-        std::vector<std::string> column_names = {"condition", "true_val", "false_val"};
+        std::vector<std::string> column_names = {"src#condition", "src#true_val", "src#false_val"};
         auto input_df = make_dataframe(index, arrays, column_names);
 
-        // Use typed variant directly
-        TransformConfiguration config{TransformDefinition{YAML::Load(std::format(
-            R"(
-type: boolean_select_string
-id: 1
-inputs:
-  "condition": "condition"
-  "true": "true_val"
-  "false": "false_val"
-timeframe: {}
-)",
-            timeframe.Serialize()))}};
+        // Use typed variant directly - reference with 2-arg input_ref
+        auto config = run_op("boolean_select_string", "1",
+            {{"condition", {input_ref("src", "condition")}},
+             {"true", {input_ref("src", "true_val")}},
+             {"false", {input_ref("src", "false_val")}}},
+            {},
+            timeframe);
         auto transformBase = MAKE_TRANSFORM(config);
         auto transform = dynamic_cast<transform::ITransform*>(transformBase.get());
 
@@ -59,7 +54,7 @@ timeframe: {}
         DataFrame result_df = transform->TransformData(input_df);
 
         // Check output type
-        auto result_series = result_df[config.GetOutputId()];
+        auto result_series = result_df[config.GetOutputId().GetColumnName()];
         auto result_type = result_series.dtype();
 
         INFO("Result type: " << result_type->ToString());
@@ -70,7 +65,7 @@ timeframe: {}
         // Check values: should be ["ValuePick", "Other", "ValuePick"]
         auto expected_array = factory::array::make_array<std::string>({"ValuePick", "Other", "ValuePick"});
         std::vector<arrow::ChunkedArrayPtr> expected_arrays = {expected_array};
-        std::vector<std::string> expected_names = {std::string(config.GetOutputId())};
+        std::vector<std::string> expected_names = {config.GetOutputId().GetColumnName()};
         auto expected = make_dataframe(index, expected_arrays, expected_names);
 
         INFO("Comparing boolean_select output\n" << result_df << "\n!=\n" << expected);
@@ -87,27 +82,23 @@ timeframe: {}
         auto true_val_array = factory::array::make_array<double>({1.0, 1.0});
         auto false_val_array = factory::array::make_array<double>({0.0, 0.0});
 
+        // Use node#column format for column names
         std::vector<arrow::ChunkedArrayPtr> arrays = {condition_array, true_val_array, false_val_array};
-        std::vector<std::string> column_names = {"condition", "true_val", "false_val"};
+        std::vector<std::string> column_names = {"src#condition", "src#true_val", "src#false_val"};
         auto input_df = make_dataframe(index, arrays, column_names);
 
-        // Use typed variant directly
-        TransformConfiguration config{TransformDefinition{YAML::Load(std::format(
-            R"(
-type: boolean_select_number
-id: 2
-inputs:
-  "condition": "condition"
-  "true": "true_val"
-  "false": "false_val"
-timeframe: {}
-)",
-            timeframe.Serialize()))}};
+        // Use typed variant directly - reference with 2-arg input_ref
+        auto config = run_op("boolean_select_number", "2",
+            {{"condition", {input_ref("src", "condition")}},
+             {"true", {input_ref("src", "true_val")}},
+             {"false", {input_ref("src", "false_val")}}},
+            {},
+            timeframe);
         auto transformBase = MAKE_TRANSFORM(config);
         auto transform = dynamic_cast<transform::ITransform*>(transformBase.get());
 
         DataFrame result_df = transform->TransformData(input_df);
-        auto result_type = result_df[config.GetOutputId()].dtype();
+        auto result_type = result_df[config.GetOutputId().GetColumnName()].dtype();
 
         INFO("Result type: " << result_type->ToString());
 

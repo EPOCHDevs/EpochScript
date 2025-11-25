@@ -42,7 +42,7 @@ struct ITransformBase {
 
   virtual epoch_script::TimeFrame GetTimeframe() const = 0;
 
-  virtual TransformConfiguration GetConfiguration() const = 0;
+  virtual const TransformConfiguration& GetConfiguration() const = 0;
 
   virtual epoch_frame::DataFrame
   TransformData(const epoch_frame::DataFrame &) const = 0;
@@ -90,32 +90,37 @@ public:
   }
 
   std::string GetOutputId(const std::string &output) const override {
-    return m_config.GetOutputId(output);
+    return m_config.GetOutputId(output).GetColumnName();
   }
 
-  std::string GetOutputId() const final { return m_config.GetOutputId(); }
+  std::string GetOutputId() const final { return m_config.GetOutputId().GetColumnName(); }
 
-  std::string GetInputId(const std::string &inputId) const override {
-    return m_config.GetInput(inputId);
+  std::string GetInputId(const std::string & slot) const override {
+    return m_config.GetInput(slot).GetColumnIdentifier();
   }
 
-  std::string GetInputId() const override { return m_config.GetInput(); }
+  std::string GetInputId() const override {
+    return  m_config.GetInput().GetColumnIdentifier();
+  }
 
   std::vector<std::string> GetInputIds() const override {
     std::vector<std::string> result;
 
-    const auto inputs = m_config.GetTransformDefinition().GetMetadata().inputs;
+    const auto slots = m_config.GetTransformDefinition().GetMetadata().inputs;
     std::ranges::for_each(
-        inputs, [&](epoch_script::transforms::IOMetaData const &io) {
-          auto out = m_config.GetInputs(io.id);
-          if (out.empty()) {
+        slots, [&](epoch_script::transforms::IOMetaData const &slot) {
+          auto input_values = m_config.GetInputs(slot.id);
+          if (input_values.empty()) {
             AssertFromStream(
                 m_config.GetTransformName() ==
                     epoch_script::transforms::TRADE_SIGNAL_EXECUTOR_ID,
                 "Only trade signal executor can have unconnected inputs.");
             return;
           }
-          result.insert(result.end(), out.begin(), out.end());
+          // Convert InputValue objects to column identifiers
+          for (const auto& input_value : input_values) {
+            result.push_back(input_value.GetColumnIdentifier());
+          }
         });
     return result;
   }
@@ -129,7 +134,7 @@ public:
     return m_config.GetTimeframe();
   }
 
-  TransformConfiguration GetConfiguration() const final { return m_config; }
+  const TransformConfiguration& GetConfiguration() const final { return m_config; }
 
   friend std::ostream &operator<<(std::ostream &os, ITransform const &model) {
     os << model.m_config.ToString();
@@ -162,8 +167,6 @@ public:
   using Ptr = std::shared_ptr<ITransform>;
 
 protected:
-  TransformConfiguration m_config;
-
   static auto GetValidSeries(epoch_frame::Series const &input) {
     const auto output = input.loc(input.is_valid());
     return std::pair{output.contiguous_array(), output};
@@ -172,6 +175,8 @@ protected:
   epoch_frame::DataFrame MakeResult(epoch_frame::Series const &series) const {
     return series.to_frame(GetOutputId());
   }
+
+  TransformConfiguration m_config;
 };
 
 using ITransformBasePtr = std::unique_ptr<ITransformBase>;

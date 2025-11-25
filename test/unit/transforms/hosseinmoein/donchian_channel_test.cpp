@@ -42,11 +42,10 @@ TEST_CASE("DonchianChannel", "[hosseinmoein][donchian]") {
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   const int64_t window = 20;
-  YAML::Node inputs_yaml; // no inputs
-  YAML::Node options_yaml;
-  options_yaml["window"] = window;
-  auto cfg =
-      run_op("donchian_channel", "donchian_id", inputs_yaml, options_yaml, tf);
+  auto cfg = run_op("donchian_channel", "donchian_id",
+      {},
+      {{"window", epoch_script::MetaDataOptionDefinition{static_cast<double>(window)}}},
+      tf);
 
   DonchianChannel dc{cfg};
   auto out = dc.TransformData(input_df);
@@ -55,10 +54,10 @@ TEST_CASE("DonchianChannel", "[hosseinmoein][donchian]") {
   auto lower = input_df[C.LOW()].rolling_agg({.window_size = window}).min();
   auto middle = (upper + lower) * Scalar{0.5};
 
-  REQUIRE(out[cfg.GetOutputId("bbands_upper")].contiguous_array().is_equal(
+  REQUIRE(out[cfg.GetOutputId("bbands_upper").GetColumnName()].contiguous_array().is_equal(
       upper.contiguous_array()));
-  REQUIRE(out[cfg.GetOutputId("bbands_lower")].contiguous_array().is_equal(
+  REQUIRE(out[cfg.GetOutputId("bbands_lower").GetColumnName()].contiguous_array().is_equal(
       lower.contiguous_array()));
-  REQUIRE(out[cfg.GetOutputId("bbands_middle")].contiguous_array().is_equal(
+  REQUIRE(out[cfg.GetOutputId("bbands_middle").GetColumnName()].contiguous_array().is_equal(
       middle.contiguous_array()));
 }

@@ -34,12 +34,15 @@ TEST_CASE("IndicatorsTest", "[indicators]") {
   auto index = factory::index::make_index(
       index_arr.value(), MonotonicDirection::Increasing, "Date");
   auto vol = df.get_column<int64_t>("IBM_Volume");
+  // Column names with # prefix to match GetInputId() format (node_id + "#" + handle)
+  // When node_id is empty, columns are accessed as #c, #h, #l, #o, #v
   auto input_df = make_dataframe<double>(
       index,
       {df.get_column<double>("IBM_Close"), df.get_column<double>("IBM_High"),
        df.get_column<double>("IBM_Low"), df.get_column<double>("IBM_Open"),
        std::vector<double>(vol.begin(), vol.end())},
-      {C.CLOSE(), C.HIGH(), C.LOW(), C.OPEN(), C.VOLUME()});
+      {"#" + std::string(C.CLOSE()), "#" + std::string(C.HIGH()), "#" + std::string(C.LOW()),
+       "#" + std::string(C.OPEN()), "#" + std::string(C.VOLUME())});
 
   // Test parameters
   int64_t period = 20;
@@ -70,7 +73,7 @@ TEST_CASE("IndicatorsTest", "[indicators]") {
                                         "resist_3", "support_1", "support_2",
                                         "support_3"};
     for (const auto &col : columns) {
-      auto lhs = result[cfg.GetOutputId(col)].contiguous_array();
+      auto lhs = result[cfg.GetOutputId(col).GetColumnName()].contiguous_array();
 
       std::vector<double> rhs;
       if (col == "pivot") {
@@ -103,17 +106,17 @@ TEST_CASE("IndicatorsTest", "[indicators]") {
     std::ranges::iota(window_index_seq, 0);
 
     auto cfg = hurst_exponent_cfg(
-        "hurst_id", period, C.CLOSE(),
+        "hurst_id", period, input_ref(C.CLOSE()),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     auto transformBase = MAKE_TRANSFORM(cfg);
     auto hurstExp = dynamic_cast<HurstExponent *>(transformBase.get());
     REQUIRE(hurstExp);
     auto expanded_result = hurstExp->TransformData(input_df);
     auto expanded_lhs =
-        expanded_result[cfg.GetOutputId("result")].contiguous_array();
+        expanded_result[cfg.GetOutputId("result").GetColumnName()].contiguous_array();
 
     cfg = rolling_hurst_exponent_cfg(
-        "rolling_hurst_id", period, C.CLOSE(),
+        "rolling_hurst_id", period, input_ref(C.CLOSE()),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     transformBase = MAKE_TRANSFORM(cfg);
     auto rollingHurstExp =
@@ -121,7 +124,7 @@ TEST_CASE("IndicatorsTest", "[indicators]") {
     REQUIRE(rollingHurstExp);
     auto rolling_result = rollingHurstExp->TransformData(input_df);
     auto rolling_lhs =
-        rolling_result[cfg.GetOutputId("result")].contiguous_array();
+        rolling_result[cfg.GetOutputId("result").GetColumnName()].contiguous_array();
 
     for (int64_t i = 0; i < static_cast<int64_t>(df.get_index().size()); i++) {
       if (i < period) {
@@ -176,7 +179,7 @@ TEST_CASE("IndicatorsTest", "[indicators]") {
 
     std::vector<std::string> columns = {"long_stop", "short_stop"};
     for (const auto &col : columns) {
-      auto lhs = result[cfg.GetOutputId(col)].contiguous_array();
+      auto lhs = result[cfg.GetOutputId(col).GetColumnName()].contiguous_array();
 
       std::vector<double> rhs;
       if (col == "long_stop") {
@@ -202,8 +205,8 @@ TEST_CASE("IndicatorsTest", "[indicators]") {
     REQUIRE(eldersTherm);
 
     auto result = eldersTherm->TransformData(input_df);
-    for (auto const &column : {"result", "ema", "buy_signal", "sell_signal"}) {
-      auto lhs = result[cfg.GetOutputId(column)].contiguous_array();
+    for (std::string const &column : {"result", "ema", "buy_signal", "sell_signal"}) {
+      auto lhs = result[cfg.GetOutputId(column).GetColumnName()].contiguous_array();
       arrow::ArrayPtr rhs;
       if (column == "result") {
         rhs = factory::array::make_contiguous_array(elders.get_result());
@@ -232,7 +235,7 @@ TEST_CASE("IndicatorsTest", "[indicators]") {
     REQUIRE(priceDistance);
 
     auto result = priceDistance->TransformData(input_df);
-    auto lhs = result[cfg.GetOutputId("result")].contiguous_array();
+    auto lhs = result[cfg.GetOutputId("result").GetColumnName()].contiguous_array();
 
     auto rhs = price_dist.get_result();
     auto rhs_arr = Array(factory::array::make_contiguous_array(rhs));
@@ -252,7 +255,7 @@ TEST_CASE("IndicatorsTest", "[indicators]") {
     REQUIRE(pslTransform);
 
     auto result = pslTransform->TransformData(input_df);
-    auto lhs = result[cfg.GetOutputId("result")].contiguous_array();
+    auto lhs = result[cfg.GetOutputId("result").GetColumnName()].contiguous_array();
 
     auto rhs = psl_visitor.get_result();
     auto rhs_arr = factory::array::make_contiguous_array(rhs);
@@ -277,7 +280,7 @@ TEST_CASE("IndicatorsTest", "[indicators]") {
     std::vector<std::string> columns = {"result", "rsi_ma", "long_line",
                                         "short_line"};
     for (const auto &col : columns) {
-      auto lhs = result[cfg.GetOutputId(col)].contiguous_array();
+      auto lhs = result[cfg.GetOutputId(col).GetColumnName()].contiguous_array();
 
       std::vector<double> rhs;
       if (col == "result") {
@@ -311,7 +314,7 @@ TEST_CASE("IndicatorsTest", "[indicators]") {
 
     std::vector<std::string> columns = {"plus_indicator", "minus_indicator"};
     for (const auto &col : columns) {
-      auto lhs = result[cfg.GetOutputId(col)].contiguous_array();
+      auto lhs = result[cfg.GetOutputId(col).GetColumnName()].contiguous_array();
 
       std::vector<double> rhs;
       if (col == "plus_indicator") {

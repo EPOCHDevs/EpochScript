@@ -92,7 +92,9 @@ MakeFREDDataSource() {
               .icon = epoch_core::Icon::LineChart,
               .text = "Economic Indicator<br/>Value: {value}",
               .textIsTemplate = true,
-              .color = epoch_core::Color::Info
+              .color = epoch_core::Color::Info,
+              .title = std::nullopt,
+              .valueKey = "value"  // UI will check if valid to determine when to show flag
           },
           .strategyTypes = {"macro-analysis", "regime-detection",
                             "economic-calendar", "risk-on-risk-off"},

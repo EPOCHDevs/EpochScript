@@ -74,6 +74,14 @@ MakeSECDataSources() {
           .requiredDataSources = {"shares", "value", "security_type", "investment_discretion", "institution_name", "period_end"},
           .intradayOnly = false,
           .allowNullInputs = true,  // SEC filings are sparse (quarterly/annually) - keep null rows
+          .flagSchema = epoch_script::transforms::FlagSchema{
+              .icon = epoch_core::Icon::FileText,
+              .text = "13F Holdings<br/>{institution_name}<br/>Shares: {shares}<br/>Value: ${value}",
+              .textIsTemplate = true,
+              .color = epoch_core::Color::Info,
+              .title = std::nullopt,
+              .valueKey = "value"  // UI will check if valid to determine when to show flag
+          },
           .strategyTypes = {"fundamental-analysis", "follow-smart-money",
                             "institutional-flow", "ownership-analysis"},
           .assetRequirements = {"single-asset"},
@@ -181,6 +189,14 @@ MakeSECDataSources() {
                    "sentiment"},
           .requiresTimeFrame = true,
           .requiredDataSources = {"transaction_date", "owner_name", "transaction_code", "shares", "price", "ownership_after"},
+          .flagSchema = epoch_script::transforms::FlagSchema{
+              .icon = epoch_core::Icon::TrendingUp,
+              .text = "Insider Trade<br/>{owner_name}<br/>Code: {transaction_code}<br/>Shares: {shares} @ ${price}",
+              .textIsTemplate = true,
+              .color = epoch_core::Color::Warning,
+              .title = std::nullopt,
+              .valueKey = "price"  // UI will check if valid to determine when to show flag
+          },
           .strategyTypes = {"insider-sentiment", "smart-money",
                             "signal-generation", "event-driven"},
           .assetRequirements = {"single-asset"},

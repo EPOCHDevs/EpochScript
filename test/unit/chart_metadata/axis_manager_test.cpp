@@ -23,7 +23,7 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
     std::unordered_map<std::string, int64_t> outputHandles;
 
     // First assignment should create default axes
-    auto sma = transform::ma("sma", 1, "c", 10, tf);
+    auto sma = transform::ma("sma", "1", strategy::InputValue(strategy::NodeReference("", "c")), 10, tf);
     auto [axis, linkedTo] =
         manager.AssignAxis(sma, timeframe, priceKeys, volumeKey, outputHandles);
 
@@ -44,7 +44,7 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
     // Register candlestick series first
     manager.RegisterSeries(timeframe, timeframe + "_candlestick", 0);
 
-    auto sma = transform::ma("sma", 1, "c", 10, tf);
+    auto sma = transform::ma("sma", "1", strategy::InputValue(strategy::NodeReference("", "c")), 10, tf);
     auto [axis, linkedTo] =
         manager.AssignAxis(sma, timeframe, priceKeys, volumeKey, outputHandles);
 
@@ -62,7 +62,7 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
     manager.RegisterSeries(timeframe, timeframe + "_volume", 1);
 
     // Create a volume-based indicator
-    auto volume_sma = transform::ma("sma", 1, "v", 10, tf);
+    auto volume_sma = transform::ma("sma", "1", strategy::InputValue(strategy::NodeReference("", "v")), 10, tf);
     auto [axis, linkedTo] = manager.AssignAxis(volume_sma, timeframe, priceKeys,
                                                volumeKey, outputHandles);
 
@@ -76,7 +76,7 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
     std::unordered_map<std::string, int64_t> outputHandles;
 
     // RSI should get its own axis
-    auto rsi = transform::single_operand_period_op("rsi", 1, 14, "c", tf);
+    auto rsi = transform::single_operand_period_op("rsi", "1", 14, strategy::InputValue(strategy::NodeReference("", "c")), tf);
     auto [axis, linkedTo] =
         manager.AssignAxis(rsi, timeframe, priceKeys, volumeKey, outputHandles);
 
@@ -92,19 +92,18 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
     std::unordered_map<std::string, int64_t> outputHandles;
 
     // Add RSI
-    auto rsi = transform::single_operand_period_op("rsi", 1, 14, "c", tf);
+    auto rsi = transform::single_operand_period_op("rsi", "1", 14, strategy::InputValue(strategy::NodeReference("", "c")), tf);
     auto [rsiAxis, rsiLinked] =
         manager.AssignAxis(rsi, timeframe, priceKeys, volumeKey, outputHandles);
     REQUIRE(rsiAxis == 2);
 
     // Add MACD
-    YAML::Node macd_inputs;
-    macd_inputs[epoch_script::ARG] = "c";
-    YAML::Node macd_options;
-    macd_options["short_period"] = 12;
-    macd_options["long_period"] = 26;
-    macd_options["signal_period"] = 9;
-    auto macd = transform::run_op("macd", "2", macd_inputs, macd_options, tf);
+    auto macd = transform::run_op("macd", "2",
+        {{epoch_script::ARG, {transform::input_ref("c")}}},
+        {{"short_period", MetaDataOptionDefinition{12.0}},
+         {"long_period", MetaDataOptionDefinition{26.0}},
+         {"signal_period", MetaDataOptionDefinition{9.0}}},
+        tf);
 
     auto [macdAxis, macdLinked] = manager.AssignAxis(macd, timeframe, priceKeys,
                                                      volumeKey, outputHandles);
@@ -119,16 +118,15 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
     std::unordered_map<std::string, int64_t> outputHandles;
 
     // Add multiple indicators
-    auto rsi = transform::single_operand_period_op("rsi", 1, 14, "c", tf);
+    auto rsi = transform::single_operand_period_op("rsi", "1", 14, strategy::InputValue(strategy::NodeReference("", "c")), tf);
     manager.AssignAxis(rsi, timeframe, priceKeys, volumeKey, outputHandles);
 
-    YAML::Node macd_inputs;
-    macd_inputs[epoch_script::ARG] = "c";
-    YAML::Node macd_options;
-    macd_options["short_period"] = 12;
-    macd_options["long_period"] = 26;
-    macd_options["signal_period"] = 9;
-    auto macd = transform::run_op("macd", "2", macd_inputs, macd_options, tf);
+    auto macd = transform::run_op("macd", "2",
+        {{epoch_script::ARG, {transform::input_ref("c")}}},
+        {{"short_period", MetaDataOptionDefinition{12.0}},
+         {"long_period", MetaDataOptionDefinition{26.0}},
+         {"signal_period", MetaDataOptionDefinition{9.0}}},
+        tf);
     manager.AssignAxis(macd, timeframe, priceKeys, volumeKey, outputHandles);
 
     auto axes = manager.GetAxes(timeframe);
@@ -158,16 +156,16 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
     manager.RegisterSeries(timeframe, timeframe + "_volume", 1);
 
     // Add SMA
-    auto sma = transform::ma("sma", 1, "c", 10, tf);
+    auto sma = transform::ma("sma", "1", strategy::InputValue(strategy::NodeReference("", "c")), 10, tf);
     auto [smaAxis, smaLinked] =
         manager.AssignAxis(sma, timeframe, priceKeys, volumeKey, outputHandles);
     manager.RegisterSeries(timeframe, "1", smaAxis);
 
     // Add transform that uses SMA output
-    outputHandles[sma.GetOutputId()] = 2; // Index in series array
+    outputHandles[sma.GetOutputId().GetColumnName()] = 2; // Index in series array
 
     auto min_sma =
-        transform::single_operand_period_op("min", 2, 5, sma.GetOutputId(), tf);
+        transform::single_operand_period_op("min", "2", 5, strategy::InputValue(sma.GetOutputId()), tf);
     auto [minAxis, minLinked] = manager.AssignAxis(
         min_sma, timeframe, priceKeys, volumeKey, outputHandles);
 
@@ -188,12 +186,12 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
     const auto timeframe2 = tf2.ToString();
 
     // Add indicator to first timeframe
-    auto rsi1 = transform::single_operand_period_op("rsi", 1, 14, "c", tf1);
+    auto rsi1 = transform::single_operand_period_op("rsi", "1", 14, strategy::InputValue(strategy::NodeReference("", "c")), tf1);
     auto [axis1, linked1] = manager.AssignAxis(rsi1, timeframe1, priceKeys,
                                                volumeKey, outputHandles);
 
     // Add indicator to second timeframe
-    auto rsi2 = transform::single_operand_period_op("rsi", 2, 14, "c", tf2);
+    auto rsi2 = transform::single_operand_period_op("rsi", "2", 14, strategy::InputValue(strategy::NodeReference("", "c")), tf2);
     auto [axis2, linked2] = manager.AssignAxis(rsi2, timeframe2, priceKeys,
                                                volumeKey, outputHandles);
 
@@ -229,9 +227,7 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
     std::unordered_map<std::string, int64_t> outputHandles;
 
     // Create a transform with no inputs (like AO - Awesome Oscillator)
-    YAML::Node inputs;
-    YAML::Node options;
-    auto ao = transform::run_op("ao", "1", inputs, options, tf);
+    auto ao = transform::run_op("ao", "1", {}, {}, tf);
 
     auto [axis, linkedTo] =
         manager.AssignAxis(ao, timeframe, priceKeys, volumeKey, outputHandles);
@@ -250,7 +246,7 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
 
     // Test various plot kinds
     SECTION("Bollinger Bands overlay") {
-      auto bbands = transform::bbands("1", 10, 2, "c", tf);
+      auto bbands = transform::bbands("1", 10, 2, strategy::InputValue(strategy::NodeReference("", "c")), tf);
       auto [axis, linkedTo] = manager.AssignAxis(bbands, timeframe, priceKeys,
                                                  volumeKey, outputHandles);
       REQUIRE(axis == 0);
@@ -258,7 +254,7 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
     }
 
     SECTION("PSAR overlay") {
-      auto psar = transform::psar("1", 0.02, 0.2, "c", tf);
+      auto psar = transform::psar("1", 0.02, 0.2, strategy::InputValue(strategy::NodeReference("", "c")), tf);
       auto [axis, linkedTo] = manager.AssignAxis(psar, timeframe, priceKeys,
                                                  volumeKey, outputHandles);
       REQUIRE(axis == 0);
@@ -266,10 +262,10 @@ TEST_CASE("AxisManager", "[chart_metadata][axis_manager]") {
     }
 
     SECTION("CCI panel indicator") {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["period"] = 20;
-      auto cci = transform::run_op("cci", "1", inputs, options, tf);
+      auto cci = transform::run_op("cci", "1",
+          {},
+          {{"period", MetaDataOptionDefinition{20.0}}},
+          tf);
       auto [axis, linkedTo] = manager.AssignAxis(cci, timeframe, priceKeys,
                                                  volumeKey, outputHandles);
       REQUIRE(axis == 2);

@@ -5,9 +5,11 @@
 #include <epoch_script/core/bar_attribute.h>
 #include <epoch_script/transforms/core/registration.h>
 #include <epoch_script/transforms/core/transform_definition.h>
+#include <epoch_script/transforms/core/config_helper.h>
 #include <unordered_map>
 
 using namespace epoch_script;
+using namespace epoch_script::transform::input_value_literals;
 using Catch::Approx;
 
 TEST_CASE("Transform Definition") {
@@ -22,7 +24,7 @@ TEST_CASE("Transform Definition") {
         .id = "1234",
         .options = {},
         .timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY,
-        .inputs = {{"input1", {"value1"}}},
+        .inputs = {{"input1", {strategy::InputValue(strategy::NodeReference("src", "close"))}}},
         .metaData = metadata};
 
     TransformDefinition transform(data);
@@ -31,8 +33,10 @@ TEST_CASE("Transform Definition") {
       REQUIRE(transform.GetType() == "example_type");
       REQUIRE(transform.GetId() == "1234");
       REQUIRE(transform.GetTimeframe().ToString() == "1D");
-      REQUIRE(transform.GetInputs().at("input1") ==
-              std::vector<std::string>{"value1"});
+      const auto& inputs = transform.GetInputs().at("input1");
+      REQUIRE(inputs.size() == 1);
+      REQUIRE(inputs[0].IsNodeReference());
+      REQUIRE(inputs[0].GetNodeReference() == strategy::NodeReference("src", "close"));
     }
 
     SECTION("SetOption updates options correctly") {
@@ -74,12 +78,17 @@ TEST_CASE("Transform Definition") {
     }
 
     SECTION("SetInput creates a copy with new inputs") {
-      InputMapping newInputs = {{"new_input", {"new_value"}}};
+      InputMapping newInputs = {{"new_input", {strategy::InputValue(strategy::NodeReference("data", "high"))}}};
       TransformDefinition copy = transform.SetInput(newInputs);
-      REQUIRE(copy.GetInputs().at("new_input") ==
-              std::vector<std::string>{"new_value"});
-      REQUIRE(transform.GetInputs().at("input1") ==
-              std::vector<std::string>{"value1"});
+      const auto& copyInputs = copy.GetInputs().at("new_input");
+      REQUIRE(copyInputs.size() == 1);
+      REQUIRE(copyInputs[0].IsNodeReference());
+      REQUIRE(copyInputs[0].GetNodeReference() == strategy::NodeReference("data", "high"));
+
+      const auto& origInputs = transform.GetInputs().at("input1");
+      REQUIRE(origInputs.size() == 1);
+      REQUIRE(origInputs[0].IsNodeReference());
+      REQUIRE(origInputs[0].GetNodeReference() == strategy::NodeReference("src", "close"));
     }
 
     SECTION("GetOptionAsDouble with and without fallback") {
@@ -98,7 +107,15 @@ TEST_CASE("Transform Definition") {
     node["timeframe"]["interval"] = 1;
     node["timeframe"]["type"] = "day";
     node["options"]["period"] = 5;
-    node["inputs"]["SLOT"] = "value1";
+
+    // Use InputValue YAML format with type and value map (single input, not sequence)
+    YAML::Node inputNode;
+    inputNode["type"] = "ref";
+    YAML::Node valueNode;
+    valueNode["node_id"] = "data";
+    valueNode["handle"] = "close";
+    inputNode["value"] = valueNode;
+    node["inputs"]["SLOT"] = inputNode;  // Single input, not push_back
 
     TransformDefinition transform(node);
 
@@ -106,8 +123,10 @@ TEST_CASE("Transform Definition") {
       REQUIRE(transform.GetType() == "sma");
       REQUIRE(transform.GetId() == "1234");
       REQUIRE(transform.GetTimeframe().ToString() == "1D");
-      REQUIRE(transform.GetInputs().at("SLOT") ==
-              std::vector<std::string>{"value1"});
+      const auto& inputs = transform.GetInputs().at("SLOT");
+      REQUIRE(inputs.size() == 1);
+      REQUIRE(inputs[0].IsNodeReference());
+      REQUIRE(inputs[0].GetNodeReference() == strategy::NodeReference("data", "close"));
     }
   }
 }

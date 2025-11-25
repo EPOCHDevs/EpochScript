@@ -23,14 +23,10 @@ TEST_CASE("LinearFit rolling (slope/intercept/residual)",
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   const int64_t window = 20;
-  epoch_script::MetaDataArgDefinitionMapping opts{
-      {"window", static_cast<double>(window)}};
-  YAML::Node inputs_yaml;
-  inputs_yaml["x"] = "x";
-  inputs_yaml["y"] = "y";
-  YAML::Node options_yaml;
-  options_yaml["window"] = window;
-  auto cfg = run_op("linear_fit", "linfit_id", inputs_yaml, options_yaml, tf);
+  auto cfg = run_op("linear_fit", "linfit_id",
+      {{"x", {input_ref("x")}}, {"y", {input_ref("y")}}},
+      {{"window", epoch_script::MetaDataOptionDefinition{static_cast<double>(window)}}},
+      tf);
 
   // Build synthetic x, y
   const size_t N = 200;

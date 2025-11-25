@@ -73,16 +73,16 @@ struct TradeExecutorTransform final : ITransform {
       const auto &inputColumn = inputColumns.front();
 
       if (inputId == TE_ENTER_LONG_KEY) {
-        priorityMap[4] = {TE_ENTER_LONG_KEY, inputColumn};
+        priorityMap[4] = std::make_pair(TE_ENTER_LONG_KEY, inputColumn.GetColumnIdentifier());
         m_hasLong = true;
       } else if (inputId == TE_ENTER_SHORT_KEY) {
-        priorityMap[3] = {TE_ENTER_SHORT_KEY, inputColumn};
+        priorityMap[3] = std::make_pair(TE_ENTER_SHORT_KEY, inputColumn.GetColumnIdentifier());
         m_hasShort = true;
       } else if (inputId == TE_EXIT_LONG_KEY) {
-        priorityMap[2] = {TE_EXIT_LONG_KEY, inputColumn};
+        priorityMap[2] = std::make_pair(TE_EXIT_LONG_KEY, inputColumn.GetColumnIdentifier());
         m_hasExit = true;
       } else if (inputId == TE_EXIT_SHORT_KEY) {
-        priorityMap[1] = {TE_EXIT_SHORT_KEY, inputColumn};
+        priorityMap[1] = std::make_pair(TE_EXIT_SHORT_KEY, inputColumn.GetColumnIdentifier());
         m_hasExit = true;
       }
     }

@@ -46,7 +46,7 @@ TEST_CASE("SeriesConfigurationBuilder",
   }
 
   SECTION("Builds line chart series") {
-    auto sma = transform::ma("sma", 1, "c", 10, tf);
+    auto sma = transform::ma("sma", "1", strategy::NodeReference("", "c"), 10, tf);
     auto series =
         SeriesConfigurationBuilder::BuildSeries(sma, 0, std::nullopt, "1");
 
@@ -62,7 +62,7 @@ TEST_CASE("SeriesConfigurationBuilder",
   }
 
   SECTION("Builds series with linkedTo") {
-    auto sma = transform::ma("sma", 1, "c", 10, tf);
+    auto sma = transform::ma("sma", "1", strategy::NodeReference("", "c"), 10, tf);
     std::optional<std::string> linkedTo = "candlestick_series";
     auto series =
         SeriesConfigurationBuilder::BuildSeries(sma, 0, linkedTo, "1");
@@ -94,31 +94,37 @@ TEST_CASE("SeriesConfigurationBuilder",
         // Create appropriate transform based on name
         epoch_script::transform::TransformConfiguration cfg = [&]() {
           if (tc.transformName == "sma" || tc.transformName == "ema") {
-            return transform::ma(tc.transformName, 1, "c", 10, tf);
+            return transform::ma(tc.transformName, "1", strategy::NodeReference("", "c"), 10, tf);
           } else if (tc.transformName == "bbands") {
-            return transform::bbands("1", 10, 2, "c", tf);
+            return transform::bbands("1", 10, 2, strategy::NodeReference("", "c"), tf);
           } else if (tc.transformName == "rsi") {
-            return transform::single_operand_period_op("rsi", 1, 14, "c", tf);
+            return transform::single_operand_period_op("rsi", "1", 14, strategy::NodeReference("", "c"), tf);
           } else if (tc.transformName == "psar") {
-            return transform::psar("1", 0.02, 0.2, "c", tf);
+            return transform::psar("1", 0.02, 0.2, strategy::NodeReference("", "c"), tf);
           } else {
-            YAML::Node inputs;
-            YAML::Node options;
             if (tc.transformName == "macd") {
-              inputs[epoch_script::ARG] = "c";
-              options["short_period"] = 12;
-              options["long_period"] = 26;
-              options["signal_period"] = 9;
+              return transform::run_op("macd", "1",
+                  {{epoch_script::ARG, {transform::input_ref("c")}}},
+                  {{"short_period", MetaDataOptionDefinition{12.0}},
+                   {"long_period", MetaDataOptionDefinition{26.0}},
+                   {"signal_period", MetaDataOptionDefinition{9.0}}},
+                  tf);
             } else if (tc.transformName == "stoch") {
-              inputs[epoch_script::ARG] = "c";
-              options["k_period"] = 14;
-              options["k_slowing_period"] = 3;
-              options["d_period"] = 3;
+              return transform::run_op("stoch", "1",
+                  {},
+                  {{"k_period", MetaDataOptionDefinition{14.0}},
+                   {"k_slowing_period", MetaDataOptionDefinition{3.0}},
+                   {"d_period", MetaDataOptionDefinition{3.0}}},
+                  tf);
             } else if (tc.transformName == "cci") {
-              options["period"] = 20;
+              return transform::run_op("cci", "1",
+                  {},
+                  {{"period", MetaDataOptionDefinition{20.0}}},
+                  tf);
+            } else if (tc.transformName == "ao") {
+              return transform::run_op("ao", "1", {}, {}, tf);
             }
-            return transform::run_op(tc.transformName, "1", inputs, options,
-                                     tf);
+            return transform::ma("sma", "1", strategy::NodeReference("", "c"), 10, tf);
           }
         }();
 
@@ -131,33 +137,30 @@ TEST_CASE("SeriesConfigurationBuilder",
 
   SECTION("Handles SMC indicators chart types") {
     SECTION("Order blocks") {
-      YAML::Node inputs;
-      inputs["high_low"] = "1#high_low";
-      YAML::Node options;
-      options["close_mitigation"] = false;
-      auto order_blocks =
-          transform::run_op("order_blocks", "1", inputs, options, tf);
+      auto order_blocks = transform::run_op("order_blocks", "1",
+          {{"high_low", {transform::input_ref("1", "high_low")}}},
+          {{"close_mitigation", MetaDataOptionDefinition{false}}},
+          tf);
       auto series = SeriesConfigurationBuilder::BuildSeries(order_blocks, 2,
                                                             std::nullopt, "1");
       REQUIRE(series.type == "order_blocks");
     }
 
     SECTION("Fair value gap") {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["join_consecutive"] = true;
-      auto fvg = transform::run_op("fair_value_gap", "1", inputs, options, tf);
+      auto fvg = transform::run_op("fair_value_gap", "1",
+          {},
+          {{"join_consecutive", MetaDataOptionDefinition{true}}},
+          tf);
       auto series =
           SeriesConfigurationBuilder::BuildSeries(fvg, 2, std::nullopt, "1");
       REQUIRE(series.type == "fvg");
     }
 
     SECTION("Swing highs/lows") {
-      YAML::Node inputs;
-      YAML::Node options;
-      options["swing_length"] = 5;
-      auto shl =
-          transform::run_op("swing_highs_lows", "1", inputs, options, tf);
+      auto shl = transform::run_op("swing_highs_lows", "1",
+          {},
+          {{"swing_length", MetaDataOptionDefinition{5.0}}},
+          tf);
       auto series =
           SeriesConfigurationBuilder::BuildSeries(shl, 0, std::nullopt, "1");
       REQUIRE(series.type == "shl");
@@ -180,46 +183,43 @@ TEST_CASE("SeriesConfigurationBuilder",
         // Create a transform that would produce this chart type
         epoch_script::transform::TransformConfiguration cfg = [&]() {
           if (test.chartType == "line") {
-            return transform::ma("sma", 1, "c", 10, tf);
+            return transform::ma("sma", "1", strategy::NodeReference("", "c"), 10, tf);
           }
           if (test.chartType == "bbands") {
-            return transform::bbands("1", 10, 2, "c", tf);
+            return transform::bbands("1", 10, 2, strategy::NodeReference("", "c"), tf);
           }
           if (test.chartType == "candlestick") {
             // For candlestick, we'll use a simple line transform and check the
             // built-in candlestick series
-            return transform::ma("sma", 1, "c", 10, tf);
+            return transform::ma("sma", "1", strategy::NodeReference("", "c"), 10, tf);
           }
           if (test.chartType == "flag") {
-            YAML::Node inputs;
-            inputs[epoch_script::ARG] = "c";
-            YAML::Node options;
-            options["period"] = 10;
-            options["body_none"] = 0.05;
-            options["body_short"] = 0.5;
-            options["body_long"] = 1.4;
-            options["wick_none"] = 0.05;
-            options["wick_long"] = 0.6;
-            options["near"] = 0.3;
-            return transform::run_op("hammer", "1", inputs, options, tf);
+            return transform::run_op("hammer", "1",
+                {{epoch_script::ARG, {transform::input_ref("c")}}},
+                {{"period", MetaDataOptionDefinition{10.0}},
+                 {"body_none", MetaDataOptionDefinition{0.05}},
+                 {"body_short", MetaDataOptionDefinition{0.5}},
+                 {"body_long", MetaDataOptionDefinition{1.4}},
+                 {"wick_none", MetaDataOptionDefinition{0.05}},
+                 {"wick_long", MetaDataOptionDefinition{0.6}},
+                 {"near", MetaDataOptionDefinition{0.3}}},
+                tf);
           }
           if (test.chartType == "shl") {
-            YAML::Node inputs;
-            YAML::Node options;
-            options["swing_length"] = 5;
-            return transform::run_op("swing_highs_lows", "1", inputs, options,
-                                     tf);
+            return transform::run_op("swing_highs_lows", "1",
+                {},
+                {{"swing_length", MetaDataOptionDefinition{5.0}}},
+                tf);
           }
           if (test.chartType == "bos_choch") {
-            YAML::Node inputs;
-            inputs["high_low"] = "dummy_input";
-            inputs["level"] = "dummy_level";
-            YAML::Node options;
-            options["close_break"] = true;
-            return transform::run_op("bos_choch", "1", inputs, options, tf);
+            return transform::run_op("bos_choch", "1",
+                {{"high_low", {transform::input_ref("dummy_input")}},
+                 {"level", {transform::input_ref("dummy_level")}}},
+                {{"close_break", MetaDataOptionDefinition{true}}},
+                tf);
           }
           // Default case - use SMA
-          return transform::ma("sma", 1, "c", 10, tf);
+          return transform::ma("sma", "1", strategy::NodeReference("", "c"), 10, tf);
         }();
 
         auto series =
@@ -239,7 +239,7 @@ TEST_CASE("SeriesConfigurationBuilder",
   }
 
   SECTION("Uses transform metadata name when available") {
-    auto sma = transform::ma("sma", 1, "c", 10, tf);
+    auto sma = transform::ma("sma", "1", strategy::NodeReference("", "c"), 10, tf);
     auto series =
         SeriesConfigurationBuilder::BuildSeries(sma, 0, std::nullopt, "1");
 
@@ -254,7 +254,7 @@ TEST_CASE("SeriesConfigurationBuilder",
   }
 
   SECTION("Handles all axis assignments correctly") {
-    auto sma = transform::ma("sma", 1, "c", 10, tf);
+    auto sma = transform::ma("sma", "1", strategy::NodeReference("", "c"), 10, tf);
 
     for (uint8_t axis = 0; axis < 5; ++axis) {
       auto series =
@@ -264,7 +264,7 @@ TEST_CASE("SeriesConfigurationBuilder",
   }
 
   SECTION("Preserves seriesepoch_script::ID correctly") {
-    auto sma = transform::ma("sma", 1, "c", 10, tf);
+    auto sma = transform::ma("sma", "1", strategy::NodeReference("", "c"), 10, tf);
 
     std::vector<std::string> testIds = {"1", "custom_id", "transform_123", ""};
 
@@ -277,14 +277,12 @@ TEST_CASE("SeriesConfigurationBuilder",
 
   SECTION("Handles complex multi-output indicators") {
     SECTION("MACD with three outputs") {
-      YAML::Node inputs;
-      inputs[epoch_script::ARG] = "c";
-      YAML::Node options;
-      options["short_period"] = 12;
-      options["long_period"] = 26;
-      options["signal_period"] = 9;
-
-      auto macd = transform::run_op("macd", "1", inputs, options, tf);
+      auto macd = transform::run_op("macd", "1",
+          {{epoch_script::ARG, {transform::input_ref("c")}}},
+          {{"short_period", MetaDataOptionDefinition{12.0}},
+           {"long_period", MetaDataOptionDefinition{26.0}},
+           {"signal_period", MetaDataOptionDefinition{9.0}}},
+          tf);
       auto series =
           SeriesConfigurationBuilder::BuildSeries(macd, 2, std::nullopt, "1");
 
@@ -297,14 +295,12 @@ TEST_CASE("SeriesConfigurationBuilder",
     }
 
     SECTION("QQE with four outputs") {
-      YAML::Node inputs;
-      inputs[epoch_script::ARG] = "c";
-      YAML::Node options;
-      options["avg_period"] = 14;
-      options["smooth_period"] = 5;
-      options["width_factor"] = 4.236;
-
-      auto qqe = transform::run_op("qqe", "1", inputs, options, tf);
+      auto qqe = transform::run_op("qqe", "1",
+          {{epoch_script::ARG, {transform::input_ref("c")}}},
+          {{"avg_period", MetaDataOptionDefinition{14.0}},
+           {"smooth_period", MetaDataOptionDefinition{5.0}},
+           {"width_factor", MetaDataOptionDefinition{4.236}}},
+          tf);
       auto series =
           SeriesConfigurationBuilder::BuildSeries(qqe, 2, std::nullopt, "1");
 
@@ -331,44 +327,86 @@ TEST_CASE("SeriesConfigurationBuilder",
 
     for (const auto &test : panelTests) {
       DYNAMIC_SECTION("Panel indicator: " + test.indicator) {
-        YAML::Node inputs;
-        YAML::Node options;
-
-        // Set up appropriate inputs/options for each indicator
-        if (test.indicator == "rsi") {
-          inputs[epoch_script::ARG] = "c";
-          options["period"] = 14;
-        } else if (test.indicator == "cci") {
-          options["period"] = 20;
-        } else if (test.indicator == "aroon") {
-          inputs[epoch_script::ARG] = "c";
-          options["period"] = 14;
-        } else if (test.indicator == "fisher") {
-          inputs[epoch_script::ARG] = "c";
-          options["period"] = 10;
-        } else if (test.indicator == "qqe") {
-          inputs[epoch_script::ARG] = "c";
-          options["avg_period"] = 14;
-          options["smooth_period"] = 5;
-          options["width_factor"] = 4.236;
-        } else if (test.indicator == "elders_thermometer") {
-          options["period"] = 13;
-          options["buy_factor"] = 0.5;
-          options["sell_factor"] = 0.5;
-        } else if (test.indicator == "fosc") {
-          inputs[epoch_script::ARG] = "c";
-          options["period"] = 14;
-        } else if (test.indicator == "qstick") {
-          options["period"] = 14;
-        }
-
-        auto transform =
-            transform::run_op(test.indicator, "1", inputs, options, tf);
+        auto cfg = [&]() {
+          if (test.indicator == "rsi") {
+            return transform::run_op("rsi", "1",
+                {{epoch_script::ARG, {transform::input_ref("c")}}},
+                {{"period", MetaDataOptionDefinition{14.0}}},
+                tf);
+          } else if (test.indicator == "cci") {
+            return transform::run_op("cci", "1",
+                {},
+                {{"period", MetaDataOptionDefinition{20.0}}},
+                tf);
+          } else if (test.indicator == "aroon") {
+            return transform::run_op("aroon", "1",
+                {},
+                {{"period", MetaDataOptionDefinition{14.0}}},
+                tf);
+          } else if (test.indicator == "fisher") {
+            return transform::run_op("fisher", "1",
+                {},
+                {{"period", MetaDataOptionDefinition{10.0}}},
+                tf);
+          } else if (test.indicator == "qqe") {
+            return transform::run_op("qqe", "1",
+                {{epoch_script::ARG, {transform::input_ref("c")}}},
+                {{"avg_period", MetaDataOptionDefinition{14.0}},
+                 {"smooth_period", MetaDataOptionDefinition{5.0}},
+                 {"width_factor", MetaDataOptionDefinition{4.236}}},
+                tf);
+          } else if (test.indicator == "elders_thermometer") {
+            return transform::run_op("elders_thermometer", "1",
+                {},
+                {{"period", MetaDataOptionDefinition{13.0}},
+                 {"buy_factor", MetaDataOptionDefinition{0.5}},
+                 {"sell_factor", MetaDataOptionDefinition{0.5}}},
+                tf);
+          } else if (test.indicator == "fosc") {
+            return transform::run_op("fosc", "1",
+                {{epoch_script::ARG, {transform::input_ref("c")}}},
+                {{"period", MetaDataOptionDefinition{14.0}}},
+                tf);
+          } else if (test.indicator == "qstick") {
+            return transform::run_op("qstick", "1",
+                {},
+                {{"period", MetaDataOptionDefinition{14.0}}},
+                tf);
+          } else if (test.indicator == "ao") {
+            return transform::run_op("ao", "1", {}, {}, tf);
+          }
+          return transform::run_op(test.indicator, "1", {}, {}, tf);
+        }();
         auto series = SeriesConfigurationBuilder::BuildSeries(
-            transform, 2, std::nullopt, "1");
+            cfg, 2, std::nullopt, "1");
 
         REQUIRE(series.type == test.expectedType);
       }
     }
+  }
+
+  SECTION("Flag series with valueKey and templateDataMapping") {
+    // Test simple flag (e.g., crossover) with boolean output
+    auto crossover = transform::run_op("crossover", "1",
+        {{epoch_script::ARG0, {transform::input_ref("c")}},
+         {epoch_script::ARG1, {transform::input_ref("c")}}},
+        {},
+        tf);
+    auto series = SeriesConfigurationBuilder::BuildSeries(crossover, 0, std::nullopt, "1");
+
+    REQUIRE(series.type == "flag");
+    REQUIRE(series.zIndex == 10);
+
+    // dataMapping should only have index and value
+    REQUIRE(series.dataMapping.size() == 2);
+    REQUIRE(series.dataMapping.count("index") == 1);
+    REQUIRE(series.dataMapping.count("value") == 1);
+    REQUIRE(series.dataMapping.at("index") == "index");
+    REQUIRE(series.dataMapping.at("value") == "1#result");  // valueKey = "result"
+
+    // templateDataMapping should have all outputs
+    REQUIRE(series.templateDataMapping.size() == 1);
+    REQUIRE(series.templateDataMapping.count("result") == 1);
+    REQUIRE(series.templateDataMapping.at("result") == "1#result");
   }
 }

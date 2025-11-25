@@ -29,14 +29,14 @@ DataFrame CreateTestDataFrame() {
   // Create index from timestamps
   auto index = factory::index::make_datetime_index(timestamps, "index","UTC");
 
-  // Create columns
+  // Create columns with node#column format
   std::vector<arrow::ChunkedArrayPtr> columns = {
     factory::array::make_array(std::vector<std::string>{"BUY", "SELL", "BUY", "SELL"}),
     factory::array::make_array(std::vector<double>{10.5, -5.2, 15.3, -8.1}),
     factory::array::make_array(std::vector<bool>{true, true, false, true})
   };
 
-  std::vector<std::string> fields = {"direction", "profit_pct", "is_signal"};
+  std::vector<std::string> fields = {"node#direction", "node#profit_pct", "node#is_signal"};
 
   return make_dataframe(index, columns, fields);
 }
@@ -200,14 +200,16 @@ TEST_CASE("CardColumnSchema - Equality and Comparison", "[event_markers][event_m
       .column_id = "col1",
       .slot = epoch_core::CardSlot::Hero,
       .render_type = epoch_core::CardRenderType::Decimal,
-      .color_map = {}
+      .color_map = {},
+      .label = "label1"
     };
 
     CardColumnSchema schema2{
       .column_id = "col1",
       .slot = epoch_core::CardSlot::Hero,
       .render_type = epoch_core::CardRenderType::Decimal,
-      .color_map = {}
+      .color_map = {},
+      .label = "label1"
     };
 
     REQUIRE(schema1 == schema2);
@@ -272,7 +274,6 @@ TEST_CASE("CardColumnSchema - Equality and Comparison", "[event_markers][event_m
 }
 
 TEST_CASE("EventMarker - Transform Functionality", "[event_markers][event_marker]") {
-
   SECTION("Filter selector returns filtered DataFrame") {
     // Create test DataFrame
     auto df = CreateTestDataFrame();
@@ -280,7 +281,7 @@ TEST_CASE("EventMarker - Transform Functionality", "[event_markers][event_marker
     // Create EventMarkerSchema configuration
     EventMarkerSchema schema{
       .title = "Trade Signals",
-      .select_key = "is_signal",
+      .select_key = "node#is_signal",
       .schemas = {
         CardColumnSchema{
           .column_id = "direction",
@@ -292,11 +293,15 @@ TEST_CASE("EventMarker - Transform Functionality", "[event_markers][event_marker
       }
     };
 
+    strategy::NodeReference direction{"node", "direction"};
+    strategy::NodeReference profit_pct{"node", "profit_pct"};
+    strategy::NodeReference is_signal{"node", "is_signal"};
+
     // Create transform config using helper function - pass object directly
     auto transformConfig = epoch_script::transform::event_marker_cfg(
       "test_selector",
       schema,
-      {"direction", "profit_pct", "is_signal"},
+      {direction, profit_pct, is_signal},
       epoch_script::TimeFrame(epoch_frame::factory::offset::days(1))
     );
 
@@ -313,22 +318,22 @@ TEST_CASE("EventMarker - Transform Functionality", "[event_markers][event_marker
     REQUIRE(result.num_cols() == 4);  // direction, profit_pct, is_signal, index
 
     // Verify column names are preserved
-    REQUIRE(result.contains("direction"));
-    REQUIRE(result.contains("profit_pct"));
-    REQUIRE(result.contains("is_signal"));
+    REQUIRE(result.contains(direction.GetColumnName()));
+    REQUIRE(result.contains(profit_pct.GetColumnName()));
+    REQUIRE(result.contains(is_signal.GetColumnName()));
 
     // Verify data content - should have rows 0, 1, and 3 from original
-    auto direction_col = result["direction"];
+    auto direction_col = result[direction.GetColumnName()];
     REQUIRE(direction_col.iloc(0).repr() == "BUY");   // original row 0
     REQUIRE(direction_col.iloc(1).repr() == "SELL");  // original row 1
     REQUIRE(direction_col.iloc(2).repr() == "SELL");  // original row 3
 
-    auto profit_col = result["profit_pct"];
+    auto profit_col = result[profit_pct.GetColumnName()];
     REQUIRE(profit_col.iloc(0).as_double() == Approx(10.5));   // original row 0
     REQUIRE(profit_col.iloc(1).as_double() == Approx(-5.2));   // original row 1
     REQUIRE(profit_col.iloc(2).as_double() == Approx(-8.1));   // original row 3
 
-    auto is_signal_col = result["is_signal"];
+    auto is_signal_col = result[is_signal.GetColumnName()];
     REQUIRE(is_signal_col.iloc(0).as_bool() == true);  // original row 0
     REQUIRE(is_signal_col.iloc(1).as_bool() == true);  // original row 1
     REQUIRE(is_signal_col.iloc(2).as_bool() == true);  // original row 3

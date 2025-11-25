@@ -78,7 +78,9 @@ MakeTulipIndicatorMetaData() {
           .icon = epoch_core::Icon::Activity,
           .text = "Cross (Any Direction)",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Info
+          .color = epoch_core::Color::Info,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   indicatorMetaData["crossover"] = IndicatorMetaData{
@@ -91,7 +93,9 @@ MakeTulipIndicatorMetaData() {
           .icon = epoch_core::Icon::TrendingUp,
           .text = "Bullish Cross",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Success
+          .color = epoch_core::Color::Success,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   indicatorMetaData["crossunder"] = IndicatorMetaData{
@@ -104,7 +108,9 @@ MakeTulipIndicatorMetaData() {
           .icon = epoch_core::Icon::TrendingDown,
           .text = "Bearish Cross",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Error
+          .color = epoch_core::Color::Error,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   indicatorMetaData["decay"] = IndicatorMetaData{

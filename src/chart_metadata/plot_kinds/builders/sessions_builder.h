@@ -17,11 +17,11 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"active", cfg.GetOutputId("active")},
-      {"high", cfg.GetOutputId("high")},
-      {"low", cfg.GetOutputId("low")},
-      {"closed", cfg.GetOutputId("closed")},
-      {"opened", cfg.GetOutputId("opened")}
+      {"active", cfg.GetOutputId("active").GetColumnName()},
+      {"high", cfg.GetOutputId("high").GetColumnName()},
+      {"low", cfg.GetOutputId("low").GetColumnName()},
+      {"closed", cfg.GetOutputId("closed").GetColumnName()},
+      {"opened", cfg.GetOutputId("opened").GetColumnName()}
     };
   }
 

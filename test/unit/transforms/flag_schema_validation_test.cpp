@@ -161,6 +161,53 @@ TEST_CASE("FlagSchema - all flag transforms have valid icon", "[metadata][flagSc
   }
 }
 
+TEST_CASE("FlagSchema - valueKey validation", "[metadata][flagSchema]") {
+  RegisterTransformMetadata(epoch_script::DEFAULT_YAML_LOADER);
+
+  auto& registry = ITransformRegistry::GetInstance();
+  const auto& allTransforms = registry.GetMetaData();
+
+  std::vector<std::string> failedTransforms;
+
+  for (const auto& [transformId, metadata] : allTransforms) {
+    // Only check flag PlotKind transforms
+    if (metadata.plotKind != epoch_core::TransformPlotKind::flag) {
+      continue;
+    }
+
+    INFO("Transform: " << transformId);
+
+    // Flag transforms MUST have flagSchema
+    REQUIRE(metadata.flagSchema.has_value());
+
+    const auto& flagSchema = metadata.flagSchema.value();
+
+    // If valueKey is specified (not empty), it must match one of the outputs
+    if (!flagSchema.valueKey.empty()) {
+      bool foundOutput = false;
+      for (const auto& output : metadata.outputs) {
+        if (output.id == flagSchema.valueKey) {
+          foundOutput = true;
+          break;
+        }
+      }
+
+      if (!foundOutput) {
+        std::string errorMsg = "Transform '" + transformId +
+                              "' has valueKey '" + flagSchema.valueKey +
+                              "' that doesn't match any output ID. Valid outputs: ";
+        for (const auto& output : metadata.outputs) {
+          errorMsg += output.id + " ";
+        }
+        failedTransforms.push_back(transformId);
+        FAIL(errorMsg);
+      }
+    }
+  }
+
+  REQUIRE(failedTransforms.empty());
+}
+
 TEST_CASE("FlagSchema - coverage report", "[metadata][flagSchema][coverage]") {
   RegisterTransformMetadata(epoch_script::DEFAULT_YAML_LOADER);
 
@@ -169,6 +216,7 @@ TEST_CASE("FlagSchema - coverage report", "[metadata][flagSchema][coverage]") {
 
   size_t totalFlagTransforms = 0;
   size_t flagTransformsWithSchema = 0;
+  size_t flagTransformsWithValueKey = 0;
 
   for (const auto& [transformId, metadata] : allTransforms) {
     if (metadata.plotKind != epoch_core::TransformPlotKind::flag) {
@@ -179,11 +227,16 @@ TEST_CASE("FlagSchema - coverage report", "[metadata][flagSchema][coverage]") {
 
     if (metadata.flagSchema.has_value()) {
       flagTransformsWithSchema++;
+
+      if (!metadata.flagSchema.value().valueKey.empty()) {
+        flagTransformsWithValueKey++;
+      }
     }
   }
 
   INFO("Total flag transforms: " << totalFlagTransforms);
   INFO("Flag transforms with flagSchema: " << flagTransformsWithSchema);
+  INFO("Flag transforms with valueKey: " << flagTransformsWithValueKey);
   INFO("Coverage: " << (totalFlagTransforms > 0 ?
        (100.0 * flagTransformsWithSchema / totalFlagTransforms) : 0) << "%");
 

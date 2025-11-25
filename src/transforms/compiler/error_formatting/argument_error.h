@@ -18,7 +18,7 @@ public:
         size_t expected_count,
         size_t received_count,
         const std::vector<std::string>& expected_names,
-        const std::vector<ValueHandle>& received_args
+        const std::vector<strategy::InputValue>& received_args
     ) : node_id_(node_id),
         component_name_(component_name),
         expected_count_(expected_count),
@@ -34,7 +34,7 @@ private:
     size_t expected_count_;
     size_t received_count_;
     std::vector<std::string> expected_names_;
-    std::vector<ValueHandle> received_args_;
+    std::vector<strategy::InputValue> received_args_;
 };
 
 /**

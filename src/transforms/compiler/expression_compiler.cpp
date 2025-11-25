@@ -15,7 +15,7 @@
 namespace epoch_script
 {
 
-    ValueHandle ExpressionCompiler::VisitExpr(const Expr& expr)
+    strategy::InputValue ExpressionCompiler::VisitExpr(const Expr& expr)
     {
         if (auto* call = dynamic_cast<const Call*>(&expr))
         {
@@ -64,10 +64,10 @@ namespace epoch_script
                    "Supported: function calls, variables, constants, arithmetic (+,-,*,/), comparisons (>,<,==), "
                    "boolean logic (and,or), conditionals (if/else), subscripts. (Internal type: " + expr_type_name + ")",
                    expr.lineno, expr.col_offset);
-        return {"", ""};
+        glz::unreachable();
     }
 
-    ValueHandle ExpressionCompiler::VisitCall(const Call& call)
+    strategy::InputValue ExpressionCompiler::VisitCall(const Call& call)
     {
         // Phase 2: Handle inline constructor calls in expressions
         // Examples: gt(a, b), abs(value), ema(10)(src.c)
@@ -139,7 +139,7 @@ namespace epoch_script
         if (comp_meta.outputs.size() == 1)
         {
             std::string out_handle = comp_meta.outputs[0].id;
-            return {synthetic_id, out_handle};
+            return strategy::NodeReference{synthetic_id, out_handle};
         }
         else
         {
@@ -150,7 +150,7 @@ namespace epoch_script
         }
     }
 
-    ValueHandle ExpressionCompiler::VisitAttribute(const Attribute& attr)
+    strategy::InputValue ExpressionCompiler::VisitAttribute(const Attribute& attr)
     {
         // Phase 2: Support attribute access on any expression, not just names
         // Examples: call().result, (ternary).result
@@ -168,15 +168,15 @@ namespace epoch_script
         {
             // Expression-based attribute access: expr.handle
             // Evaluate the base expression first
-            ValueHandle base_handle = VisitExpr(*base_expr);
+            strategy::InputValue base_handle = VisitExpr(*base_expr);
 
             // Now access the requested attribute (handle) on the result
             // The attr.attr field is the handle name we're accessing
-            return {base_handle.node_id, attr.attr};
+            return strategy::NodeReference{base_handle.GetNodeReference().GetNodeId(), attr.attr};
         }
     }
 
-    ValueHandle ExpressionCompiler::VisitName(const Name& name)
+    strategy::InputValue ExpressionCompiler::VisitName(const Name& name)
     {
         // Handle lowercase boolean literals as special keywords
         if (name.id == "true")
@@ -205,7 +205,7 @@ namespace epoch_script
         {
             std::string node_id = ref.substr(0, dot_pos);
             std::string handle = ref.substr(dot_pos + 1);
-            return {node_id, handle};
+            return strategy::NodeReference{node_id, handle};
         }
 
         // Otherwise, ref is a component name - need to resolve single output
@@ -215,7 +215,7 @@ namespace epoch_script
         if (comp_name == "number" || comp_name == "bool_true" ||
             comp_name == "bool_false" || comp_name == "text" || comp_name == "null")
         {
-            return {name.id, "result"};
+            return strategy::NodeReference{name.id, "result"};
         }
 
         // Look up component metadata
@@ -241,13 +241,13 @@ namespace epoch_script
         // Get the output handle
         std::string handle = outputs[0].id;
 
-        return {name.id, handle};
+        return strategy::NodeReference{name.id, handle};
     }
 
-    ValueHandle ExpressionCompiler::VisitConstant(const Constant& constant)
+    strategy::InputValue ExpressionCompiler::VisitConstant(const Constant& constant)
     {
         // Materialize constants as nodes
-        return std::visit([this, &constant](auto&& value) -> ValueHandle
+        return std::visit([this, &constant](auto&& value) -> strategy::InputValue
         {
             using T = std::decay_t<decltype(value)>;
 
@@ -263,12 +263,12 @@ namespace epoch_script
                 return MaterializeNull();
             } else {
                 ThrowError("Unsupported constant type", constant.lineno, constant.col_offset);
-                return {"", ""};
+                std::unreachable();
             }
         }, constant.value);
     }
 
-    ValueHandle ExpressionCompiler::VisitBinOp(const BinOp& bin_op)
+    strategy::InputValue ExpressionCompiler::VisitBinOp(const BinOp& bin_op)
     {
         // Map operator type to component name
         std::string comp_name;
@@ -342,8 +342,8 @@ namespace epoch_script
         context_.algorithms.push_back(std::move(algo));
 
         // Now resolve left and right operands (may create child nodes with higher IDs)
-        ValueHandle left = VisitExpr(*bin_op.left);
-        ValueHandle right = VisitExpr(*bin_op.right);
+        strategy::InputValue left = VisitExpr(*bin_op.left);
+        strategy::InputValue right = VisitExpr(*bin_op.right);
 
         // Get input names and types from component metadata dynamically
         std::vector<std::string> input_names;
@@ -392,7 +392,7 @@ namespace epoch_script
         std::string right_input_name = input_names[1];
 
         // Type checking and casting for left operand
-        DataType left_source_type = type_checker_.GetNodeOutputType(left.node_id, left.handle);
+        DataType left_source_type = type_checker_.GetNodeOutputType(left);
         DataType left_target_type = input_types[left_input_name];
 
         if (!type_checker_.IsTypeCompatible(left_source_type, left_target_type))
@@ -407,13 +407,13 @@ namespace epoch_script
                 ThrowError("Type error in binary operation '" + comp_name + "': " +
                            "left operand ('" + left_input_name + "') must be " + TypeChecker::DataTypeToString(left_target_type) +
                            ", but received " + TypeChecker::DataTypeToString(left_source_type) +
-                           " from '" + left.node_id + "." + left.handle + "'",
+                           " from '" + left.GetColumnIdentifier() + "'",
                            bin_op.lineno, bin_op.col_offset);
             }
         }
 
         // Type checking and casting for right operand
-        DataType right_source_type = type_checker_.GetNodeOutputType(right.node_id, right.handle);
+        DataType right_source_type = type_checker_.GetNodeOutputType(right);
         DataType right_target_type = input_types[right_input_name];
 
         if (!type_checker_.IsTypeCompatible(right_source_type, right_target_type))
@@ -428,14 +428,14 @@ namespace epoch_script
                 ThrowError("Type error in binary operation '" + comp_name + "': " +
                            "right operand ('" + right_input_name + "') must be " + TypeChecker::DataTypeToString(right_target_type) +
                            ", but received " + TypeChecker::DataTypeToString(right_source_type) +
-                           " from '" + right.node_id + "." + right.handle + "'",
+                           " from '" + right.GetColumnIdentifier() + "'",
                            bin_op.lineno, bin_op.col_offset);
             }
         }
 
         // Wire inputs to the node we created earlier using dynamic input names
-        context_.algorithms[node_index].inputs[left_input_name].push_back(JoinId(left.node_id, left.handle));
-        context_.algorithms[node_index].inputs[right_input_name].push_back(JoinId(right.node_id, right.handle));
+        context_.algorithms[node_index].inputs[left_input_name].push_back(left);
+        context_.algorithms[node_index].inputs[right_input_name].push_back(right);
 
         // Update node_lookup_ AFTER recursion (index never invalidated)
         context_.node_lookup[node_id] = node_index;
@@ -461,10 +461,10 @@ namespace epoch_script
             out_handle = outputs[0].id;
         }
 
-        return {node_id, out_handle};
+        return strategy::NodeReference{node_id, out_handle};
     }
 
-    ValueHandle ExpressionCompiler::VisitUnaryOp(const UnaryOp& unary_op)
+    strategy::InputValue ExpressionCompiler::VisitUnaryOp(const UnaryOp& unary_op)
     {
         // Handle unary plus (idempotent - just return the operand)
         if (unary_op.op == UnaryOpType::UAdd)
@@ -476,10 +476,10 @@ namespace epoch_script
         if (unary_op.op == UnaryOpType::USub)
         {
             // Create -1 number node
-            ValueHandle minus_one = MaterializeNumber(-1.0);
+            strategy::InputValue minus_one = MaterializeNumber(-1.0);
 
             // Resolve operand
-            ValueHandle operand = VisitExpr(*unary_op.operand);
+            strategy::InputValue operand = VisitExpr(*unary_op.operand);
 
             // Create mul AlgorithmNode
             std::string node_id = UniqueNodeId("mul");
@@ -488,8 +488,8 @@ namespace epoch_script
             algo.type = "mul";
 
             // Wire inputs: (-1) * operand
-            algo.inputs["SLOT0"].push_back(JoinId(minus_one.node_id, minus_one.handle));
-            algo.inputs["SLOT1"].push_back(JoinId(operand.node_id, operand.handle));
+            algo.inputs[ARG0].push_back(minus_one);
+            algo.inputs[ARG1].push_back(operand);
 
             // Add to algorithms list
             context_.algorithms.push_back(std::move(algo));
@@ -498,7 +498,7 @@ namespace epoch_script
             // Track output type
             context_.node_output_types[node_id]["result"] = DataType::Decimal;
 
-            return {node_id, "result"};
+            return strategy::NodeReference{node_id, "result"};
         }
 
         // Handle logical not
@@ -515,7 +515,7 @@ namespace epoch_script
             const auto& comp_meta = context_.GetComponentMetadata(comp_name);
 
             // Resolve operand FIRST (child-first/topological ordering required for timeframe resolution)
-            ValueHandle operand = VisitExpr(*unary_op.operand);
+            strategy::InputValue operand = VisitExpr(*unary_op.operand);
 
             // Create node AFTER resolving operand
             std::string node_id = UniqueNodeId(comp_name);
@@ -524,7 +524,7 @@ namespace epoch_script
             algo.type = comp_name;
 
             // Wire input (SLOT for unary operators)
-            algo.inputs["SLOT"].push_back(JoinId(operand.node_id, operand.handle));
+            algo.inputs[ARG].push_back(operand);
 
             // Add to algorithms list
             context_.algorithms.push_back(std::move(algo));
@@ -541,15 +541,15 @@ namespace epoch_script
                 out_handle = outputs[0].id;
             }
 
-            return {node_id, out_handle};
+            return strategy::NodeReference{node_id, out_handle};
         }
 
         ThrowError("Unsupported unary operator. Supported unary operators: - (negation), + (identity), not (logical negation)",
                    unary_op.lineno, unary_op.col_offset);
-        return {"", ""};
+        std::unreachable();
     }
 
-    ValueHandle ExpressionCompiler::VisitCompare(const Compare& compare)
+    strategy::InputValue ExpressionCompiler::VisitCompare(const Compare& compare)
     {
         // Only single comparisons supported (a < b, not a < b < c)
         if (compare.ops.size() != 1 || compare.comparators.size() != 1)
@@ -593,8 +593,8 @@ namespace epoch_script
         const auto& comp_meta = context_.GetComponentMetadata(comp_name);
 
         // Resolve operands FIRST (child-first/topological ordering required for timeframe resolution)
-        ValueHandle left = VisitExpr(*compare.left);
-        ValueHandle right = VisitExpr(*compare.comparators[0]);
+        strategy::InputValue left = VisitExpr(*compare.left);
+        strategy::InputValue right = VisitExpr(*compare.comparators[0]);
 
         // Create node AFTER resolving operands
         std::string node_id = UniqueNodeId(comp_name);
@@ -649,7 +649,7 @@ namespace epoch_script
         std::string right_input_name = input_names[1];
 
         // Type checking and casting for left operand
-        DataType left_source_type = type_checker_.GetNodeOutputType(left.node_id, left.handle);
+        DataType left_source_type = type_checker_.GetNodeOutputType(left);
         DataType left_target_type = input_types[left_input_name];
 
         if (!type_checker_.IsTypeCompatible(left_source_type, left_target_type))
@@ -664,13 +664,13 @@ namespace epoch_script
                 ThrowError("Type error in comparison '" + comp_name + "': " +
                            "left operand ('" + left_input_name + "') must be " + TypeChecker::DataTypeToString(left_target_type) +
                            ", but received " + TypeChecker::DataTypeToString(left_source_type) +
-                           " from '" + left.node_id + "." + left.handle + "'",
+                           " from '" + left.GetColumnIdentifier() + "'",
                            compare.lineno, compare.col_offset);
             }
         }
 
         // Type checking and casting for right operand
-        DataType right_source_type = type_checker_.GetNodeOutputType(right.node_id, right.handle);
+        DataType right_source_type = type_checker_.GetNodeOutputType(right);
         DataType right_target_type = input_types[right_input_name];
 
         if (!type_checker_.IsTypeCompatible(right_source_type, right_target_type))
@@ -685,14 +685,14 @@ namespace epoch_script
                 ThrowError("Type error in comparison '" + comp_name + "': " +
                            "right operand ('" + right_input_name + "') must be " + TypeChecker::DataTypeToString(right_target_type) +
                            ", but received " + TypeChecker::DataTypeToString(right_source_type) +
-                           " from '" + right.node_id + "." + right.handle + "'",
+                           " from '" + right.GetColumnIdentifier() + "'",
                            compare.lineno, compare.col_offset);
             }
         }
 
         // Wire inputs
-        algo.inputs[left_input_name].push_back(JoinId(left.node_id, left.handle));
-        algo.inputs[right_input_name].push_back(JoinId(right.node_id, right.handle));
+        algo.inputs[left_input_name].push_back(left);
+        algo.inputs[right_input_name].push_back(right);
 
         // Add to algorithms list
         context_.algorithms.push_back(std::move(algo));
@@ -709,10 +709,10 @@ namespace epoch_script
             out_handle = outputs[0].id;
         }
 
-        return {node_id, out_handle};
+        return strategy::NodeReference{node_id, out_handle};
     }
 
-    ValueHandle ExpressionCompiler::VisitBoolOp(const BoolOp& bool_op)
+    strategy::InputValue ExpressionCompiler::VisitBoolOp(const BoolOp& bool_op)
     {
         // Boolean operations (and, or) with multiple operands
         // Convert to nested binary operations: (a and b and c) -> (a and (b and c))
@@ -723,13 +723,13 @@ namespace epoch_script
         }
 
         // Evaluate all operands and cast to Boolean if needed
-        std::vector<ValueHandle> handles;
+        std::vector<strategy::InputValue> handles;
         for (const auto& value : bool_op.values)
         {
-            ValueHandle handle = VisitExpr(*value);
+            strategy::InputValue handle = VisitExpr(*value);
 
             // Type check and cast to Boolean if needed
-            DataType source_type = type_checker_.GetNodeOutputType(handle.node_id, handle.handle);
+            DataType source_type = type_checker_.GetNodeOutputType(handle);
             DataType target_type = DataType::Boolean;
 
             if (!type_checker_.IsTypeCompatible(source_type, target_type))
@@ -773,26 +773,26 @@ namespace epoch_script
         if (handles.size() == 2)
         {
             // Simple case: just two operands
-            context_.algorithms[node_indices[0]].inputs["SLOT0"].push_back(JoinId(handles[0].node_id, handles[0].handle));
-            context_.algorithms[node_indices[0]].inputs["SLOT1"].push_back(JoinId(handles[1].node_id, handles[1].handle));
+            context_.algorithms[node_indices[0]].inputs[ARG0].push_back(handles[0]);
+            context_.algorithms[node_indices[0]].inputs[ARG1].push_back(handles[1]);
         }
         else
         {
             // Complex case: a and b and c ...
-            context_.algorithms[node_indices[0]].inputs["SLOT0"].push_back(JoinId(handles[0].node_id, handles[0].handle));
-            context_.algorithms[node_indices[0]].inputs["SLOT1"].push_back(JoinId(node_ids[1], "result"));
+            context_.algorithms[node_indices[0]].inputs[ARG0].push_back(handles[0]);
+            context_.algorithms[node_indices[0]].inputs[ARG1].push_back(strategy::NodeReference(node_ids[1], "result"));
 
             // Middle nodes
             for (size_t i = 1; i < node_ids.size() - 1; ++i)
             {
-                context_.algorithms[node_indices[i]].inputs["SLOT0"].push_back(JoinId(handles[i].node_id, handles[i].handle));
-                context_.algorithms[node_indices[i]].inputs["SLOT1"].push_back(JoinId(node_ids[i + 1], "result"));
+                context_.algorithms[node_indices[i]].inputs[ARG0].push_back(handles[i]);
+                context_.algorithms[node_indices[i]].inputs[ARG1].push_back(strategy::NodeReference(node_ids[i + 1], "result"));
             }
 
             // Last node
             size_t last_idx = node_ids.size() - 1;
-            context_.algorithms[node_indices[last_idx]].inputs["SLOT0"].push_back(JoinId(handles[last_idx].node_id, handles[last_idx].handle));
-            context_.algorithms[node_indices[last_idx]].inputs["SLOT1"].push_back(JoinId(handles[last_idx + 1].node_id, handles[last_idx + 1].handle));
+            context_.algorithms[node_indices[last_idx]].inputs[ARG0].push_back(handles[last_idx]);
+            context_.algorithms[node_indices[last_idx]].inputs[ARG1].push_back(handles[last_idx + 1]);
         }
 
         // Update node_lookup_ and track output types
@@ -802,7 +802,7 @@ namespace epoch_script
             context_.node_output_types[node_ids[i]]["result"] = DataType::Boolean;
         }
 
-        return {node_ids[0], "result"};
+        return strategy::NodeReference(node_ids[0], "result");
     }
 
     std::string ExpressionCompiler::DetermineBooleanSelectVariant(DataType true_type, DataType false_type)
@@ -884,19 +884,19 @@ namespace epoch_script
         }
     }
 
-    ValueHandle ExpressionCompiler::VisitIfExp(const IfExp& if_exp)
+    strategy::InputValue ExpressionCompiler::VisitIfExp(const IfExp& if_exp)
     {
         // Ternary expression: test ? body : orelse
         // Lower to type-specialized boolean_select_* based on branch types
 
         // Resolve inputs FIRST (child-first/topological ordering required for timeframe resolution)
-        ValueHandle condition = VisitExpr(*if_exp.test);
-        ValueHandle true_val = VisitExpr(*if_exp.body);
-        ValueHandle false_val = VisitExpr(*if_exp.orelse);
+        strategy::InputValue condition = VisitExpr(*if_exp.test);
+        strategy::InputValue true_val = VisitExpr(*if_exp.body);
+        strategy::InputValue false_val = VisitExpr(*if_exp.orelse);
 
         // Infer types from true/false branches
-        DataType true_type = type_checker_.GetNodeOutputType(true_val.node_id, true_val.handle);
-        DataType false_type = type_checker_.GetNodeOutputType(false_val.node_id, false_val.handle);
+        DataType true_type = type_checker_.GetNodeOutputType(true_val);
+        DataType false_type = type_checker_.GetNodeOutputType(false_val);
 
         // Determine the correct type-specialized variant
         std::string comp_name = DetermineBooleanSelectVariant(true_type, false_type);
@@ -916,9 +916,9 @@ namespace epoch_script
         algo.type = comp_name;
 
         // Wire inputs to named handles
-        algo.inputs["condition"].push_back(JoinId(condition.node_id, condition.handle));
-        algo.inputs["true"].push_back(JoinId(true_val.node_id, true_val.handle));
-        algo.inputs["false"].push_back(JoinId(false_val.node_id, false_val.handle));
+        algo.inputs["condition"].push_back(condition);
+        algo.inputs["true"].push_back(true_val);
+        algo.inputs["false"].push_back(false_val);
 
         // Add to algorithms list
         context_.algorithms.push_back(std::move(algo));
@@ -932,10 +932,10 @@ namespace epoch_script
             out_handle = outputs[0].id;
         }
 
-        return {node_id, out_handle};
+        return strategy::NodeReference(node_id, out_handle);
     }
 
-    ValueHandle ExpressionCompiler::VisitSubscript(const Subscript& subscript)
+    strategy::InputValue ExpressionCompiler::VisitSubscript(const Subscript& subscript)
     {
         // Subscript notation interpreted as lag operator
         // e.g., src.c[1] becomes lag(period=1)(src.c)
@@ -991,10 +991,10 @@ namespace epoch_script
         }
 
         // Resolve the value being lagged
-        ValueHandle value = VisitExpr(*subscript.value);
+        strategy::InputValue value = VisitExpr(*subscript.value);
 
         // Infer input type to determine the correct typed lag variant
-        DataType input_type = type_checker_.GetNodeOutputType(value.node_id, value.handle);
+        DataType input_type = type_checker_.GetNodeOutputType(value);
         std::string comp_name = DetermineLagVariant(input_type);
 
         // Validate component exists
@@ -1014,7 +1014,7 @@ namespace epoch_script
         algo.options["period"] = epoch_script::MetaDataOptionDefinition{static_cast<double>(lag_period)};
 
         // Wire the value to the lag input
-        algo.inputs["SLOT"].push_back(JoinId(value.node_id, value.handle));
+        algo.inputs["SLOT"].push_back(value);
 
         // Add to algorithms list
         context_.algorithms.push_back(std::move(algo));
@@ -1024,12 +1024,12 @@ namespace epoch_script
         // Track output type (lag preserves input type)
         context_.node_output_types[node_id]["result"] = input_type;
 
-        return {node_id, "result"};
+        return strategy::NodeReference(node_id, "result");
     }
 
     // Materialize literal nodes
 
-    ValueHandle ExpressionCompiler::MaterializeNumber(double value)
+    strategy::InputValue ExpressionCompiler::MaterializeNumber(double value)
     {
         std::string node_id = UniqueNodeId("number");
 
@@ -1043,10 +1043,10 @@ namespace epoch_script
         context_.var_to_binding[node_id] = "number";
         context_.node_output_types[node_id]["result"] = DataType::Decimal;
 
-        return {node_id, "result"};
+        return strategy::NodeReference(node_id, "result");
     }
 
-    ValueHandle ExpressionCompiler::MaterializeBoolean(bool value)
+    strategy::InputValue ExpressionCompiler::MaterializeBoolean(bool value)
     {
         std::string node_type = value ? "bool_true" : "bool_false";
         std::string node_id = UniqueNodeId(node_type);
@@ -1061,10 +1061,10 @@ namespace epoch_script
         context_.var_to_binding[node_id] = node_type;
         context_.node_output_types[node_id]["result"] = DataType::Boolean;
 
-        return {node_id, "result"};
+        return strategy::NodeReference(node_id, "result");
     }
 
-    ValueHandle ExpressionCompiler::MaterializeText(const std::string& value)
+    strategy::InputValue ExpressionCompiler::MaterializeText(const std::string& value)
     {
         std::string node_id = UniqueNodeId("text");
 
@@ -1080,10 +1080,10 @@ namespace epoch_script
         context_.var_to_binding[node_id] = "text";
         context_.node_output_types[node_id]["result"] = DataType::String;
 
-        return {node_id, "result"};
+        return strategy::NodeReference(node_id, "result");
     }
 
-    ValueHandle ExpressionCompiler::MaterializeNull()
+    strategy::InputValue ExpressionCompiler::MaterializeNull()
     {
         // Use null_number as the default typed null variant
         // Most common use case for None/null literals is numeric contexts
@@ -1100,7 +1100,7 @@ namespace epoch_script
         context_.var_to_binding[node_id] = comp_name;
         context_.node_output_types[node_id]["result"] = DataType::Number;
 
-        return {node_id, "result"};
+        return strategy::NodeReference(node_id, "result");
     }
 
     // Private helper methods
@@ -1142,10 +1142,10 @@ namespace epoch_script
             handle += "." + parts[i];
         }
 
-        return {var, handle};
+        return std::pair(var, handle);
     }
 
-    ValueHandle ExpressionCompiler::ResolveHandle(const std::string& var, const std::string& handle)
+    strategy::InputValue ExpressionCompiler::ResolveHandle(const std::string& var, const std::string& handle)
     {
         // Check if var is bound to a node.handle
         auto it = context_.var_to_binding.find(var);
@@ -1214,7 +1214,7 @@ namespace epoch_script
             ThrowError("Unknown handle '" + handle + "' on '" + var + "'");
         }
 
-        return {var, handle};
+        return strategy::NodeReference(var, handle);
     }
 
     std::string ExpressionCompiler::UniqueNodeId(const std::string& base)
@@ -1241,8 +1241,8 @@ namespace epoch_script
     void ExpressionCompiler::WireInputs(
         const std::string& target_node_id,
         const std::string& component_name,
-        const std::vector<ValueHandle>& args,
-        const std::unordered_map<std::string, ValueHandle>& kwargs)
+        const std::vector<strategy::InputValue>& args,
+        const std::unordered_map<std::string, strategy::InputValue>& kwargs)
     {
         // Get component metadata
         if (!context_.HasComponent(component_name))
@@ -1307,7 +1307,7 @@ namespace epoch_script
             }
 
             // Type checking: get source and target types
-            DataType source_type = type_checker_.GetNodeOutputType(handle.node_id, handle.handle);
+            DataType source_type = type_checker_.GetNodeOutputType(handle);
             DataType target_type = input_types[name];
 
             // Check if types are compatible
@@ -1318,12 +1318,12 @@ namespace epoch_script
                 if (cast_result.has_value() && cast_result.value() != "incompatible")
                 {
                     // Insert cast node (this may reallocate algorithms_ vector)
-                    ValueHandle casted = type_checker_.InsertTypeCast(handle, source_type, target_type);
+                    strategy::InputValue casted = type_checker_.InsertTypeCast(handle, source_type, target_type);
                     // Find target node by ID after potential reallocation
                     auto* target_node = find_target_node(target_node_id);
                     if (target_node)
                     {
-                        target_node->inputs[name].push_back(JoinId(casted.node_id, casted.handle));
+                        target_node->inputs[name].push_back(casted);
                     }
                 }
                 else
@@ -1332,7 +1332,7 @@ namespace epoch_script
                     ThrowError("Type error calling '" + component_name + "()': " +
                                "named argument '" + name + "' must be " + TypeChecker::DataTypeToString(target_type) +
                                ", but received " + TypeChecker::DataTypeToString(source_type) +
-                               " from '" + handle.node_id + "." + handle.handle + "'");
+                               " from '" + handle.GetColumnIdentifier() + "'");
                 }
             }
             else
@@ -1341,7 +1341,7 @@ namespace epoch_script
                 auto* target_node = find_target_node(target_node_id);
                 if (target_node)
                 {
-                    target_node->inputs[name].push_back(JoinId(handle.node_id, handle.handle));
+                    target_node->inputs[name].push_back(handle);
                 }
             }
         }
@@ -1379,7 +1379,7 @@ namespace epoch_script
                 std::string dst_handle = (i < input_ids.size()) ? input_ids[i] : input_ids.back();
 
                 // Type checking: get source and target types
-                DataType source_type = type_checker_.GetNodeOutputType(handle.node_id, handle.handle);
+                DataType source_type = type_checker_.GetNodeOutputType(handle);
                 DataType target_type = input_types[dst_handle];
 
                 // Check if types are compatible
@@ -1390,12 +1390,12 @@ namespace epoch_script
                     if (cast_result.has_value() && cast_result.value() != "incompatible")
                     {
                         // Insert cast node (this may reallocate algorithms_ vector)
-                        ValueHandle casted = type_checker_.InsertTypeCast(handle, source_type, target_type);
+                        strategy::InputValue casted = type_checker_.InsertTypeCast(handle, source_type, target_type);
                         // Find target node by ID after potential reallocation
                         auto* target_node = find_target_node(target_node_id);
                         if (target_node)
                         {
-                            target_node->inputs[dst_handle].push_back(JoinId(casted.node_id, casted.handle));
+                            target_node->inputs[dst_handle].push_back(casted);
                         }
                     }
                     else
@@ -1404,7 +1404,7 @@ namespace epoch_script
                         std::string error_msg = "Type error calling '" + component_name + "()': ";
                         error_msg += "argument " + std::to_string(i + 1) + " ('" + dst_handle + "') must be " + TypeChecker::DataTypeToString(target_type);
                         error_msg += ", but received " + TypeChecker::DataTypeToString(source_type);
-                        error_msg += " from '" + handle.node_id + "." + handle.handle + "'";
+                        error_msg += " from '" + handle.GetColumnIdentifier() + "'";
                         ThrowError(error_msg);
                     }
                 }
@@ -1414,7 +1414,7 @@ namespace epoch_script
                     auto* target_node = find_target_node(target_node_id);
                     if (target_node)
                     {
-                        target_node->inputs[dst_handle].push_back(JoinId(handle.node_id, handle.handle));
+                        target_node->inputs[dst_handle].push_back(handle);
                     }
                 }
             }

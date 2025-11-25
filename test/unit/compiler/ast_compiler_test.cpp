@@ -201,9 +201,9 @@ TEST_CASE("EpochScript Compiler: Test Cases", "[epoch_script_compiler]")
                         for (size_t j = 0; j < expected_refs.size(); ++j)
                         {
                             INFO("Comparing input " << handle << "[" << j << "]");
-                            INFO("Expected: " << expected_refs[j]);
-                            INFO("Actual: " << actual.inputs.at(handle)[j]);
-                            REQUIRE(actual.inputs.at(handle)[j] == expected_refs[j]);
+                            INFO("Expected: " << expected_refs[j].GetColumnIdentifier());
+                            INFO("Actual: " << actual.inputs.at(handle)[j].GetColumnIdentifier());
+                            REQUIRE(actual.inputs.at(handle)[j].GetColumnIdentifier() == expected_refs[j].GetColumnIdentifier());
                         }
                     }
 
@@ -232,7 +232,7 @@ TEST_CASE("EpochScript Compiler: Test Cases", "[epoch_script_compiler]")
 
 using epoch_script::TimeframeResolver;
 
-TEST_CASE("TimeframeResolver: Returns nullopt when no inputs", "[timeframe_resolution]")
+TEST_CASE("TimeframeResolver: Returns nullopt when no inputs [2]", "[timeframe_resolution]")
 {
     TimeframeResolver resolver;
 
@@ -343,8 +343,8 @@ TEST_CASE("TimeframeResolver: ResolveNodeTimeframe resolves from inputs", "[time
     epoch_script::strategy::AlgorithmNode node;
     node.id = "test_node";
     // node.timeframe is not set - should resolve from inputs
-    node.inputs["SLOT0"] = {"input_node#result"};
-    node.inputs["SLOT1"] = {"input_node#result"};
+    node.inputs["SLOT0"] = std::vector<strategy::InputValue>{strategy::NodeReference{"input_node", "result"}};
+    node.inputs["SLOT1"] = std::vector<strategy::InputValue>{strategy::NodeReference{"input_node", "result"}};
 
     auto result = resolver.ResolveNodeTimeframe(node);
 

@@ -22,7 +22,7 @@ std::string ArgumentCountError::Format(int line, int col) const {
     if (!received_args_.empty()) {
         std::vector<std::string> arg_sources;
         for (const auto& arg : received_args_) {
-            arg_sources.push_back(arg.node_id + "." + arg.handle);
+            arg_sources.push_back(arg.GetColumnIdentifier());
         }
         oss << " " << FormatListInBrackets(arg_sources);
     }

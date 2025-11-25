@@ -17,10 +17,10 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"bull_flag", cfg.GetOutputId("bull_flag")},
-      {"bear_flag", cfg.GetOutputId("bear_flag")},
-      {"slmax", cfg.GetOutputId("slmax")},
-      {"slmin", cfg.GetOutputId("slmin")}
+      {"bull_flag", cfg.GetOutputId("bull_flag").GetColumnName()},
+      {"bear_flag", cfg.GetOutputId("bear_flag").GetColumnName()},
+      {"slmax", cfg.GetOutputId("slmax").GetColumnName()},
+      {"slmin", cfg.GetOutputId("slmin").GetColumnName()}
     };
   }
 

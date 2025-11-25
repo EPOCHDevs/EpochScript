@@ -120,6 +120,39 @@ namespace epoch_script
         return DataType::Any;
     }
 
+    DataType TypeChecker::GetNodeOutputType(const strategy::InputValue& input)
+    {
+        // If it's a NodeReference, delegate to the existing overload
+        if (input.IsNodeReference())
+        {
+            const auto& node_ref = input.GetNodeReference();
+            return GetNodeOutputType(node_ref.GetNodeId(), node_ref.GetHandle());
+        }
+
+        // If it's a Constant, return its type directly
+        if (input.IsLiteral())
+        {
+            const auto& constant = input.GetLiteral();
+            if (constant.IsDecimal()) return DataType::Decimal;
+            if (constant.IsBoolean()) return DataType::Boolean;
+            if (constant.IsString()) return DataType::String;
+            if (constant.IsTimestamp()) return DataType::Timestamp;
+            if (constant.IsNull())
+            {
+                // Null has specific types - map to DataType
+                auto null_type = constant.GetNull().type;
+                if (null_type == epoch_core::IODataType::Integer) return DataType::Integer;
+                if (null_type == epoch_core::IODataType::Decimal) return DataType::Decimal;
+                if (null_type == epoch_core::IODataType::Boolean) return DataType::Boolean;
+                if (null_type == epoch_core::IODataType::String) return DataType::String;
+                if (null_type == epoch_core::IODataType::Timestamp) return DataType::Timestamp;
+            }
+        }
+
+        // Default to Any if unknown
+        return DataType::Any;
+    }
+
     bool TypeChecker::IsTypeCompatible(DataType source, DataType target)
     {
         // Any type accepts all
@@ -178,7 +211,7 @@ namespace epoch_script
         return "incompatible";
     }
 
-    ValueHandle TypeChecker::InsertTypeCast(const ValueHandle& source, DataType source_type, DataType target_type)
+    strategy::InputValue TypeChecker::InsertTypeCast(const strategy::InputValue& source, DataType source_type, DataType target_type)
     {
         // Don't insert static_cast if target type is Any - there's nothing to cast to
         if (target_type == DataType::Any)
@@ -205,14 +238,17 @@ namespace epoch_script
         // Special case: Boolean to String uses stringify instead of static_cast
         if (cast_method.value() == "bool_to_string")
         {
-            std::string cast_node_id = InsertStringify(source.node_id, source.handle);
-            return {cast_node_id, "result"};
+            // Extract NodeReference from source (casting only makes sense for node outputs, not constants)
+            const auto& source_ref = source.GetNodeReference();
+            std::string cast_node_id = InsertStringify(source_ref.GetNodeId(), source_ref.GetHandle());
+            return strategy::NodeReference(cast_node_id, "result");
         }
 
         // All other casts use static_cast transforms
         // Insert static_cast node for the target type
-        std::string cast_node_id = InsertStaticCast(source.node_id, source.handle, target_type);
-        return {cast_node_id, "result"};
+        const auto& source_ref = source.GetNodeReference();
+        std::string cast_node_id = InsertStaticCast(source_ref.GetNodeId(), source_ref.GetHandle(), target_type);
+        return strategy::NodeReference(cast_node_id, "result");
     }
 
     std::string TypeChecker::DataTypeToString(DataType type)
@@ -259,7 +295,7 @@ namespace epoch_script
 
     // Private helpers
 
-    ValueHandle TypeChecker::MaterializeNumber(double value)
+    strategy::InputValue TypeChecker::MaterializeNumber(double value)
     {
         std::string node_id = UniqueNodeId("number");
 
@@ -273,10 +309,10 @@ namespace epoch_script
         context_.var_to_binding[node_id] = "number";
         context_.node_output_types[node_id]["result"] = DataType::Decimal;
 
-        return {node_id, "result"};
+        return strategy::NodeReference(node_id, "result");
     }
 
-    ValueHandle TypeChecker::MaterializeString(const std::string& value)
+    strategy::InputValue TypeChecker::MaterializeString(const std::string& value)
     {
         std::string node_id = UniqueNodeId("text");
 
@@ -290,7 +326,7 @@ namespace epoch_script
         context_.var_to_binding[node_id] = "text";
         context_.node_output_types[node_id]["result"] = DataType::String;
 
-        return {node_id, "result"};
+        return strategy::NodeReference(node_id, "result");
     }
 
     std::string TypeChecker::UniqueNodeId(const std::string& base)
@@ -357,7 +393,7 @@ namespace epoch_script
         cast_node.type = cast_type;
 
         // Wire the input from source node (static_cast transforms expect "SLOT" as input key)
-        cast_node.inputs["SLOT"] = {JoinId(source_node_id, source_handle)};
+        cast_node.inputs["SLOT"] = {epoch_script::strategy::InputValue{epoch_script::strategy::NodeReference{source_node_id, source_handle}}};
 
         // Add to algorithms list
         context_.algorithms.push_back(std::move(cast_node));
@@ -381,7 +417,7 @@ namespace epoch_script
         stringify_node.type = "stringify";
 
         // Wire the input from source node (stringify expects "SLOT" as input key)
-        stringify_node.inputs["SLOT"] = {JoinId(source_node_id, source_handle)};
+        stringify_node.inputs["SLOT"] = {epoch_script::strategy::InputValue{epoch_script::strategy::NodeReference{source_node_id, source_handle}}};
 
         // Add to algorithms list
         context_.algorithms.push_back(std::move(stringify_node));

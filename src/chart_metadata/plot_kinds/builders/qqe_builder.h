@@ -17,10 +17,10 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"result", cfg.GetOutputId("result")},
-      {"rsi_ma", cfg.GetOutputId("rsi_ma")},
-      {"long_line", cfg.GetOutputId("long_line")},
-      {"short_line", cfg.GetOutputId("short_line")}
+      {"result", cfg.GetOutputId("result").GetColumnName()},
+      {"rsi_ma", cfg.GetOutputId("rsi_ma").GetColumnName()},
+      {"long_line", cfg.GetOutputId("long_line").GetColumnName()},
+      {"short_line", cfg.GetOutputId("short_line").GetColumnName()}
     };
   }
 

@@ -31,10 +31,12 @@ public:
   epoch_frame::DataFrame TransformData(const epoch_frame::DataFrame &df) const override {
     // 1. Get expected columns from configuration inputs
     std::vector<std::string> inputColumns;
-    for (const auto& [inputId, columns] : m_config.GetInputs()) {
-      inputColumns.insert(inputColumns.end(), columns.begin(), columns.end());
+    for (const auto& [inputId, inputValues] : GetConfiguration().GetInputs()) {
+      for (const auto& input_value : inputValues) {
+        inputColumns.push_back(input_value.GetColumnIdentifier());
+      }
     }
-    for (const auto& column : m_config.GetTransformDefinition().GetMetadata().requiredDataSources) {
+    for (const auto& column : GetRequiredDataSources()) {
       inputColumns.emplace_back(column);
     }
 
@@ -74,14 +76,16 @@ protected:
   void BuildColumnMappings() {
     // Similar to TradeExecutorTransform constructor
     // Map input columns like "gap_classifier#result" to expected names like "gap"
-    const auto inputs = m_config.GetInputs();
-    for (const auto& [inputId, inputColumns] : inputs) {
-      for (auto const& column: inputColumns) {
-      m_columnMappings.emplace(column, inputId);
+    const auto inputs = GetConfiguration().GetInputs();
+    for (const auto& [inputId, inputValues] : inputs) {
+      for (const auto& input_value : inputValues) {
+        // Get the actual column name that will appear in the DataFrame
+        std::string column_name = input_value.GetColumnIdentifier();
+        m_columnMappings.emplace(column_name, inputId);
       }
     }
 
-    for (const auto& column : m_config.GetTransformDefinition().GetMetadata().requiredDataSources) {
+    for (const auto& column : GetRequiredDataSources()) {
       m_columnMappings.emplace(column, column);
     }
   }

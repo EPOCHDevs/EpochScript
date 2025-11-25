@@ -17,9 +17,9 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"direction", cfg.GetOutputId("direction")},
-      {"current_retracement", cfg.GetOutputId("current_retracement")},
-      {"deepest_retracement", cfg.GetOutputId("deepest_retracement")}
+      {"direction", cfg.GetOutputId("direction").GetColumnName()},
+      {"current_retracement", cfg.GetOutputId("current_retracement").GetColumnName()},
+      {"deepest_retracement", cfg.GetOutputId("deepest_retracement").GetColumnName()}
     };
   }
 

@@ -17,9 +17,9 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"macd", cfg.GetOutputId("macd")},
-      {"macd_signal", cfg.GetOutputId("macd_signal")},
-      {"macd_histogram", cfg.GetOutputId("macd_histogram")}
+      {"macd", cfg.GetOutputId("macd").GetColumnName()},
+      {"macd_signal", cfg.GetOutputId("macd_signal").GetColumnName()},
+      {"macd_histogram", cfg.GetOutputId("macd_histogram").GetColumnName()}
     };
   }
 

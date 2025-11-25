@@ -19,8 +19,8 @@ public:
     // Validation ensures exactly one of "result" or "value" exists
     // Determine which one to use (not checking IF it exists, but WHICH exists)
     std::string value_id = cfg.ContainsOutputId("result")
-      ? cfg.GetOutputId("result")
-      : cfg.GetOutputId("value");
+      ? cfg.GetOutputId("result").GetColumnName()
+      : cfg.GetOutputId("value").GetColumnName();
 
     return {
       {"index", INDEX_COLUMN},

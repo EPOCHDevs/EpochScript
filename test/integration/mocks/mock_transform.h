@@ -3,9 +3,9 @@
 #include <epoch_script/transforms/core/itransform.h>
 #include <epoch_script/transforms/core/transform_configuration.h>
 #include <epoch_script/transforms/core/transform_definition.h>
+#include <epoch_script/transforms/core/config_helper.h>
 #include <epoch_protos/tearsheet.pb.h>
 #include <trompeloeil.hpp>
-#include <yaml-cpp/yaml.h>
 #include <memory>
 #include <vector>
 #include <format>
@@ -96,59 +96,88 @@ public:
         return m_requiredDataSources;
     }
 
-    [[nodiscard]] epoch_script::transform::TransformConfiguration GetConfiguration() const override {
-        // Lazy initialization of configuration
+    [[nodiscard]] const epoch_script::transform::TransformConfiguration& GetConfiguration() const override {
+        // Lazy initialization of configuration using config_helper pattern (no YAML)
         if (!m_cachedConfig) {
-            // Generate valid YAML based on inputs
-            std::string yamlStr;
+            using namespace epoch_script::transform;
+            using InputVal = epoch_script::strategy::InputValue;
+            using NodeRef = epoch_script::strategy::NodeReference;
+
+            // Default timeframe for mocks - use string constructor
+            auto mockTimeframe = m_timeframe.value_or(epoch_script::TimeFrame("1D"));
+
+            // Helper to parse "node#col" format into NodeReference
+            auto parseInputRef = [](const std::string& ref) -> NodeRef {
+                auto hashPos = ref.find('#');
+                if (hashPos != std::string::npos) {
+                    return NodeRef{ref.substr(0, hashPos), ref.substr(hashPos + 1)};
+                }
+                return NodeRef{"", ref};  // Just column name, no node
+            };
+
+            // Build input mapping from actual m_inputIds
+            epoch_script::strategy::InputMapping inputMapping;
+            for (size_t i = 0; i < m_inputIds.size(); ++i) {
+                std::string slotName = "SLOT" + std::to_string(i);
+                inputMapping[slotName] = {InputVal{parseInputRef(m_inputIds[i])}};
+            }
+
             if (m_isSelector) {
                 // Use card_selector_filter for selector transforms
-                // Note: YAML string escaping is tricky - use JSON format for the schema
-                yamlStr = std::format(
-                    "type: card_selector_filter\n"
-                    "id: {}\n"
-                    "timeframe:\n"
-                    "  interval: 1\n"
-                    "  type: day\n"
-                    "inputs:\n"
-                    "  SLOT: [data#c]\n"
-                    "options:\n"
-                    "  event_marker_schema:\n"
-                    "    title: Test Selector\n"
-                    "    select_key: filter\n"
-                    "    schemas:\n"
-                    "      - column_id: c\n"
-                    "        slot: Hero\n"
-                    "        render_type: Number\n",
-                    m_id
-                );
+                // Create event marker schema
+                epoch_script::EventMarkerSchema schema;
+                schema.title = "Test Selector";
+                schema.select_key = "filter";
+                schema.schemas.push_back(epoch_script::CardColumnSchema{
+                    .column_id = "c",
+                    .slot = epoch_core::CardSlot::Hero,
+                    .render_type = epoch_core::CardRenderType::Decimal,
+                    .color_map = {}
+                });
+
+                // Use actual inputs if provided, otherwise use SLOT
+                if (inputMapping.empty()) {
+                    inputMapping["SLOT"] = {};
+                }
+
+                TransformDefinitionData data{
+                    .type = "card_selector_filter",
+                    .id = m_id,
+                    .options = {{"event_marker_schema",
+                        epoch_script::MetaDataOptionDefinition{epoch_script::MetaDataOptionDefinition::T{schema}}}},
+                    .timeframe = mockTimeframe,
+                    .inputs = inputMapping
+                };
+                m_cachedConfig = std::make_unique<TransformConfiguration>(TransformDefinition{std::move(data)});
+
             } else if (m_isCrossSectional) {
                 // Use top_k for cross-sectional (requires SLOT input)
-                yamlStr = std::format(
-                    "type: top_k\n"
-                    "id: {}\n"
-                    "timeframe: {{\"interval\":1,\"type\":\"day\"}}\n"
-                    "inputs:\n"
-                    "  SLOT: \"data#c\"\n"
-                    "options:\n"
-                    "  k: 5\n",
-                    m_id
-                );
+                // Use actual inputs if provided, otherwise use SLOT
+                if (inputMapping.empty()) {
+                    inputMapping["SLOT"] = {};
+                }
+
+                TransformDefinitionData data{
+                    .type = "top_k",
+                    .id = m_id,
+                    .options = {{"k", epoch_script::MetaDataOptionDefinition{5.0}}},
+                    .timeframe = mockTimeframe,
+                    .inputs = inputMapping
+                };
+                m_cachedConfig = std::make_unique<TransformConfiguration>(TransformDefinition{std::move(data)});
+
             } else {
-                // Use number for regular (no inputs required)
-                yamlStr = std::format(
-                    "type: number\n"
-                    "id: {}\n"
-                    "timeframe: {{\"interval\":1,\"type\":\"day\"}}\n"
-                    "inputs: []\n"
-                    "options:\n"
-                    "  value: 42\n",
-                    m_id
-                );
+                // Use gt for regular mocks (category: Math, not Scalar)
+                // This ensures mocks go through normal execution path in execution_node.cpp
+                // Mocks override TransformData anyway, so actual transform logic doesn't matter
+                TransformDefinitionData data{
+                    .type = "gt",
+                    .id = m_id,
+                    .timeframe = mockTimeframe,
+                    .inputs = inputMapping  // Use actual inputs from m_inputIds
+                };
+                m_cachedConfig = std::make_unique<TransformConfiguration>(TransformDefinition{std::move(data)});
             }
-            m_cachedConfig = std::make_unique<epoch_script::transform::TransformConfiguration>(
-                epoch_script::TransformDefinition{YAML::Load(yamlStr)}
-            );
         }
         return *m_cachedConfig;
     }
@@ -306,22 +335,34 @@ inline std::unique_ptr<MockTransform> CreateReporterMockTransform(
     // Reporters have NO output metadata (they generate tearsheets)
     mock->m_outputMetadata = {};
 
-    // Create configuration with Reporter category
-    std::string yamlStr = std::format(
-        "type: cs_numeric_cards_report\n"
-        "id: {}\n"
-        "timeframe: {{\"interval\":1,\"type\":\"day\"}}\n"
-        "inputs:\n"
-        "  SLOT: {}\n"
-        "options:\n"
-        "  title: Test Report\n",
-        id,
-        inputIds.empty() ? "[]" : "\"" + inputIds[0] + "\""
-    );
+    // Create configuration with Reporter category using TransformDefinitionData (no YAML)
+    using namespace epoch_script::transform;
+    using InputVal = epoch_script::strategy::InputValue;
+    using NodeRef = epoch_script::strategy::NodeReference;
 
-    mock->m_cachedConfig = std::make_unique<epoch_script::transform::TransformConfiguration>(
-        epoch_script::TransformDefinition{YAML::Load(yamlStr)}
-    );
+    std::vector<InputVal> slotInputs;
+    if (!inputIds.empty()) {
+        // Parse the first inputId (format: "node#col" or just "col")
+        auto& firstInput = inputIds[0];
+        auto hashPos = firstInput.find('#');
+        if (hashPos != std::string::npos) {
+            slotInputs.push_back(InputVal{NodeRef{
+                firstInput.substr(0, hashPos),
+                firstInput.substr(hashPos + 1)
+            }});
+        } else {
+            slotInputs.push_back(InputVal{NodeRef{"", firstInput}});
+        }
+    }
+
+    TransformDefinitionData data{
+        .type = "cs_numeric_cards_report",
+        .id = id,
+        .options = {{"title", epoch_script::MetaDataOptionDefinition{"Test Report"}}},
+        .timeframe = timeframe,
+        .inputs = {{"SLOT", slotInputs}}
+    };
+    mock->m_cachedConfig = std::make_unique<TransformConfiguration>(TransformDefinition{std::move(data)});
 
     // Set default expectation for GetEventMarkers - orchestrator always calls this
     // Store the expectation in the mock to keep it alive (type-erased with shared_ptr<void>)

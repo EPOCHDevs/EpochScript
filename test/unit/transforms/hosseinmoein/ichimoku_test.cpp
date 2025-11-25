@@ -41,19 +41,12 @@ TEST_CASE("Ichimoku", "[hosseinmoein][ichimoku]") {
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   const int64_t p_tenkan = 9, p_kijun = 26, p_senkou_b = 52;
-  epoch_script::MetaDataArgDefinitionMapping opts{
-      {"p_tenkan",
-       epoch_script::MetaDataOptionDefinition{static_cast<double>(p_tenkan)}},
-      {"p_kijun",
-       epoch_script::MetaDataOptionDefinition{static_cast<double>(p_kijun)}},
-      {"p_senkou_b", epoch_script::MetaDataOptionDefinition{
-                         static_cast<double>(p_senkou_b)}}};
-  YAML::Node inputs_yaml; // none
-  YAML::Node options_yaml;
-  options_yaml["p_tenkan"] = p_tenkan;
-  options_yaml["p_kijun"] = p_kijun;
-  options_yaml["p_senkou_b"] = p_senkou_b;
-  auto cfg = run_op("ichimoku", "ichimoku_id", inputs_yaml, options_yaml, tf);
+  auto cfg = run_op("ichimoku", "ichimoku_id",
+      {},
+      {{"p_tenkan", epoch_script::MetaDataOptionDefinition{static_cast<double>(p_tenkan)}},
+       {"p_kijun", epoch_script::MetaDataOptionDefinition{static_cast<double>(p_kijun)}},
+       {"p_senkou_b", epoch_script::MetaDataOptionDefinition{static_cast<double>(p_senkou_b)}}},
+      tf);
 
   Ichimoku ich{cfg};
   auto out = ich.TransformData(input_df);
@@ -79,14 +72,14 @@ TEST_CASE("Ichimoku", "[hosseinmoein][ichimoku]") {
   senkou_b = senkou_b.shift(-p_kijun);
   auto chikou = input_df[C.CLOSE()].shift(p_kijun);
 
-  REQUIRE(out[cfg.GetOutputId("tenkan")].contiguous_array().is_equal(
+  REQUIRE(out[cfg.GetOutputId("tenkan").GetColumnName()].contiguous_array().is_equal(
       tenkan.contiguous_array()));
-  REQUIRE(out[cfg.GetOutputId("kijun")].contiguous_array().is_equal(
+  REQUIRE(out[cfg.GetOutputId("kijun").GetColumnName()].contiguous_array().is_equal(
       kijun.contiguous_array()));
-  REQUIRE(out[cfg.GetOutputId("senkou_a")].contiguous_array().is_equal(
+  REQUIRE(out[cfg.GetOutputId("senkou_a").GetColumnName()].contiguous_array().is_equal(
       senkou_a.contiguous_array()));
-  REQUIRE(out[cfg.GetOutputId("senkou_b")].contiguous_array().is_equal(
+  REQUIRE(out[cfg.GetOutputId("senkou_b").GetColumnName()].contiguous_array().is_equal(
       senkou_b.contiguous_array()));
-  REQUIRE(out[cfg.GetOutputId("chikou")].contiguous_array().is_equal(
+  REQUIRE(out[cfg.GetOutputId("chikou").GetColumnName()].contiguous_array().is_equal(
       chikou.contiguous_array()));
 }

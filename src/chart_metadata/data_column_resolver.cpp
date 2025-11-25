@@ -10,7 +10,7 @@ std::vector<std::string> DataColumnResolver::ResolveColumns(
   columns.push_back(INDEX_COLUMN);
 
   for (auto const &outputId : cfg.GetOutputs()) {
-    columns.emplace_back(cfg.GetOutputId(outputId.id));
+    columns.emplace_back(cfg.GetOutputId(outputId.id).GetColumnName());
   }
 
   return columns;

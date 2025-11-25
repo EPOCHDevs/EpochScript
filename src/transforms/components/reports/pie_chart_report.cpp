@@ -13,8 +13,8 @@ void PieChartReport::generateTearsheet(const epoch_frame::DataFrame &normalizedD
                                      epoch_tearsheet::DashboardBuilder &dashboard) const {
   try {
     // Get column names from input mapping
-    auto labelColumn = m_config.GetInput("label");
-    auto valueColumn = m_config.GetInput("value");
+    auto labelColumn = GetInputId("label");
+    auto valueColumn = GetInputId("value");
 
     // Normalize series as percentage using utility function
     auto normalizedSeries = ReportUtils::normalizeSeriesAsPercentage(

@@ -36,7 +36,13 @@ public:
         if (value.empty()) return defaultValue;
         try {
             return std::stoi(value);
+        } catch (const std::exception& exp) {
+            SPDLOG_WARN("Failed to parse environment variable '{}' with value '{}' as integer: {}. Using default value: {}",
+                        key, value, exp.what(), defaultValue);
+            return defaultValue;
         } catch (...) {
+            SPDLOG_WARN("Failed to parse environment variable '{}' with value '{}' as integer (unknown error). Using default value: {}",
+                        key, value, defaultValue);
             return defaultValue;
         }
     }

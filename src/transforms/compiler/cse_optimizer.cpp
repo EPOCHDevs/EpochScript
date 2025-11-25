@@ -88,20 +88,22 @@ void CSEOptimizer::Optimize(std::vector<strategy::AlgorithmNode>& algorithms,
         {
             for (auto& ref : refs)
             {
-                // Extract node_id from "node_id#handle" format
-                auto hash_pos = ref.find('#');
-                if (hash_pos != std::string::npos)
-                {
-                    std::string node_id = ref.substr(0, hash_pos);
-                    std::string handle = ref.substr(hash_pos); // includes the '#'
+                // Only process node references, skip literal constants
+                if (!ref.IsNodeReference())
+                    continue;
 
-                    // Check if this node is a duplicate that needs redirection
-                    auto redirect_it = redirect_map.find(node_id);
-                    if (redirect_it != redirect_map.end())
-                    {
-                        // Redirect to canonical node
-                        ref = redirect_it->second + handle;
-                    }
+                const auto& node_ref = ref.GetNodeReference();
+                const std::string& node_id = node_ref.GetNodeId();
+                const std::string& handle = node_ref.GetHandle();
+
+                // Check if this node is a duplicate that needs redirection
+                auto redirect_it = redirect_map.find(node_id);
+                if (redirect_it != redirect_map.end())
+                {
+                    // Redirect to canonical node
+                    ref = epoch_script::strategy::InputValue{
+                        epoch_script::strategy::NodeReference{redirect_it->second, handle}
+                    };
                 }
                 // else: external reference like "src", leave unchanged
             }
@@ -208,7 +210,17 @@ size_t CSEOptimizer::ComputeSemanticHash(const strategy::AlgorithmNode& node) co
         const auto& refs = node.inputs.at(key);
         for (const auto& ref : refs)
         {
-            HashCombine(h, std::hash<std::string>{}(ref));
+            // Hash InputValue: differentiate between reference and literal
+            if (ref.IsNodeReference())
+            {
+                HashCombine(h, 0); // Tag for node reference
+                HashCombine(h, std::hash<std::string>{}(ref.GetNodeReference().GetRef()));
+            }
+            else
+            {
+                HashCombine(h, 1); // Tag for literal
+                HashCombine(h, std::hash<std::string>{}(ref.GetLiteral().ToString()));
+            }
         }
     }
 

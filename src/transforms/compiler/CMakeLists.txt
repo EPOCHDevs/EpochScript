@@ -14,6 +14,7 @@ target_sources(epoch_script PRIVATE
     expression_compiler.cpp
     node_builder.cpp
     option_validator.cpp
+    scalar_inlining_pass.cpp
     special_parameter_handler.cpp
     timeframe_resolver.cpp
     type_checker.cpp

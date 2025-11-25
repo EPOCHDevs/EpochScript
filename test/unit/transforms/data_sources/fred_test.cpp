@@ -183,35 +183,11 @@ timeframe: 1d
 )")}};
 
     // Verify output IDs follow naming convention
-    auto observationDateId = config.GetOutputId("observation_date");
-    auto valueId = config.GetOutputId("value");
+    auto observationDateId = config.GetOutputId("observation_date").GetColumnName();
+    auto valueId = config.GetOutputId("value").GetColumnName();
 
     REQUIRE_FALSE(observationDateId.empty());
     REQUIRE_FALSE(valueId.empty());
     REQUIRE(observationDateId != valueId);
   }
-}
-
-TEST_CASE("FRED Series ID Mapping", "[fred][metadata]") {
-  // Verify the FRED_SERIES_MAP contains expected mappings
-  REQUIRE(FRED_SERIES_MAP.contains("CPI"));
-  REQUIRE(FRED_SERIES_MAP.at("CPI") == "CPIAUCSL");
-
-  REQUIRE(FRED_SERIES_MAP.contains("CoreCPI"));
-  REQUIRE(FRED_SERIES_MAP.at("CoreCPI") == "CPILFESL");
-
-  REQUIRE(FRED_SERIES_MAP.contains("FedFunds"));
-  REQUIRE(FRED_SERIES_MAP.at("FedFunds") == "DFF");
-
-  REQUIRE(FRED_SERIES_MAP.contains("Unemployment"));
-  REQUIRE(FRED_SERIES_MAP.at("Unemployment") == "UNRATE");
-
-  REQUIRE(FRED_SERIES_MAP.contains("GDP"));
-  REQUIRE(FRED_SERIES_MAP.at("GDP") == "GDPC1");
-
-  REQUIRE(FRED_SERIES_MAP.contains("Treasury10Y"));
-  REQUIRE(FRED_SERIES_MAP.at("Treasury10Y") == "DGS10");
-
-  REQUIRE(FRED_SERIES_MAP.contains("VIX"));
-  REQUIRE(FRED_SERIES_MAP.at("VIX") == "VIXCLS");
 }

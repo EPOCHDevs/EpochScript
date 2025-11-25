@@ -44,7 +44,9 @@ MakeNewsDataSource() {
               .icon = epoch_core::Icon::Newspaper,
               .text = "{title}<br/>{description}",
               .textIsTemplate = true,
-              .color = epoch_core::Color::Info
+              .color = epoch_core::Color::Info,
+              .title = std::nullopt,
+              .valueKey = "title"  // UI will check if valid to determine when to show flag
           },
           .strategyTypes = {"event-driven", "sentiment", "news-based"},
           .assetRequirements = {"single-asset"},

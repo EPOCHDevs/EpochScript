@@ -17,10 +17,10 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"liquidity", cfg.GetOutputId("liquidity")},
-      {"level", cfg.GetOutputId("level")},
-      {"end", cfg.GetOutputId("end")},
-      {"swept", cfg.GetOutputId("swept")}
+      {"liquidity", cfg.GetOutputId("liquidity").GetColumnName()},
+      {"level", cfg.GetOutputId("level").GetColumnName()},
+      {"end", cfg.GetOutputId("end").GetColumnName()},
+      {"swept", cfg.GetOutputId("swept").GetColumnName()}
     };
   }
 

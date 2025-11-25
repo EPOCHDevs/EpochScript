@@ -114,8 +114,8 @@ namespace epoch_script
 
         // Handle shorthand syntax: component(inputs) instead of component()(inputs)
         // If first call has args and component has no options, treat args as feed inputs
-        std::vector<ValueHandle> feed_step_args;
-        std::unordered_map<std::string, ValueHandle> feed_step_kwargs;
+        std::vector<strategy::InputValue> feed_step_args;
+        std::unordered_map<std::string, strategy::InputValue> feed_step_kwargs;
 
         if (!calls[0]->args.empty())
         {
@@ -139,8 +139,8 @@ namespace epoch_script
         // Parse subsequent feed steps
         for (size_t i = 1; i < calls.size(); ++i)
         {
-            std::vector<ValueHandle> args;
-            std::unordered_map<std::string, ValueHandle> kwargs;
+            std::vector<strategy::InputValue> args;
+            std::unordered_map<std::string, strategy::InputValue> kwargs;
 
             for (const auto& arg_expr : calls[i]->args)
             {
@@ -409,7 +409,9 @@ namespace epoch_script
             else if (auto* dict = dynamic_cast<const Dict*>(value_expr.get()))
             {
                 // Handle dictionary literal (e.g., color_map={Success: ["active"], Error: ["inactive"]})
+                // Initialize as empty object (not null) to handle empty dicts like color_map={}
                 glz::generic dict_obj;
+                dict_obj.data = glz::generic::object_t{};
 
                 // Process each key-value pair
                 for (size_t i = 0; i < dict->keys.size(); ++i)

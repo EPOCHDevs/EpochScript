@@ -10,7 +10,7 @@
     "id": "lag_0",
     "type": "lag_number",
     "inputs": {
-      "SLOT": ["src#c"]
+      "SLOT": [{"type": "ref", "value": {"node_id": "src", "handle": "c"}}]
     },
     "options": {
       "period": 1.0
@@ -21,7 +21,7 @@
     "id": "node_0",
     "type": "numeric_cards_report",
     "inputs": {
-      "SLOT": ["lag_0#result"]
+      "SLOT": [{"type": "ref", "value": {"node_id": "lag_0", "handle": "result"}}]
     },
     "options": {
       "category": "Test",

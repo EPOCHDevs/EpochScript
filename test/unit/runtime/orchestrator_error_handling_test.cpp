@@ -37,12 +37,10 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors
     // Helper to create minimal valid DataFrame for testing
     auto createMinimalDataFrame = []() {
         using namespace epoch_frame;
-        // Create timestamp using arrow's TimestampScalar
-        arrow::TimestampScalar ts(DateTime::now().timestamp().value, arrow::timestamp(arrow::TimeUnit::MICRO));
-        std::vector<arrow::TimestampScalar> dates = {ts};
+        // Create UTC timestamp for consistency with system expectations
+        std::vector<DateTime> dates = {DateTime::now()};
         std::vector<double> values = {100.0};
-        auto ts_array = factory::array::make_timestamp_array(dates);
-        auto index = std::make_shared<DateTimeIndex>(ts_array);
+        auto index = factory::index::make_datetime_index(dates, "", "UTC");
         auto col = factory::array::make_array(values);
         return make_dataframe(index, {col}, {"value"});
     };

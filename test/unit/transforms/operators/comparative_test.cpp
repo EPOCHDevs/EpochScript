@@ -85,7 +85,8 @@ TEST_CASE("Comparative Transforms") {
     // Vector-based comparisons
     SECTION("Vector Equals (vector_eq)") {
       TransformConfiguration config = vector_op(
-          "eq", 7, "actual", "expected",
+          "eq", 7, strategy::InputValue(strategy::NodeReference("actual")),
+          strategy::InputValue(strategy::NodeReference("expected")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -102,7 +103,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Vector Not Equals (vector_neq)") {
       TransformConfiguration config = vector_op(
-          "neq", 8, "actual", "expected",
+          "neq", 8, strategy::InputValue(strategy::NodeReference("actual")),
+          strategy::InputValue(strategy::NodeReference("expected")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -119,7 +121,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Vector Less Than (vector_lt)") {
       TransformConfiguration config = vector_op(
-          "lt", 9, "previous", "current",
+          "lt", 9, strategy::InputValue(strategy::NodeReference("previous")),
+          strategy::InputValue(strategy::NodeReference("current")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -136,7 +139,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Vector Less Than Equals (vector_lte)") {
       TransformConfiguration config = vector_op(
-          "lte", 10, "previous", "current",
+          "lte", 10, strategy::InputValue(strategy::NodeReference("previous")),
+          strategy::InputValue(strategy::NodeReference("current")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -157,7 +161,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Logical OR (logical_or)") {
       TransformConfiguration config = logical_op(
-          "or", 11, "bool_a", "bool_b",
+          "or", 11, strategy::InputValue(strategy::NodeReference("bool_a")),
+          strategy::InputValue(strategy::NodeReference("bool_b")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -174,7 +179,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Logical AND (logical_and)") {
       TransformConfiguration config = logical_op(
-          "and", 12, "bool_a", "bool_b",
+          "and", 12, strategy::InputValue(strategy::NodeReference("bool_a")),
+          strategy::InputValue(strategy::NodeReference("bool_b")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -191,7 +197,7 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Logical NOT (logical_not)") {
       TransformConfiguration config = single_operand_op(
-          "logical", "not", 13, "bool_a",
+          "logical", "not", 13, strategy::InputValue(strategy::NodeReference("bool_a")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -208,7 +214,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Logical XOR (logical_xor)") {
       TransformConfiguration config = logical_op(
-          "xor", 14, "bool_a", "bool_b",
+          "xor", 14, strategy::InputValue(strategy::NodeReference("bool_a")),
+          strategy::InputValue(strategy::NodeReference("bool_b")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -225,7 +232,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Logical AND NOT (logical_and_not)") {
       TransformConfiguration config = logical_op(
-          "and_not", 15, "bool_a", "bool_b",
+          "and_not", 15, strategy::InputValue(strategy::NodeReference("bool_a")),
+          strategy::InputValue(strategy::NodeReference("bool_b")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -453,7 +461,8 @@ TEST_CASE("Additional Comparative Transforms") {
     epoch_frame::DataFrame input = MakeNumericDataFrame();
 
     TransformConfiguration config = vector_op(
-        "gt", 25, "current", "previous",
+        "gt", 25, strategy::InputValue(strategy::NodeReference("current")),
+        strategy::InputValue(strategy::NodeReference("previous")),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -472,7 +481,8 @@ TEST_CASE("Additional Comparative Transforms") {
     epoch_frame::DataFrame input = MakeNumericDataFrame();
 
     TransformConfiguration config = vector_op(
-        "gte", 26, "current", "previous",
+        "gte", 26, strategy::InputValue(strategy::NodeReference("current")),
+        strategy::InputValue(strategy::NodeReference("previous")),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -566,7 +576,7 @@ timeframe: {}
 
     // Use the helper function instead of direct YAML
     TransformConfiguration config = boolean_branch(
-        "31", "condition",
+        "31", strategy::InputValue(strategy::NodeReference("condition")),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
     auto transformBase = MAKE_TRANSFORM(config);
@@ -601,7 +611,7 @@ timeframe: {}
 
     // Use the helper function instead of direct YAML
     TransformConfiguration config = ratio_branch(
-        "32", "ratio", 1.5, 0.8,
+        "32", strategy::InputValue(strategy::NodeReference("ratio")), 1.5, 0.8,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
     auto transformBase = MAKE_TRANSFORM(config);

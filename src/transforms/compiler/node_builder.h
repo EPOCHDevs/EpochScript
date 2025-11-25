@@ -50,8 +50,8 @@ namespace epoch_script
         void WireInputs(
             const std::string& target_node_id,
             const std::string& component_name,
-            const std::vector<ValueHandle>& args,
-            const std::unordered_map<std::string, ValueHandle>& kwargs);
+            const std::vector<strategy::InputValue>& args,
+            const std::unordered_map<std::string, strategy::InputValue>& kwargs);
 
     private:
         CompilationContext& context_;
@@ -64,13 +64,10 @@ namespace epoch_script
         // Helper to generate unique node ID
         std::string UniqueNodeId(const std::string& base);
 
-        // Helper to create "node_id#handle" format
-        std::string JoinId(const std::string& node_id, const std::string& handle);
-
         // Helper to resolve SLOT references in node options
         void ResolveSlotReferencesInOptions(
             const std::string& target_node_id,
-            const std::vector<ValueHandle>& args);
+            const std::vector<strategy::InputValue>& args);
 
         // Error reporting helper
         [[noreturn]] void ThrowError(const std::string& msg, int line = 0, int col = 0);

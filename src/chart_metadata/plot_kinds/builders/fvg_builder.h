@@ -17,10 +17,10 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"fvg", cfg.GetOutputId("fvg")},
-      {"top", cfg.GetOutputId("top")},
-      {"bottom", cfg.GetOutputId("bottom")},
-      {"mitigated_index", cfg.GetOutputId("mitigated_index")}
+      {"fvg", cfg.GetOutputId("fvg").GetColumnName()},
+      {"top", cfg.GetOutputId("top").GetColumnName()},
+      {"bottom", cfg.GetOutputId("bottom").GetColumnName()},
+      {"mitigated_index", cfg.GetOutputId("mitigated_index").GetColumnName()}
     };
   }
 

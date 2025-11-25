@@ -47,9 +47,9 @@ TEST_CASE("index_datetime_extract - year component", "[datetime][extract][index]
   DataFrame output = transform->TransformData(input);
 
   REQUIRE(output.size() == 3);
-  REQUIRE(output.contains(config.GetOutputId()));
+  REQUIRE(output.contains(config.GetOutputId().GetColumnName()));
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   REQUIRE(series.size() == 3);
 
   // Verify year values
@@ -70,7 +70,7 @@ TEST_CASE("index_datetime_extract - month component", "[datetime][extract][index
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto month_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   // January=1, March=3, December=12
@@ -90,7 +90,7 @@ TEST_CASE("index_datetime_extract - day component", "[datetime][extract][index]"
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto day_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   REQUIRE(day_array->Value(0) == 15);
@@ -109,7 +109,7 @@ TEST_CASE("index_datetime_extract - time components", "[datetime][extract][index
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
 
-    auto series = output[config.GetOutputId()];
+    auto series = output[config.GetOutputId().GetColumnName()];
     auto hour_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
     REQUIRE(hour_array->Value(0) == 14);
@@ -125,7 +125,7 @@ TEST_CASE("index_datetime_extract - time components", "[datetime][extract][index
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
 
-    auto series = output[config.GetOutputId()];
+    auto series = output[config.GetOutputId().GetColumnName()];
     auto minute_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
     REQUIRE(minute_array->Value(0) == 30);
@@ -141,7 +141,7 @@ TEST_CASE("index_datetime_extract - time components", "[datetime][extract][index
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
 
-    auto series = output[config.GetOutputId()];
+    auto series = output[config.GetOutputId().GetColumnName()];
     auto second_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
     REQUIRE(second_array->Value(0) == 45);
@@ -167,7 +167,7 @@ TEST_CASE("index_datetime_extract - day_of_week component", "[datetime][extract]
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto dow_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   // ISO standard: Monday=0, Sunday=6
@@ -193,7 +193,7 @@ TEST_CASE("index_datetime_extract - quarter component", "[datetime][extract][ind
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto quarter_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   REQUIRE(quarter_array->Value(0) == 1);
@@ -218,7 +218,7 @@ TEST_CASE("index_datetime_extract - is_leap_year component", "[datetime][extract
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto leap_array = std::static_pointer_cast<arrow::BooleanArray>(series.contiguous_array().value());
 
   REQUIRE(leap_array->Value(0) == true);   // 2020 is leap year
@@ -242,7 +242,7 @@ TEST_CASE("index_datetime_extract - day_of_year component", "[datetime][extract]
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto doy_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   REQUIRE(doy_array->Value(0) == 1);
@@ -266,7 +266,7 @@ TEST_CASE("index_datetime_extract - week component", "[datetime][extract][index]
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto week_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   // ISO weeks
@@ -287,7 +287,7 @@ TEST_CASE("index_datetime_extract - default component is year", "[datetime][extr
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto year_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   // Should extract year by default

@@ -44,7 +44,9 @@ MakeShortVolumeDataSource() {
               .icon = epoch_core::Icon::Activity,
               .text = "Short Volume<br/>Volume: {short_volume}<br/>Ratio: {short_volume_ratio}",
               .textIsTemplate = true,
-              .color = epoch_core::Color::Warning
+              .color = epoch_core::Color::Warning,
+              .title = std::nullopt,
+              .valueKey = "short_volume"  // UI will check if valid to determine when to show flag
           },
           .strategyTypes = {"sentiment", "volume-analysis", "microstructure"},
           .assetRequirements = {"single-asset"},

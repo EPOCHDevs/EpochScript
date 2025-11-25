@@ -44,7 +44,9 @@ MakeDividendsDataSource() {
               .icon = epoch_core::Icon::DollarSign,
               .text = "Dividend: ${cash_amount}<br/>Declared: {declaration_date}<br/>Pay Date: {pay_date}",
               .textIsTemplate = true,
-              .color = epoch_core::Color::Success
+              .color = epoch_core::Color::Success,
+              .title = std::nullopt,
+              .valueKey = "cash_amount"  // UI will check if valid to determine when to show flag
           },
           .strategyTypes = {"dividend-capture", "income", "fundamental"},
           .assetRequirements = {"single-asset"},

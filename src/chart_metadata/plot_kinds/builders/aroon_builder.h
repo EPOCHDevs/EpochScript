@@ -17,8 +17,8 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"aroon_up", cfg.GetOutputId("aroon_up")},
-      {"aroon_down", cfg.GetOutputId("aroon_down")}
+      {"aroon_up", cfg.GetOutputId("aroon_up").GetColumnName()},
+      {"aroon_down", cfg.GetOutputId("aroon_down").GetColumnName()}
     };
   }
 

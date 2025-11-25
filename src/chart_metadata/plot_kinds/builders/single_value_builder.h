@@ -17,7 +17,7 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"value", cfg.GetOutputId("result")}
+      {"value", cfg.GetOutputId("result").GetColumnName()}
     };
   }
 

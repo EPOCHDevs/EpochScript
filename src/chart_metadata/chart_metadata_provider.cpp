@@ -157,7 +157,7 @@ ChartMetadataProvider::ChartMetadataProvider(
 
     // Update output handles mapping
     for (auto const &outputHandle : cfg.GetOutputs()) {
-      outputHandlesToSeriesId[cfg.GetOutputId(outputHandle.id)] =
+      outputHandlesToSeriesId[cfg.GetOutputId(outputHandle.id).GetColumnName()] =
           paneMeta.series.size() - 1;
     }
 

@@ -17,10 +17,10 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"previous_high", cfg.GetOutputId("previous_high")},
-      {"previous_low", cfg.GetOutputId("previous_low")},
-      {"broken_high", cfg.GetOutputId("broken_high")},
-      {"broken_low", cfg.GetOutputId("broken_low")}
+      {"previous_high", cfg.GetOutputId("previous_high").GetColumnName()},
+      {"previous_low", cfg.GetOutputId("previous_low").GetColumnName()},
+      {"broken_high", cfg.GetOutputId("broken_high").GetColumnName()},
+      {"broken_low", cfg.GetOutputId("broken_low").GetColumnName()}
     };
   }
 

@@ -42,7 +42,7 @@ TEST_CASE("FinBERT Sentiment Transform - Configuration", "[ml][finbert][config]"
   const auto tf = EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   SECTION("Basic configuration") {
-    auto config = finbert_sentiment_cfg("test_finbert", "text", tf);
+    auto config = finbert_sentiment_cfg("test_finbert", strategy::InputValue(transform::ConstantValue(std::string("text"))), tf);
 
     REQUIRE(config.GetTransformName() == "finbert_sentiment");
     REQUIRE(config.GetId() == "test_finbert");
@@ -97,7 +97,7 @@ TEST_CASE("FinBERT Sentiment Transform - Integration Test",
   const auto tf = EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   SECTION("End-to-end sentiment analysis") {
-    auto config = finbert_sentiment_cfg("test_integration", "text", tf);
+    auto config = finbert_sentiment_cfg("test_integration", strategy::InputValue(transform::ConstantValue(std::string("text"))), tf);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
@@ -106,17 +106,17 @@ TEST_CASE("FinBERT Sentiment Transform - Integration Test",
 
     // Verify output structure
     REQUIRE(output.num_cols() == 4);
-    REQUIRE(output.contains(config.GetOutputId("positive")));
-    REQUIRE(output.contains(config.GetOutputId("neutral")));
-    REQUIRE(output.contains(config.GetOutputId("negative")));
-    REQUIRE(output.contains(config.GetOutputId("confidence")));
+    REQUIRE(output.contains(config.GetOutputId("positive").GetColumnName()));
+    REQUIRE(output.contains(config.GetOutputId("neutral").GetColumnName()));
+    REQUIRE(output.contains(config.GetOutputId("negative").GetColumnName()));
+    REQUIRE(output.contains(config.GetOutputId("confidence").GetColumnName()));
     REQUIRE(output.size() == 5);
 
     // Get output columns
-    auto positive_col = output[config.GetOutputId("positive")];
-    auto neutral_col = output[config.GetOutputId("neutral")];
-    auto negative_col = output[config.GetOutputId("negative")];
-    auto confidence_col = output[config.GetOutputId("confidence")];
+    auto positive_col = output[config.GetOutputId("positive").GetColumnName()];
+    auto neutral_col = output[config.GetOutputId("neutral").GetColumnName()];
+    auto negative_col = output[config.GetOutputId("negative").GetColumnName()];
+    auto confidence_col = output[config.GetOutputId("confidence").GetColumnName()];
 
     // Verify first result (positive sentiment expected)
     REQUIRE(positive_col.iloc(0).as_bool() == true);

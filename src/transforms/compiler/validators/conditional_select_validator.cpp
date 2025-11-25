@@ -28,8 +28,7 @@ namespace epoch_script
             size_t cond_idx = i * 2;
             const auto& cond_handle = ctx.args[cond_idx];
 
-            DataType cond_type = ctx.type_checker.GetNodeOutputType(
-                cond_handle.node_id, cond_handle.handle);
+            DataType cond_type = ctx.type_checker.GetNodeOutputType(cond_handle);
 
             if (cond_type != DataType::Boolean && cond_type != DataType::Any) {
                 throw std::runtime_error(

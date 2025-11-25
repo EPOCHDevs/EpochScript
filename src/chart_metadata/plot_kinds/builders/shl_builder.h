@@ -17,8 +17,8 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"high_low", cfg.GetOutputId("high_low")},
-      {"level", cfg.GetOutputId("level")}
+      {"high_low", cfg.GetOutputId("high_low").GetColumnName()},
+      {"level", cfg.GetOutputId("level").GetColumnName()}
     };
   }
 

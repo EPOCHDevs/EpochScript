@@ -30,12 +30,6 @@ namespace epoch_script
         Any      // A
     };
 
-    // Value handle - references an output from a node
-    struct ValueHandle
-    {
-        std::string node_id;
-        std::string handle;
-    };
 
     // Shared compilation state accessible to all compiler components
     struct CompilationContext

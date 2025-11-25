@@ -25,25 +25,25 @@ public:
 
     // Try bbands_* naming first, then fall back to *_band naming
     if (cfg.ContainsOutputId("bbands_upper")) {
-      mapping["bbands_upper"] = cfg.GetOutputId("bbands_upper");
+      mapping["bbands_upper"] = cfg.GetOutputId("bbands_upper").GetColumnName();
     } else if (cfg.ContainsOutputId("upper_band")) {
-      mapping["bbands_upper"] = cfg.GetOutputId("upper_band");
+      mapping["bbands_upper"] = cfg.GetOutputId("upper_band").GetColumnName();
     }
 
     // Middle band is optional (e.g., keltner_channels doesn't have it)
     // Always add the key, but use empty string if not present
     if (cfg.ContainsOutputId("bbands_middle")) {
-      mapping["bbands_middle"] = cfg.GetOutputId("bbands_middle");
+      mapping["bbands_middle"] = cfg.GetOutputId("bbands_middle").GetColumnName();
     } else if (cfg.ContainsOutputId("middle_band")) {
-      mapping["bbands_middle"] = cfg.GetOutputId("middle_band");
+      mapping["bbands_middle"] = cfg.GetOutputId("middle_band").GetColumnName();
     } else {
       mapping["bbands_middle"] = "";  // Empty string if no middle band
     }
 
     if (cfg.ContainsOutputId("bbands_lower")) {
-      mapping["bbands_lower"] = cfg.GetOutputId("bbands_lower");
+      mapping["bbands_lower"] = cfg.GetOutputId("bbands_lower").GetColumnName();
     } else if (cfg.ContainsOutputId("lower_band")) {
-      mapping["bbands_lower"] = cfg.GetOutputId("lower_band");
+      mapping["bbands_lower"] = cfg.GetOutputId("lower_band").GetColumnName();
     }
 
     return mapping;

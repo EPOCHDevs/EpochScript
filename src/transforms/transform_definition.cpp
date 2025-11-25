@@ -71,7 +71,7 @@ TransformDefinition::TransformDefinition(
   }
   m_data.options = algorithm.options;
 
-  m_data.inputs = algorithm.inputs;
+  m_data.inputs = algorithm.inputs;  // Unified inputs (node references + literals)
   int connectedInput = 0;
   for (auto const &input : m_data.metaData.inputs) {
     if (!algorithm.inputs.contains(input.id)) {

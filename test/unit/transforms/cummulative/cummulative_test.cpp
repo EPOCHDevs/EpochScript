@@ -20,6 +20,7 @@ using namespace std::chrono_literals;
 using namespace epoch_frame;
 
 TEST_CASE("Cummulative Transforms") {
+    strategy::NodeReference ref("", "input_column");
   SECTION("CumProdOperation") {
     auto index = epoch_frame::factory::index::make_datetime_index(
         {epoch_frame::DateTime{2020y, std::chrono::January, 1d},
@@ -29,10 +30,10 @@ TEST_CASE("Cummulative Transforms") {
 
     // Shared Setup: Define an input DataFrame with a numeric column
     epoch_frame::DataFrame input =
-        make_dataframe<double>(index, {{1.0, 2.0, 3.0, 4.0}}, {"input_column"});
+        make_dataframe<double>(index, {{1.0, 2.0, 3.0, 4.0}}, {ref.GetColumnName()});
 
     TransformConfiguration config = cum_prod(
-        "20", "input_column",
+        "20", strategy::InputValue(strategy::NodeReference(ref)),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
     // Use registry to create the transform
@@ -41,7 +42,7 @@ TEST_CASE("Cummulative Transforms") {
 
     // Expected Output: Cumulative product [1.0, 2.0, 6.0, 24.0]
     epoch_frame::DataFrame expected = make_dataframe<double>(
-        index, {{1.0, 2.0, 6.0, 24.0}}, {config.GetOutputId()});
+        index, {{1.0, 2.0, 6.0, 24.0}}, {config.GetOutputId().GetColumnName()});
 
     // Apply transform
     epoch_frame::DataFrame output = transform->TransformData(input);

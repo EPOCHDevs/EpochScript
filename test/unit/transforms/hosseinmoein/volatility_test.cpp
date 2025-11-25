@@ -59,7 +59,7 @@ TEST_CASE("VolatilityTest", "[volatility]") {
 
     auto result = accelerationBand->TransformData(input_df);
     for (std::string const &col : {"upper_band", "middle_band", "lower_band"}) {
-      auto lhs = result[cfg.GetOutputId(col)].contiguous_array();
+      auto lhs = result[cfg.GetOutputId(col).GetColumnName()].contiguous_array();
 
       std::vector<double> rhs;
       if (col == "upper_band") {
@@ -87,7 +87,7 @@ TEST_CASE("VolatilityTest", "[volatility]") {
     REQUIRE(garmanKlass);
 
     auto result = garmanKlass->TransformData(input_df);
-    auto lhs = result[cfg.GetOutputId()].contiguous_array();
+    auto lhs = result[cfg.GetOutputId().GetColumnName()].contiguous_array();
     auto rhs =
         Array(factory::array::make_contiguous_array(gk_vol.get_result()));
 
@@ -106,7 +106,7 @@ TEST_CASE("VolatilityTest", "[volatility]") {
     REQUIRE(hodgesTompkins);
 
     auto result = hodgesTompkins->TransformData(input_df);
-    auto lhs = result[cfg.GetOutputId()].contiguous_array();
+    auto lhs = result[cfg.GetOutputId().GetColumnName()].contiguous_array();
     auto rhs =
         Array(factory::array::make_contiguous_array(ht_vol.get_result()));
 
@@ -127,7 +127,7 @@ TEST_CASE("VolatilityTest", "[volatility]") {
 
     auto result = keltnerChannels->TransformData(input_df);
     for (std::string const &col : {"upper_band", "lower_band"}) {
-      auto lhs = result[cfg.GetOutputId(col)].contiguous_array();
+      auto lhs = result[cfg.GetOutputId(col).GetColumnName()].contiguous_array();
 
       std::vector<double> rhs;
       if (col == "upper_band") {
@@ -153,7 +153,7 @@ TEST_CASE("VolatilityTest", "[volatility]") {
     REQUIRE(parkinson);
 
     auto result = parkinson->TransformData(input_df);
-    auto lhs = result[cfg.GetOutputId()].contiguous_array();
+    auto lhs = result[cfg.GetOutputId().GetColumnName()].contiguous_array();
     auto rhs =
         Array(factory::array::make_contiguous_array(p_visitor.get_result()));
 
@@ -172,7 +172,7 @@ TEST_CASE("VolatilityTest", "[volatility]") {
     REQUIRE(ulcerIndex);
 
     auto result = ulcerIndex->TransformData(input_df);
-    auto lhs = result[cfg.GetOutputId()].contiguous_array();
+    auto lhs = result[cfg.GetOutputId().GetColumnName()].contiguous_array();
     auto rhs =
         Array(factory::array::make_contiguous_array(ui_visitor.get_result()));
 
@@ -191,7 +191,7 @@ TEST_CASE("VolatilityTest", "[volatility]") {
     REQUIRE(yangZhang);
 
     auto result = yangZhang->TransformData(input_df);
-    auto lhs = result[cfg.GetOutputId()].contiguous_array();
+    auto lhs = result[cfg.GetOutputId().GetColumnName()].contiguous_array();
     auto rhs =
         Array(factory::array::make_contiguous_array(yz_vol.get_result()));
 

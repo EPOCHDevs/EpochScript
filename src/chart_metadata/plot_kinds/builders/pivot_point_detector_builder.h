@@ -17,9 +17,9 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"pivot_type", cfg.GetOutputId("pivot_type")},
-      {"pivot_level", cfg.GetOutputId("pivot_level")},
-      {"pivot_index", cfg.GetOutputId("pivot_index")}
+      {"pivot_type", cfg.GetOutputId("pivot_type").GetColumnName()},
+      {"pivot_level", cfg.GetOutputId("pivot_level").GetColumnName()},
+      {"pivot_index", cfg.GetOutputId("pivot_index").GetColumnName()}
     };
   }
 

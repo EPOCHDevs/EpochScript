@@ -38,8 +38,8 @@ DataFrame createTestDataFrameWithTimestamp() {
       epoch_frame::DateTime{2021y, std::chrono::March, 20d, 9h, 15min, 30s},
       epoch_frame::DateTime{2022y, std::chrono::December, 31d, 23h, 59min, 59s}};
 
-  auto price_df = make_dataframe<double>(index, {{10.0, 20.0, 30.0}}, {"price"});
-  auto timestamp_df = make_dataframe<DateTime>(index, {timestamps}, {"observation_date"});
+  auto price_df = make_dataframe<double>(index, {{10.0, 20.0, 30.0}}, {"node#price"});
+  auto timestamp_df = make_dataframe<DateTime>(index, {timestamps}, {"node#observation_date"});
 
   // Combine the two dataframes by merging their tables
   std::vector<arrow::ChunkedArrayPtr> combined_columns;
@@ -60,7 +60,7 @@ TEST_CASE("column_datetime_extract - year component", "[datetime][extract][colum
   auto input = createTestDataFrameWithTimestamp();
   auto index = input.index();
 
-  auto config = column_datetime_extract_cfg("year_extract", "observation_date", "year",
+  auto config = column_datetime_extract_cfg("year_extract", strategy::InputValue(strategy::NodeReference("node", "observation_date")), "year",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -69,9 +69,9 @@ TEST_CASE("column_datetime_extract - year component", "[datetime][extract][colum
   DataFrame output = transform->TransformData(input);
 
   REQUIRE(output.size() == 3);
-  REQUIRE(output.contains(config.GetOutputId()));
+  REQUIRE(output.contains(config.GetOutputId().GetColumnName()));
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   REQUIRE(series.size() == 3);
 
   // Verify year values
@@ -84,7 +84,7 @@ TEST_CASE("column_datetime_extract - year component", "[datetime][extract][colum
 TEST_CASE("column_datetime_extract - month component", "[datetime][extract][column]") {
   auto input = createTestDataFrameWithTimestamp();
 
-  auto config = column_datetime_extract_cfg("month_extract", "observation_date", "month",
+  auto config = column_datetime_extract_cfg("month_extract", strategy::InputValue(strategy::NodeReference("node", "observation_date")), "month",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -92,7 +92,7 @@ TEST_CASE("column_datetime_extract - month component", "[datetime][extract][colu
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto month_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   // January=1, March=3, December=12
@@ -104,7 +104,7 @@ TEST_CASE("column_datetime_extract - month component", "[datetime][extract][colu
 TEST_CASE("column_datetime_extract - day component", "[datetime][extract][column]") {
   auto input = createTestDataFrameWithTimestamp();
 
-  auto config = column_datetime_extract_cfg("day_extract", "observation_date", "day",
+  auto config = column_datetime_extract_cfg("day_extract", strategy::InputValue(strategy::NodeReference("node", "observation_date")), "day",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -112,7 +112,7 @@ TEST_CASE("column_datetime_extract - day component", "[datetime][extract][column
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto day_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   REQUIRE(day_array->Value(0) == 15);
@@ -124,14 +124,14 @@ TEST_CASE("column_datetime_extract - time components", "[datetime][extract][colu
   auto input = createTestDataFrameWithTimestamp();
 
   SECTION("hour component") {
-    auto config = column_datetime_extract_cfg("hour_extract", "observation_date", "hour",
+    auto config = column_datetime_extract_cfg("hour_extract", strategy::InputValue(strategy::NodeReference("node", "observation_date")), "hour",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
 
-    auto series = output[config.GetOutputId()];
+    auto series = output[config.GetOutputId().GetColumnName()];
     auto hour_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
     REQUIRE(hour_array->Value(0) == 14);
@@ -140,14 +140,14 @@ TEST_CASE("column_datetime_extract - time components", "[datetime][extract][colu
   }
 
   SECTION("minute component") {
-    auto config = column_datetime_extract_cfg("minute_extract", "observation_date", "minute",
+    auto config = column_datetime_extract_cfg("minute_extract", strategy::InputValue(strategy::NodeReference("node", "observation_date")), "minute",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
 
-    auto series = output[config.GetOutputId()];
+    auto series = output[config.GetOutputId().GetColumnName()];
     auto minute_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
     REQUIRE(minute_array->Value(0) == 30);
@@ -156,14 +156,14 @@ TEST_CASE("column_datetime_extract - time components", "[datetime][extract][colu
   }
 
   SECTION("second component") {
-    auto config = column_datetime_extract_cfg("second_extract", "observation_date", "second",
+    auto config = column_datetime_extract_cfg("second_extract", strategy::InputValue(strategy::NodeReference("node", "observation_date")), "second",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
 
-    auto series = output[config.GetOutputId()];
+    auto series = output[config.GetOutputId().GetColumnName()];
     auto second_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
     REQUIRE(second_array->Value(0) == 45);
@@ -185,8 +185,8 @@ TEST_CASE("column_datetime_extract - quarter component", "[datetime][extract][co
       epoch_frame::DateTime{2020y, std::chrono::July, 20d},      // Q3
       epoch_frame::DateTime{2020y, std::chrono::October, 5d}};  // Q4
 
-  auto price_df = make_dataframe<double>(index, {{10.0, 20.0, 30.0, 40.0}}, {"price"});
-  auto timestamp_df = make_dataframe<DateTime>(index, {timestamps}, {"period_end"});
+  auto price_df = make_dataframe<double>(index, {{10.0, 20.0, 30.0, 40.0}}, {"node#price"});
+  auto timestamp_df = make_dataframe<DateTime>(index, {timestamps}, {"node#period_end"});
 
   std::vector<arrow::ChunkedArrayPtr> combined_columns;
   std::vector<std::string> combined_names;
@@ -200,7 +200,7 @@ TEST_CASE("column_datetime_extract - quarter component", "[datetime][extract][co
   }
   auto input = make_dataframe(index, combined_columns, combined_names);
 
-  auto config = column_datetime_extract_cfg("quarter_extract", "period_end", "quarter",
+  auto config = column_datetime_extract_cfg("quarter_extract", strategy::InputValue(strategy::NodeReference("node", "period_end")), "quarter",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -208,7 +208,7 @@ TEST_CASE("column_datetime_extract - quarter component", "[datetime][extract][co
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto quarter_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   REQUIRE(quarter_array->Value(0) == 1);
@@ -228,8 +228,8 @@ TEST_CASE("column_datetime_extract - is_leap_year component", "[datetime][extrac
       epoch_frame::DateTime{2021y, std::chrono::January, 1d},   // Not leap year
       epoch_frame::DateTime{2024y, std::chrono::January, 1d}}; // Leap year
 
-  auto price_df = make_dataframe<double>(index, {{10.0, 20.0, 30.0}}, {"price"});
-  auto timestamp_df = make_dataframe<DateTime>(index, {timestamps}, {"fiscal_year_end"});
+  auto price_df = make_dataframe<double>(index, {{10.0, 20.0, 30.0}}, {"node#price"});
+  auto timestamp_df = make_dataframe<DateTime>(index, {timestamps}, {"node#fiscal_year_end"});
 
   std::vector<arrow::ChunkedArrayPtr> combined_columns;
   std::vector<std::string> combined_names;
@@ -243,7 +243,7 @@ TEST_CASE("column_datetime_extract - is_leap_year component", "[datetime][extrac
   }
   auto input = make_dataframe(index, combined_columns, combined_names);
 
-  auto config = column_datetime_extract_cfg("leap_extract", "fiscal_year_end", "is_leap_year",
+  auto config = column_datetime_extract_cfg("leap_extract", strategy::InputValue(strategy::NodeReference("node", "fiscal_year_end")), "is_leap_year",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -251,7 +251,7 @@ TEST_CASE("column_datetime_extract - is_leap_year component", "[datetime][extrac
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto leap_array = std::static_pointer_cast<arrow::BooleanArray>(series.contiguous_array().value());
 
   REQUIRE(leap_array->Value(0) == true);   // 2020 is leap year
@@ -263,7 +263,7 @@ TEST_CASE("column_datetime_extract - default component is year", "[datetime][ext
   auto input = createTestDataFrameWithTimestamp();
 
   // Don't specify component option - should default to year
-  auto config = column_datetime_extract_cfg("default_extract", "observation_date", "year",
+  auto config = column_datetime_extract_cfg("default_extract", strategy::InputValue(strategy::NodeReference("node", "observation_date")), "year",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -271,7 +271,7 @@ TEST_CASE("column_datetime_extract - default component is year", "[datetime][ext
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto year_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   // Should extract year by default

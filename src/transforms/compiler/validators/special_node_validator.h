@@ -21,8 +21,8 @@ namespace epoch_script
 
     // Validation context passed to validators
     struct ValidationContext {
-        const std::vector<ValueHandle>& args;
-        const std::unordered_map<std::string, ValueHandle>& kwargs;
+        const std::vector<strategy::InputValue>& args;
+        const std::unordered_map<std::string, strategy::InputValue>& kwargs;
         const std::string& target_node_id;
         const std::string& component_name;
         TypeChecker& type_checker;

@@ -61,7 +61,9 @@ AlpacaWebSocketManager::AlpacaWebSocketManager(
         try {
           ParseAndDispatch(message);
         } catch (std::exception const &ex) {
-          SPDLOG_ERROR("Parse error: {}", ex.what());
+          SPDLOG_ERROR("Parse error: {}. Message: {}", ex.what(), message);
+          // Re-throw to properly propagate the error
+          throw;
         }
       });
     }
@@ -96,7 +98,17 @@ void AlpacaWebSocketManager::ParseAndDispatch(const std::string &raw) const {
     std::string symbol;
     try {
       symbol = std::string(obj["S"].get_string());
+    } catch (const std::exception& exp) {
+      // Try alternate field name (lowercase 's' instead of uppercase 'S')
+      SPDLOG_DEBUG("Failed to get symbol from 'S' field, trying 's' field: {}", exp.what());
+      try {
+        symbol = std::string(obj["s"].get_string());
+      } catch (const std::exception& exp2) {
+        throw std::runtime_error(std::format("Failed to extract symbol from bar data. Neither 'S' nor 's' field found: {} / {}", exp.what(), exp2.what()));
+      }
     } catch (...) {
+      // Try alternate field name (lowercase 's' instead of uppercase 'S')
+      SPDLOG_DEBUG("Failed to get symbol from 'S' field (unknown error), trying 's' field");
       symbol = std::string(obj["s"].get_string());
     }
     const double o = obj["o"].get_number();
@@ -122,7 +134,9 @@ void AlpacaWebSocketManager::ParseAndDispatch(const std::string &raw) const {
   try {
     m_newMessageSignal(bars);
   } catch (std::exception const &ex) {
-    SPDLOG_ERROR("Signal error: {}", ex.what());
+    SPDLOG_ERROR("Signal dispatch error: {}. Failed to notify subscribers of {} bar(s)", ex.what(), bars.size());
+    // Re-throw to properly propagate the error
+    throw;
   }
 }
 

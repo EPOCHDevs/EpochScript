@@ -20,12 +20,10 @@ TEST_CASE("RollingCorr basic correlation",
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   const int64_t window = 20;
-  YAML::Node inputs_yaml;
-  inputs_yaml["x"] = "x";
-  inputs_yaml["y"] = "y";
-  YAML::Node options_yaml;
-  options_yaml["window"] = window;
-  auto cfg = run_op("rolling_corr", "rolling_corr_id", inputs_yaml, options_yaml, tf);
+  auto cfg = run_op("rolling_corr", "rolling_corr_id",
+      {{"x", {input_ref("x")}}, {"y", {input_ref("y")}}},
+      {{"window", epoch_script::MetaDataOptionDefinition{static_cast<double>(window)}}},
+      tf);
 
   // Build synthetic x, y with perfect positive correlation
   const size_t N = 200;
@@ -64,12 +62,10 @@ TEST_CASE("RollingCorr negative correlation",
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   const int64_t window = 20;
-  YAML::Node inputs_yaml;
-  inputs_yaml["x"] = "x";
-  inputs_yaml["y"] = "y";
-  YAML::Node options_yaml;
-  options_yaml["window"] = window;
-  auto cfg = run_op("rolling_corr", "rolling_corr_id", inputs_yaml, options_yaml, tf);
+  auto cfg = run_op("rolling_corr", "rolling_corr_id",
+      {{"x", {input_ref("x")}}, {"y", {input_ref("y")}}},
+      {{"window", epoch_script::MetaDataOptionDefinition{static_cast<double>(window)}}},
+      tf);
 
   // Build synthetic x, y with perfect negative correlation
   const size_t N = 200;

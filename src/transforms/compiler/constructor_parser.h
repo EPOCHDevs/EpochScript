@@ -26,7 +26,7 @@ namespace epoch_script
     {
         std::string ctor_name;
         std::unordered_map<std::string, epoch_script::MetaDataOptionDefinition::T> ctor_kwargs;
-        std::vector<std::pair<std::vector<ValueHandle>, std::unordered_map<std::string, ValueHandle>>> feed_steps;
+        std::vector<std::pair<std::vector<strategy::InputValue>, std::unordered_map<std::string, strategy::InputValue>>> feed_steps;
     };
 
     class ConstructorParser

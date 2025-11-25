@@ -117,6 +117,7 @@ struct FlagSchema {
   bool textIsTemplate{false};                     // true = substitute {column} placeholders
   epoch_core::Color color;                        // Semantic color (UI decides shade based on brand)
   std::optional<std::string> title{std::nullopt}; // Optional popup/tooltip title
+  std::string valueKey;                           // Output column ID for flag positioning (e.g., "result", "cash_amount")
 };
 
 struct TransformsMetaData {

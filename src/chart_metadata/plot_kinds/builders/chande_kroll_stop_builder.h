@@ -17,8 +17,8 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"long_stop", cfg.GetOutputId("long_stop")},
-      {"short_stop", cfg.GetOutputId("short_stop")}
+      {"long_stop", cfg.GetOutputId("long_stop").GetColumnName()},
+      {"short_stop", cfg.GetOutputId("short_stop").GetColumnName()}
     };
   }
 

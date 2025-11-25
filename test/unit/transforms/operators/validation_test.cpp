@@ -28,7 +28,8 @@ DataFrame createTestDataFrameForZeroOne() {
        epoch_frame::DateTime{2020y, std::chrono::January, 3d},
        epoch_frame::DateTime{2020y, std::chrono::January, 4d}});
 
-  return make_dataframe<double>(index, {{0.0, 1.0, 5.0, 0.0}}, {"value"});
+  // Use node#column format for column name
+  return make_dataframe<double>(index, {{0.0, 1.0, 5.0, 0.0}}, {"src#value"});
 }
 
 TEST_CASE("IsZero Transform", "[validation]") {
@@ -37,13 +38,14 @@ TEST_CASE("IsZero Transform", "[validation]") {
   const auto &timeframe =
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
-  auto config = is_zero_cfg("is_zero_test", "value", timeframe);
+  // Use input_ref with node#column reference
+  auto config = is_zero_cfg("is_zero_test", input_ref("src", "value"), timeframe);
   auto transformBase = MAKE_TRANSFORM(config);
   auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
   DataFrame output = transform->TransformData(input);
   DataFrame expected = make_dataframe<bool>(
-      index, {{true, false, false, true}}, {config.GetOutputId()});
+      index, {{true, false, false, true}}, {config.GetOutputId().GetColumnName()});
 
   INFO("Comparing is_zero output\n" << output << "\n!=\n" << expected);
   REQUIRE(output.equals(expected));
@@ -55,13 +57,14 @@ TEST_CASE("IsOne Transform", "[validation]") {
   const auto &timeframe =
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
-  auto config = is_one_cfg("is_one_test", "value", timeframe);
+  // Use input_ref with node#column reference
+  auto config = is_one_cfg("is_one_test", input_ref("src", "value"), timeframe);
   auto transformBase = MAKE_TRANSFORM(config);
   auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
   DataFrame output = transform->TransformData(input);
   DataFrame expected = make_dataframe<bool>(
-      index, {{false, true, false, false}}, {config.GetOutputId()});
+      index, {{false, true, false, false}}, {config.GetOutputId().GetColumnName()});
 
   INFO("Comparing is_one output\n" << output << "\n!=\n" << expected);
   REQUIRE(output.equals(expected));

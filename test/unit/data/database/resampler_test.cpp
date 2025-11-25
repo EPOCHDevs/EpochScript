@@ -526,21 +526,19 @@ TEST_CASE("Generic Resampler handles different column types correctly", "[Resamp
       REQUIRE(resultDf.iloc(1, "n").as_int64() == 65);
     }
 
-    SECTION("Custom float column is averaged") {
-      // custom_float should be average: (51 + 52 + 53 + 54 + 55) / 5 = 53
+    SECTION("Custom float column is last") {
       REQUIRE(resultDf.iloc(1, "custom_float").as_double() ==
-              Catch::Approx(53.0));
+              Catch::Approx(55.0));
     }
 
-    SECTION("Custom integer column is summed") {
-      // custom_int should be sum: 201 + 202 + 203 + 204 + 205 = 1015
-      REQUIRE(resultDf.iloc(1, "custom_int").as_int64() == 1015);
+    SECTION("Custom integer column is last") {
+      REQUIRE(resultDf.iloc(1, "custom_int").as_int64() == 205);
     }
 
-    SECTION("Custom string column is concatenated") {
+    SECTION("Custom string column is last") {
       // custom_str should be concatenated: "val1,val2,val3,val4,val5"
       auto str_value = resultDf.iloc(1, "custom_str").value<std::string>().value();
-      REQUIRE(str_value == "val1,val2,val3,val4,val5");
+      REQUIRE(str_value == "val5");
     }
   }
 }

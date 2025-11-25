@@ -79,7 +79,11 @@ TEST_CASE("Template Expansion - FRED Transform") {
         FREDTransform transform(config);
 
         // Get output IDs - should use simple handles (for graph wiring)
-        auto outputIds = transform.GetOutputIds();
+        auto outputMetadata = transform.GetOutputMetaData();
+        std::vector<std::string> outputIds;
+        for (const auto& meta : outputMetadata) {
+            outputIds.push_back(transform.GetOutputId(meta.id));
+        }
 
         REQUIRE(outputIds.size() == 2);
         REQUIRE(outputIds[0] == "test_fred_gdp#observation_date");
@@ -115,7 +119,11 @@ TEST_CASE("Template Expansion - FRED Transform") {
             REQUIRE(requiredDataSources.size() == 1);
             REQUIRE(requiredDataSources[0] == "ECON:" + category + ":value");
 
-            auto outputIds = transform.GetOutputIds();
+            auto outputMetadata = transform.GetOutputMetaData();
+            std::vector<std::string> outputIds;
+            for (const auto& meta : outputMetadata) {
+                outputIds.push_back(transform.GetOutputId(meta.id));
+            }
             REQUIRE(outputIds.size() == 1);
             REQUIRE(outputIds[0] == "test_fred_" + category + "#value");
         }
@@ -196,7 +204,11 @@ TEST_CASE("Template Expansion - Indices Transform (common_indices)") {
         PolygonDataSourceTransform transform(config);
 
         // Get output IDs - should use simple handles (for graph wiring)
-        auto outputIds = transform.GetOutputIds();
+        auto outputMetadata = transform.GetOutputMetaData();
+        std::vector<std::string> outputIds;
+        for (const auto& meta : outputMetadata) {
+            outputIds.push_back(transform.GetOutputId(meta.id));
+        }
 
         REQUIRE(outputIds.size() == 1);
         REQUIRE(outputIds[0] == "test_common_indices_vix#c");
@@ -231,7 +243,11 @@ TEST_CASE("Template Expansion - Indices Transform (common_indices)") {
             REQUIRE(requiredDataSources.size() == 1);
             REQUIRE(requiredDataSources[0] == "IDX:" + ticker + ":c");
 
-            auto outputIds = transform.GetOutputIds();
+            auto outputMetadata = transform.GetOutputMetaData();
+            std::vector<std::string> outputIds;
+            for (const auto& meta : outputMetadata) {
+                outputIds.push_back(transform.GetOutputId(meta.id));
+            }
             REQUIRE(outputIds.size() == 1);
             REQUIRE(outputIds[0] == "test_common_indices_" + ticker + "#c");
         }
@@ -287,7 +303,11 @@ TEST_CASE("Template Expansion - Indices Transform (indices)") {
         REQUIRE(requiredDataSources[4] == "IDX:FTSE:v");
 
         // Get output IDs - should use simple handles (for graph wiring)
-        auto outputIds = transform.GetOutputIds();
+        auto outputMetadata = transform.GetOutputMetaData();
+        std::vector<std::string> outputIds;
+        for (const auto& meta : outputMetadata) {
+            outputIds.push_back(transform.GetOutputId(meta.id));
+        }
 
         REQUIRE(outputIds.size() == 5);
         REQUIRE(outputIds[0] == "test_indices_ftse#c");

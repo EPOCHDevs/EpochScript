@@ -8,8 +8,8 @@ namespace epoch_script::reports {
 
 void BaseCardReport::generateTearsheet(const epoch_frame::DataFrame &normalizedDf,
                                         epoch_tearsheet::DashboardBuilder &dashboard) const {
-  // For single input transforms, get the inputId (which is what the column is renamed to)
-  auto inputCol = m_config.GetInput();
+  // For single input transforms, get the column identifier for DataFrame indexing
+  auto inputCol = this->GetInputId();
 
   // Get the series for the input column
   auto series = normalizedDf[inputCol];

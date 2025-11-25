@@ -56,10 +56,10 @@ timeframe: {}
 
   // Scalar optimization: output should be single-row DataFrame
   REQUIRE(output.size() == 1);
-  REQUIRE(output.contains(config.GetOutputId()));
+  REQUIRE(output.contains(config.GetOutputId().GetColumnName()));
 
   // Verify the timestamp value is correct
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   REQUIRE(series.size() == 1);
 
   // Extract the timestamp value and verify it matches expected nanoseconds
@@ -93,9 +93,9 @@ timeframe: {}
     DataFrame output = transform->TransformData(input);
 
     REQUIRE(output.size() == 1);
-    REQUIRE(output.contains(config.GetOutputId()));
+    REQUIRE(output.contains(config.GetOutputId().GetColumnName()));
 
-    auto timestamp_ns = output[config.GetOutputId()].array()->GetScalar(0).ValueOrDie();
+    auto timestamp_ns = output[config.GetOutputId().GetColumnName()].array()->GetScalar(0).ValueOrDie();
     epoch_frame::DateTime expected_dt = epoch_frame::DateTime::from_str("2021-03-15 14:30:00", "UTC");
     int64_t expected_nanos = expected_dt.m_nanoseconds.count();
 
@@ -122,7 +122,7 @@ timeframe: {}
 
     REQUIRE(output.size() == 1);
 
-    auto timestamp_ns = output[config.GetOutputId()].array()->GetScalar(0).ValueOrDie();
+    auto timestamp_ns = output[config.GetOutputId().GetColumnName()].array()->GetScalar(0).ValueOrDie();
     epoch_frame::DateTime expected_dt = epoch_frame::DateTime::from_str("2022-12-31 23:59:59", "UTC");
     int64_t expected_nanos = expected_dt.m_nanoseconds.count();
 
@@ -155,7 +155,7 @@ timeframe: {}
     auto transform = MAKE_TRANSFORM(config);
     auto output = transform->TransformData(createTimestampScalarTestDataFrame());
     REQUIRE(output.size() == 1);
-    REQUIRE(output.contains(config.GetOutputId()));
+    REQUIRE(output.contains(config.GetOutputId().GetColumnName()));
 
     // Get the timestamp value and verify it's 2020-01-01 00:00:00 UTC
     auto column_name = output.column_names().at(0);

@@ -17,6 +17,7 @@ TEST_CASE("SMC Test") {
   using namespace epoch_frame;
   using namespace epoch_script;
   using namespace epoch_script::transform;
+  using InputVal = strategy::InputValue;
   constexpr auto test_instrument = "EURUSD";
   auto path = std::format("{}/{}/{}_15M.csv",
                           SMC_TEST_DATA_DIR,
@@ -199,9 +200,10 @@ TEST_CASE("SMC Test") {
     auto timeframe =
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
     auto shl = make_shl();
+      auto cfg = shl->GetConfiguration();
 
     auto config =
-        order_blocks("ob", shl->GetOutputId("high_low"), false, timeframe);
+        order_blocks("ob", InputVal(cfg.GetOutputId("high_low")), false, timeframe);
     auto transformBase = MAKE_TRANSFORM(config);
     auto ob_transform = dynamic_cast<ITransform *>(transformBase.get());
 
@@ -317,8 +319,9 @@ TEST_CASE("SMC Test") {
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
     auto shl = make_shl();
 
-    auto config = bos_choch("bos_choch", shl->GetOutputId("high_low"),
-                            shl->GetOutputId("level"), true, timeframe);
+    auto shl_cfg = shl->GetConfiguration();
+    auto config = bos_choch("bos_choch", InputVal(shl_cfg.GetOutputId("high_low")),
+                            InputVal(shl_cfg.GetOutputId("level")), true, timeframe);
     auto transformBase = MAKE_TRANSFORM(config);
     auto bos_choch_transform = dynamic_cast<ITransform *>(transformBase.get());
 
@@ -365,8 +368,9 @@ TEST_CASE("SMC Test") {
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
     auto shl = make_shl();
 
-    auto config = liquidity("liquidity", shl->GetOutputId("high_low"),
-                            shl->GetOutputId("level"), 0.01, timeframe);
+    auto shl_cfg = shl->GetConfiguration();
+    auto config = liquidity("liquidity", InputVal(shl_cfg.GetOutputId("high_low")),
+                            InputVal(shl_cfg.GetOutputId("level")), 0.01, timeframe);
     auto transformBase = MAKE_TRANSFORM(config);
     auto liquidity_transform = dynamic_cast<ITransform *>(transformBase.get());
 
@@ -414,9 +418,11 @@ TEST_CASE("SMC Test") {
     auto timeframe =
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
     auto shl = make_shl();
+      auto cfg = shl->GetConfiguration();
 
-    auto config = retracements("retracements", shl->GetOutputId("high_low"),
-                               shl->GetOutputId("level"), timeframe);
+    auto config = retracements("retracements",
+        InputVal(cfg.GetOutputId("high_low")),
+        InputVal(cfg.GetOutputId("level")), timeframe);
     auto transformBase = MAKE_TRANSFORM(config);
     auto retracements_transform =
         dynamic_cast<ITransform *>(transformBase.get());

@@ -17,11 +17,11 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"tenkan", cfg.GetOutputId("tenkan")},
-      {"kijun", cfg.GetOutputId("kijun")},
-      {"senkou_a", cfg.GetOutputId("senkou_a")},
-      {"senkou_b", cfg.GetOutputId("senkou_b")},
-      {"chikou", cfg.GetOutputId("chikou")}
+      {"tenkan", cfg.GetOutputId("tenkan").GetColumnName()},
+      {"kijun", cfg.GetOutputId("kijun").GetColumnName()},
+      {"senkou_a", cfg.GetOutputId("senkou_a").GetColumnName()},
+      {"senkou_b", cfg.GetOutputId("senkou_b").GetColumnName()},
+      {"chikou", cfg.GetOutputId("chikou").GetColumnName()}
     };
   }
 

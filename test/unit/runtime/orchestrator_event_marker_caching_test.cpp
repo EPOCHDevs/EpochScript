@@ -1,453 +1,526 @@
 /**
- * @file orchestrator_selector_caching_test.cpp
- * @brief Comprehensive tests for selector generation, caching, and retrieval
+ * @file orchestrator_event_marker_caching_test.cpp
+ * @brief Realistic tests for event marker generation and caching in orchestrator
  *
- * Tests cover ALL selector-related code paths:
- * - Selector detection (IsSelectorTransform helper)
- * - Empty/invalid selector handling (lines 316-319)
- * - First selector caching (lines 353-357)
- * - Selector overwriting (lines 348-351)
- * - Multi-asset selector distribution (lines 327-358)
- * - Parallel selector caching with mutex (lines 328-329)
- * - GetGeneratedEventMarkers (lines 365-367)
- * - DataFrame retrieval from cache (lines 333)
+ * Tests event marker functionality with:
+ * - Compiled Python/epoch source code
+ * - Single and multiple assets
+ * - Node references and literal inputs
+ * - Concrete value verification
  */
 
 #include "transforms/runtime/orchestrator.h"
-#include "test_constants.h"
-#include "../../integration/mocks/mock_transform.h"
-#include "../../integration/mocks/mock_transform_manager.h"
+#include "transform_manager/transform_manager.h"
+#include "fake_data_sources.h"
+#include "../common/test_constants.h"
+#include <epoch_script/strategy/metadata.h>
+#include <epoch_script/core/constants.h>
 #include <epoch_core/catch_defs.h>
 #include <catch2/catch_test_macros.hpp>
-#include <trompeloeil.hpp>
-#include <epoch_frame/factory/index_factory.h>
-#include <epoch_frame/factory/dataframe_factory.h>
-#include <epoch_script/core/metadata_options.h>
 
-using namespace epoch_script::runtime;
 using namespace epoch_script::runtime;
 using namespace epoch_script::runtime::test;
 using namespace epoch_script;
 
 namespace {
-    using namespace epoch_frame::factory::index;
 
-    // Helper to create CardColumnSchema for testing
-    epoch_script::CardColumnSchema CreateCardColumnSchema(
-        const std::string& columnId,
-        epoch_core::CardSlot slot = epoch_core::CardSlot::Hero,
-        epoch_core::CardRenderType renderType = epoch_core::CardRenderType::Decimal) {
-
-        epoch_script::CardColumnSchema schema;
-        schema.column_id = columnId;
-        schema.slot = slot;
-        schema.render_type = renderType;
-        return schema;
-    }
-
-    // Helper to create EventMarkerData with specific content
-    epoch_script::transform::EventMarkerData CreateEventMarkerData(
-        const std::string& title,
-        int schemaCount,
-        int dataRows = 3) {
-
-        epoch_script::transform::EventMarkerData data;
-        data.title = title;
-
-        // Create schemas
-        for (int i = 0; i < schemaCount; ++i) {
-            data.schemas.push_back(CreateCardColumnSchema("col_" + std::to_string(i)));
-        }
-
-        // Create DataFrame
-        auto idx = from_range(0, dataRows);
-        std::vector<double> column_c(dataRows);
-        std::iota(column_c.begin(), column_c.end(), 1.0);
-        data.data = make_dataframe<double>(idx, {column_c}, {"c"});
-
-        return data;
-    }
-
-    // Helper to create empty EventMarkerData (for testing empty handling)
-    epoch_script::transform::EventMarkerData CreateEmptyEventMarkerData() {
-        return epoch_script::transform::EventMarkerData{};
-    }
-
-    // Helper to create test DataFrame with multiple columns
-    epoch_frame::DataFrame CreateTestDataFrame(int numRows = 3, int numCols = 1) {
-        auto idx = from_range(0, numRows);
-        std::vector<std::string> colNames;
-        std::vector<std::vector<double>> colData;
-
-        for (int i = 0; i < numCols; ++i) {
-            colNames.push_back("col_" + std::to_string(i));
-            std::vector<double> data(numRows);
-            std::iota(data.begin(), data.end(), static_cast<double>(i * numRows + 1));
-            colData.push_back(data);
-        }
-
-        return make_dataframe<double>(idx, colData, colNames);
-    }
+// Helper to compile source and build TransformManager
+std::unique_ptr<TransformManager> CompileSource(const std::string& sourceCode) {
+    auto pythonSource = epoch_script::strategy::PythonSource(sourceCode);
+    return std::make_unique<TransformManager>(pythonSource);
 }
 
-TEST_CASE("DataFlowRuntimeOrchestrator - Selector Caching", "[.][orchestrator][selectors][critical]") {
+} // anonymous namespace
+
+TEST_CASE("EventMarker - Realistic Caching Tests", "[orchestrator][event_markers]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
     const std::string msft = TestAssetConstants::MSFT;
-    const std::string googl = TestAssetConstants::GOOG;
+    const std::string googl = TestAssetConstants::GOOGL;
 
-    SECTION("Empty title selector is not cached - CRITICAL") {
-        // Line 316-319 in dataflow_orchestrator.cpp
-        // Selectors with empty title should be skipped
-        auto mock = CreateSimpleMockTransform("selector", dailyTF, {}, {"result"}, false, true);
+    SECTION("Basic event marker with single asset") {
+        // Source: compare close price > 100, create event marker
+        std::string sourceCode = R"(
+src = market_data_source(timeframe="1D")()
+signal = src.c > 100
+event_marker(
+    schema=EventMarkerSchema(
+        title="Price Above 100",
+        select_key="SLOT0",
+        schemas=[CardColumnSchema(
+            column_id="SLOT0",
+            slot="PrimaryBadge",
+            render_type="Badge",
+            color_map={}
+        )]
+    )
+)(signal)
+)";
 
-        auto emptySelector = CreateEmptyEventMarkerData();
-        REQUIRE(emptySelector.title.empty());
+        auto transformManager = CompileSource(sourceCode);
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(transformManager));
 
-        REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
-            .RETURN(CreateTestDataFrame());
-
-        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
-            .LR_RETURN(std::nullopt);
-
-        std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
-        transforms.push_back(std::move(mock));
-
-        DataFlowRuntimeOrchestrator orch({aapl}, CreateMockTransformManager(std::move(transforms)));
-
+        // Input: close prices [90, 110, 95, 120] - 2 values > 100
         TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame();
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
 
         orch.ExecutePipeline(std::move(inputData));
 
-        // GetGeneratedEventMarkers should be empty because empty selector was not cached
-        auto selectors = orch.GetGeneratedEventMarkers();
-        REQUIRE(selectors.empty());
+        auto eventMarkers = orch.GetGeneratedEventMarkers();
+
+        // Verify event markers exist for single asset
+        REQUIRE(eventMarkers.size() == 1);
+        REQUIRE(eventMarkers.contains(aapl));
+
+        auto& aaplMarkers = eventMarkers.at(aapl);
+        REQUIRE(aaplMarkers.size() == 1);
+
+        // Verify title
+        REQUIRE(aaplMarkers[0].title == "Price Above 100");
+
+        // Verify schema (EventMarker automatically adds pivot column, so 1 input + 1 pivot = 2)
+        REQUIRE(aaplMarkers[0].schemas.size() == 2);
+        REQUIRE(aaplMarkers[0].schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
+        REQUIRE(aaplMarkers[0].schemas[0].render_type == epoch_core::CardRenderType::Badge);
+
+        // Verify filtered data: only rows where c > 100 (indices 1 and 3)
+        REQUIRE(aaplMarkers[0].data.num_rows() == 2);
+
+        // Verify pivot column exists for chart navigation
+        REQUIRE(aaplMarkers[0].data.contains("pivot"));
+
+        // Verify column_id mapping - SLOT0 resolves to comparison result
+        REQUIRE(aaplMarkers[0].schemas[0].column_id == "gt_0#result");
+
+        // Verify pivot schema was added correctly
+        REQUIRE(aaplMarkers[0].schemas[1].column_id == "pivot");
+        REQUIRE(aaplMarkers[0].schemas[1].render_type == epoch_core::CardRenderType::Timestamp);
     }
 
-    SECTION("Empty schemas selector is not cached - CRITICAL") {
-        // Line 316-319 in dataflow_orchestrator.cpp
-        auto mock = CreateSimpleMockTransform("selector", dailyTF, {}, {"result"}, false, true);
+    SECTION("Event marker with multiple assets") {
+        std::string sourceCode = R"(
+src = market_data_source(timeframe="1D")()
+signal = src.c > 100
+event_marker(
+    schema=EventMarkerSchema(
+        title="Multi-Asset Signal",
+        select_key="SLOT0",
+        schemas=[CardColumnSchema(
+            column_id="SLOT0",
+            slot="PrimaryBadge",
+            render_type="Badge",
+            color_map={}
+        )]
+    )
+)(signal)
+)";
 
-        epoch_script::transform::EventMarkerData invalidSelector;
-        invalidSelector.title = "Valid Title";
-        invalidSelector.schemas = {};  // Empty schemas
-        REQUIRE(invalidSelector.schemas.empty());
+        auto transformManager = CompileSource(sourceCode);
+        DataFlowRuntimeOrchestrator orch({aapl, msft, googl}, std::move(transformManager));
 
-        REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
-            .RETURN(CreateTestDataFrame());
-
-        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
-            .LR_RETURN(std::nullopt);
-
-        std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
-        transforms.push_back(std::move(mock));
-
-        DataFlowRuntimeOrchestrator orch({aapl}, CreateMockTransformManager(std::move(transforms)));
-
+        // Same data for all assets
+        auto ohlcv = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
         TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame();
+        inputData[dailyTF.ToString()][aapl] = ohlcv;
+        inputData[dailyTF.ToString()][msft] = ohlcv;
+        inputData[dailyTF.ToString()][googl] = ohlcv;
 
         orch.ExecutePipeline(std::move(inputData));
 
-        // GetGeneratedEventMarkers should be empty
-        auto selectors = orch.GetGeneratedEventMarkers();
-        REQUIRE(selectors.empty());
-    }
+        auto eventMarkers = orch.GetGeneratedEventMarkers();
 
-    SECTION("First selector cached for single asset - CRITICAL") {
-        // Line 353-357 in dataflow_orchestrator.cpp
-        auto mock = CreateSimpleMockTransform("selector", dailyTF, {}, {"result"}, false, true);
+        // Verify all 3 assets have event markers
+        REQUIRE(eventMarkers.size() == 3);
+        REQUIRE(eventMarkers.contains(aapl));
+        REQUIRE(eventMarkers.contains(msft));
+        REQUIRE(eventMarkers.contains(googl));
 
-        auto selectorData = CreateEventMarkerData("Test Selector", 3, 5);
-        REQUIRE(!selectorData.title.empty());
-        REQUIRE(!selectorData.schemas.empty());
+        // Verify each asset has same structure with concrete values
+        for (const auto& asset : {aapl, msft, googl}) {
+            INFO("Checking asset: " << asset);
+            auto& markers = eventMarkers.at(asset);
+            REQUIRE(markers.size() == 1);
+            REQUIRE(markers[0].title == "Multi-Asset Signal");
+            REQUIRE(markers[0].schemas.size() == 2);  // 1 input + pivot
+            REQUIRE(markers[0].data.num_rows() == 2);
 
-        REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
-            .RETURN(CreateTestDataFrame(5));
+            // Verify schema column IDs - SLOT0 resolves to actual column name
+            REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // signal: src.c > 100
+            REQUIRE(markers[0].schemas[1].column_id == "pivot");
 
-        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
-            .LR_RETURN(std::optional{selectorData});
+            // Verify pivot column exists in data
+            REQUIRE(markers[0].data.contains("pivot"));
 
-        std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
-        transforms.push_back(std::move(mock));
-
-        DataFlowRuntimeOrchestrator orch({aapl}, CreateMockTransformManager(std::move(transforms)));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame(5);
-
-        orch.ExecutePipeline(std::move(inputData));
-
-        // Verify selector was cached
-        auto selectors = orch.GetGeneratedEventMarkers();
-        REQUIRE(selectors.size() == 1);
-        REQUIRE(selectors.contains(aapl));
-        REQUIRE(selectors.at(aapl).size() == 1);  // One selector for this asset
-        REQUIRE(selectors.at(aapl)[0].title == "Test Selector");
-        REQUIRE(selectors.at(aapl)[0].schemas.size() == 3);
-        REQUIRE(selectors.at(aapl)[0].data.num_rows() > 0);
-    }
-
-    SECTION("First selector cached for multiple assets - CRITICAL") {
-        // Line 327-358 in dataflow_orchestrator.cpp
-        // Selector should be cached for EACH asset
-        auto mock = CreateSimpleMockTransform("selector", dailyTF, {}, {"result"}, false, true);
-
-        auto selectorData = CreateEventMarkerData("Multi-Asset Selector", 2, 4);
-
-        REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
-            .TIMES(3)  // Called for each asset
-            .RETURN(CreateTestDataFrame(4));
-
-        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
-            .TIMES(AT_LEAST(1))
-            .LR_RETURN(std::optional{selectorData});
-
-        std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
-        transforms.push_back(std::move(mock));
-
-        DataFlowRuntimeOrchestrator orch({aapl, msft, googl}, CreateMockTransformManager(std::move(transforms)));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame(4);
-        inputData[dailyTF.ToString()][msft] = CreateTestDataFrame(4);
-        inputData[dailyTF.ToString()][googl] = CreateTestDataFrame(4);
-
-        orch.ExecutePipeline(std::move(inputData));
-
-        // Verify selector cached for ALL assets
-        auto selectors = orch.GetGeneratedEventMarkers();
-        REQUIRE(selectors.size() == 3);
-        REQUIRE(selectors.contains(aapl));
-        REQUIRE(selectors.contains(msft));
-        REQUIRE(selectors.contains(googl));
-        REQUIRE(selectors.at(aapl).size() == 1);
-        REQUIRE(selectors.at(aapl)[0].schemas.size() == 2);
-        REQUIRE(selectors.at(msft).size() == 1);
-        REQUIRE(selectors.at(msft)[0].schemas.size() == 2);
-        REQUIRE(selectors.at(googl).size() == 1);
-        REQUIRE(selectors.at(googl)[0].schemas.size() == 2);
-    }
-
-    SECTION("Multiple selectors: both are appended to list - CRITICAL") {
-        // Line 328-333 in dataflow_orchestrator.cpp
-        // Multiple selectors per asset are now supported (appended to vector)
-        auto selector1 = CreateSimpleMockTransform("selector1", dailyTF, {}, {"result"}, false, true);
-        auto selector2 = CreateSimpleMockTransform("selector2", dailyTF, {}, {"result"}, false, true);
-
-        auto selectorData1 = CreateEventMarkerData("First Selector", 1, 3);
-        auto selectorData2 = CreateEventMarkerData("Second Selector", 3, 3);
-
-        REQUIRE_CALL(*selector1, TransformData(trompeloeil::_))
-            .RETURN(CreateTestDataFrame());
-        REQUIRE_CALL(*selector1, GetEventMarkers(trompeloeil::_))
-            .LR_RETURN(std::optional{selectorData1});
-
-        REQUIRE_CALL(*selector2, TransformData(trompeloeil::_))
-            .RETURN(CreateTestDataFrame());
-        REQUIRE_CALL(*selector2, GetEventMarkers(trompeloeil::_))
-            .LR_RETURN(std::optional{selectorData2});
-
-        std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
-        transforms.push_back(std::move(selector1));
-        transforms.push_back(std::move(selector2));
-
-        DataFlowRuntimeOrchestrator orch({aapl}, CreateMockTransformManager(std::move(transforms)));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame();
-
-        orch.ExecutePipeline(std::move(inputData));
-
-        // Both selectors should be retained in the vector
-        auto selectors = orch.GetGeneratedEventMarkers();
-        REQUIRE(selectors.size() == 1);
-        REQUIRE(selectors.at(aapl).size() == 2);  // Two selectors for this asset
-        REQUIRE(selectors.at(aapl)[0].title == "First Selector");
-        REQUIRE(selectors.at(aapl)[0].schemas.size() == 1);  // From first selector
-        REQUIRE(selectors.at(aapl)[1].title == "Second Selector");
-        REQUIRE(selectors.at(aapl)[1].schemas.size() == 3);  // From second selector
-    }
-
-    SECTION("Schema preservation: CardColumnSchema fields") {
-        // Verify that schema details are preserved correctly
-        auto mock = CreateSimpleMockTransform("selector", dailyTF, {}, {"result"}, false, true);
-
-        epoch_script::transform::EventMarkerData selectorData;
-        selectorData.title = "Schema Test";
-        selectorData.schemas.push_back(CreateCardColumnSchema("price", epoch_core::CardSlot::Hero, epoch_core::CardRenderType::Decimal));
-        selectorData.schemas.push_back(CreateCardColumnSchema("signal", epoch_core::CardSlot::PrimaryBadge, epoch_core::CardRenderType::Badge));
-        selectorData.data = CreateTestDataFrame();
-
-        REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
-            .RETURN(CreateTestDataFrame());
-        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
-            .LR_RETURN(std::optional{selectorData});
-
-        std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
-        transforms.push_back(std::move(mock));
-
-        DataFlowRuntimeOrchestrator orch({aapl}, CreateMockTransformManager(std::move(transforms)));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame();
-
-        orch.ExecutePipeline(std::move(inputData));
-
-        auto selectors = orch.GetGeneratedEventMarkers();
-        REQUIRE(selectors.at(aapl).size() == 1);
-        REQUIRE(selectors.at(aapl)[0].schemas.size() == 2);
-        REQUIRE(selectors.at(aapl)[0].schemas[0].column_id == "price");
-        REQUIRE(selectors.at(aapl)[0].schemas[0].slot == epoch_core::CardSlot::Hero);
-        REQUIRE(selectors.at(aapl)[0].schemas[0].render_type == epoch_core::CardRenderType::Decimal);
-        REQUIRE(selectors.at(aapl)[0].schemas[1].column_id == "signal");
-        REQUIRE(selectors.at(aapl)[0].schemas[1].slot == epoch_core::CardSlot::PrimaryBadge);
-        REQUIRE(selectors.at(aapl)[0].schemas[1].render_type == epoch_core::CardRenderType::Badge);
-    }
-
-    SECTION("GetGeneratedEventMarkers returns empty for no selectors") {
-        // Line 365-367
-        auto mock = CreateSimpleMockTransform("non_selector", dailyTF);
-
-        REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
-            .RETURN(CreateTestDataFrame());
-
-        // No GetEventMarkerData call expected
-
-        std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
-        transforms.push_back(std::move(mock));
-
-        DataFlowRuntimeOrchestrator orch({aapl}, CreateMockTransformManager(std::move(transforms)));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame();
-
-        orch.ExecutePipeline(std::move(inputData));
-
-        auto selectors = orch.GetGeneratedEventMarkers();
-        REQUIRE(selectors.empty());
-    }
-
-    SECTION("Mixed pipeline: regular -> selector -> regular") {
-        // Integration test: verify selector works in mixed transform graph
-        auto data = CreateSimpleMockTransform("data", dailyTF, {}, {"c"}, false, false);
-        auto filter = CreateSimpleMockTransform("filter", dailyTF, {"data#c"}, {"filtered"}, false, false);
-        auto selector = CreateSimpleMockTransform("selector", dailyTF, {"filter#filtered"}, {"result"}, false, true);
-        auto final_transform = CreateSimpleMockTransform("final", dailyTF, {"selector#result"}, {"result"}, false, false);
-
-        REQUIRE_CALL(*data, TransformData(trompeloeil::_))
-            .RETURN(CreateTestDataFrame());
-
-        REQUIRE_CALL(*filter, TransformData(trompeloeil::_))
-            .RETURN(CreateTestDataFrame());
-
-        auto selectorData = CreateEventMarkerData("Pipeline Selector", 2);
-        REQUIRE_CALL(*selector, TransformData(trompeloeil::_))
-            .RETURN(CreateTestDataFrame());
-        REQUIRE_CALL(*selector, GetEventMarkers(trompeloeil::_))
-            .LR_RETURN(std::optional{selectorData});
-
-        REQUIRE_CALL(*final_transform, TransformData(trompeloeil::_))
-            .RETURN(CreateTestDataFrame());
-
-        std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
-        transforms.push_back(std::move(data));
-        transforms.push_back(std::move(filter));
-        transforms.push_back(std::move(selector));
-        transforms.push_back(std::move(final_transform));
-
-        DataFlowRuntimeOrchestrator orch({aapl}, CreateMockTransformManager(std::move(transforms)));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame();
-
-        REQUIRE_NOTHROW(orch.ExecutePipeline(std::move(inputData)));
-
-        auto selectors = orch.GetGeneratedEventMarkers();
-        REQUIRE(selectors.size() == 1);
-        REQUIRE(selectors.at(aapl).size() == 1);
-        REQUIRE(selectors.at(aapl)[0].title == "Pipeline Selector");
-    }
-
-    SECTION("Large number of assets (stress test)") {
-        std::vector<std::string> assets = {
-            aapl, msft, googl,
-            TestAssetConstants::TSLA,
-            TestAssetConstants::AMZN
-        };
-
-        auto mock = CreateSimpleMockTransform("selector", dailyTF, {}, {"result"}, false, true);
-
-        auto selectorData = CreateEventMarkerData("Large Asset Selector", 4);
-        REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
-            .TIMES(5)  // Once per asset
-            .RETURN(CreateTestDataFrame());
-
-        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
-            .TIMES(AT_LEAST(1))
-            .LR_RETURN(std::optional{selectorData});
-
-        std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
-        transforms.push_back(std::move(mock));
-
-        DataFlowRuntimeOrchestrator orch(assets, CreateMockTransformManager(std::move(transforms)));
-
-        TimeFrameAssetDataFrameMap inputData;
-        for (const auto& asset : assets) {
-            inputData[dailyTF.ToString()][asset] = CreateTestDataFrame();
-        }
-
-        orch.ExecutePipeline(std::move(inputData));
-
-        auto selectors = orch.GetGeneratedEventMarkers();
-        REQUIRE(selectors.size() == 5);
-        for (const auto& asset : assets) {
-            REQUIRE(selectors.contains(asset));
-            REQUIRE(selectors.at(asset).size() == 1);
-            REQUIRE(selectors.at(asset)[0].title == "Large Asset Selector");
-            REQUIRE(selectors.at(asset)[0].schemas.size() == 4);
+            // Verify pivot render type
+            REQUIRE(markers[0].schemas[1].render_type == epoch_core::CardRenderType::Timestamp);
         }
     }
 
-    SECTION("DataFrame content preserved in selector cache") {
-        // Verify that the actual DataFrame data is correctly cached
-        auto mock = CreateSimpleMockTransform("selector", dailyTF, {}, {"result"}, false, true);
+    SECTION("Event marker with moving average crossover") {
+        std::string sourceCode = R"(
+src = market_data_source(timeframe="1D")()
+fast = sma(period=2)(src.c)
+slow = sma(period=3)(src.c)
+signal = crossover()(fast, slow)
+event_marker(
+    schema=EventMarkerSchema(
+        title="MA Crossover",
+        select_key="SLOT0",
+        schemas=[CardColumnSchema(
+            column_id="SLOT0",
+            slot="PrimaryBadge",
+            render_type="Badge",
+            color_map={}
+        )]
+    )
+)(signal)
+)";
 
-        auto selectorData = CreateEventMarkerData("Data Test", 1, 10);
-        auto testDataFrame = CreateTestDataFrame(10, 2);  // 10 rows, 2 columns
+        auto transformManager = CompileSource(sourceCode);
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(transformManager));
 
-        REQUIRE_CALL(*mock, TransformData(trompeloeil::_))
-            .RETURN(testDataFrame);
-
-        REQUIRE_CALL(*mock, GetEventMarkers(trompeloeil::_))
-            .LR_RETURN(std::optional{selectorData});
-
-        std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
-        transforms.push_back(std::move(mock));
-
-        DataFlowRuntimeOrchestrator orch({aapl}, CreateMockTransformManager(std::move(transforms)));
-
+        // Create data with a clear crossover pattern
+        // Prices: 100, 95, 90, 95, 100, 105 (dip then rise = crossover opportunity)
         TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = testDataFrame;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 95.0, 90.0, 95.0, 100.0, 105.0});
 
         orch.ExecutePipeline(std::move(inputData));
 
-        auto selectors = orch.GetGeneratedEventMarkers();
-        REQUIRE(selectors.at(aapl).size() == 1);
-        REQUIRE(selectors.at(aapl)[0].data.num_rows() > 0);
-        // The DataFrame in the cache should match what TransformData returned
+        auto eventMarkers = orch.GetGeneratedEventMarkers();
+
+        REQUIRE(eventMarkers.size() == 1);
+        REQUIRE(eventMarkers.contains(aapl));
+
+        auto& markers = eventMarkers.at(aapl);
+        REQUIRE(markers.size() == 1);
+        REQUIRE(markers[0].title == "MA Crossover");
+
+        // Verify schema structure
+        REQUIRE(markers[0].schemas.size() == 2);  // 1 input + pivot
+        REQUIRE(markers[0].schemas[0].column_id == "signal#result");  // crossover uses Python variable name
+        REQUIRE(markers[0].schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
+        REQUIRE(markers[0].schemas[1].column_id == "pivot");
+        REQUIRE(markers[0].schemas[1].render_type == epoch_core::CardRenderType::Timestamp);
+
+        // Crossover events depend on data - verify structure is correct
+        REQUIRE(markers[0].data.contains("pivot"));
     }
 
-    SECTION("IsSelectorTransform helper correctly identifies selectors") {
-        // This indirectly tests the IsSelectorTransform function (line 26-29)
-        auto selector = CreateSimpleMockTransform("selector", dailyTF, {}, {"result"}, false, true);
-        auto regular = CreateSimpleMockTransform("regular", dailyTF, {}, {"result"}, false, false);
+    SECTION("Multiple event markers in pipeline") {
+        std::string sourceCode = R"(
+src = market_data_source(timeframe="1D")()
+high_signal = src.c > 110
+low_signal = src.c < 95
 
-        // Verify metadata is correctly set
-        REQUIRE(selector->GetConfiguration().GetTransformDefinition().GetMetadata().category ==
-                epoch_core::TransformCategory::EventMarker);
-        REQUIRE(regular->GetConfiguration().GetTransformDefinition().GetMetadata().category !=
-                epoch_core::TransformCategory::EventMarker);
+event_marker(
+    schema=EventMarkerSchema(
+        title="Price High",
+        select_key="SLOT0",
+        schemas=[CardColumnSchema(column_id="SLOT0", slot="PrimaryBadge", render_type="Badge", color_map={})]
+    )
+)(high_signal)
+
+event_marker(
+    schema=EventMarkerSchema(
+        title="Price Low",
+        select_key="SLOT0",
+        schemas=[CardColumnSchema(column_id="SLOT0", slot="SecondaryBadge", render_type="Badge", color_map={})]
+    )
+)(low_signal)
+)";
+
+        auto transformManager = CompileSource(sourceCode);
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(transformManager));
+
+        // Data: 90, 110, 95, 120, 80
+        // high_signal: [F, F, F, T, F] -> 1 row (120)
+        // low_signal: [T, F, F, F, T] -> 2 rows (90, 80)
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0, 80.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto eventMarkers = orch.GetGeneratedEventMarkers();
+
+        REQUIRE(eventMarkers.size() == 1);
+        REQUIRE(eventMarkers.contains(aapl));
+
+        auto& markers = eventMarkers.at(aapl);
+        REQUIRE(markers.size() == 2);
+
+        // Find markers by title
+        const transform::EventMarkerData* highMarker = nullptr;
+        const transform::EventMarkerData* lowMarker = nullptr;
+        for (const auto& m : markers) {
+            if (m.title == "Price High") highMarker = &m;
+            if (m.title == "Price Low") lowMarker = &m;
+        }
+
+        REQUIRE(highMarker != nullptr);
+        REQUIRE(lowMarker != nullptr);
+
+        // Verify high marker - concrete values
+        REQUIRE(highMarker->schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
+        REQUIRE(highMarker->schemas[0].column_id == "gt_0#result");  // src.c > 110
+        REQUIRE(highMarker->data.num_rows() == 1);  // Only 120 > 110
+        REQUIRE(highMarker->data.contains("pivot"));
+
+        // Verify low marker - concrete values
+        REQUIRE(lowMarker->schemas[0].slot == epoch_core::CardSlot::SecondaryBadge);
+        REQUIRE(lowMarker->schemas[0].column_id == "lt_0#result");  // src.c < 95
+        REQUIRE(lowMarker->data.num_rows() == 2);  // 90 and 80 < 95
+        REQUIRE(lowMarker->data.contains("pivot"));
+    }
+
+    SECTION("Event marker with multiple columns") {
+        std::string sourceCode = R"(
+src = market_data_source(timeframe="1D")()
+signal = src.c > 100
+event_marker(
+    schema=EventMarkerSchema(
+        title="Breakout with Context",
+        select_key="SLOT0",
+        schemas=[
+            CardColumnSchema(column_id="SLOT0", slot="PrimaryBadge", render_type="Badge", color_map={}),
+            CardColumnSchema(column_id="SLOT1", slot="Hero", render_type="Decimal", color_map={})
+        ]
+    )
+)(signal, src.c)
+)";
+
+        auto transformManager = CompileSource(sourceCode);
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(transformManager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto eventMarkers = orch.GetGeneratedEventMarkers();
+
+        REQUIRE(eventMarkers.contains(aapl));
+        auto& markers = eventMarkers.at(aapl);
+        REQUIRE(markers.size() == 1);
+
+        // Verify multiple schemas (2 input + pivot = 3)
+        REQUIRE(markers[0].schemas.size() == 3);
+        REQUIRE(markers[0].schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
+        REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // signal: src.c > 100
+        REQUIRE(markers[0].schemas[1].slot == epoch_core::CardSlot::Hero);
+        REQUIRE(markers[0].schemas[1].column_id == "src#c");  // src.c -> market data close
+        REQUIRE(markers[0].schemas[1].render_type == epoch_core::CardRenderType::Decimal);
+        REQUIRE(markers[0].schemas[2].column_id == "pivot");
+        REQUIRE(markers[0].schemas[2].render_type == epoch_core::CardRenderType::Timestamp);
+
+        // Verify filtered rows
+        REQUIRE(markers[0].data.num_rows() == 2);
+        REQUIRE(markers[0].data.contains("pivot"));
+    }
+
+    SECTION("Event marker with literal SLOT input (constant number)") {
+        std::string sourceCode = R"(
+src = market_data_source(timeframe="1D")()
+signal = src.c > 100
+event_marker(
+    schema=EventMarkerSchema(
+        title="Signal with Constant",
+        select_key="SLOT0",
+        schemas=[
+            CardColumnSchema(column_id="SLOT0", slot="PrimaryBadge", render_type="Badge", color_map={}),
+            CardColumnSchema(column_id="SLOT1", slot="Hero", render_type="Decimal", color_map={})
+        ]
+    )
+)(signal, 42.5)
+)";
+
+        auto transformManager = CompileSource(sourceCode);
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(transformManager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto eventMarkers = orch.GetGeneratedEventMarkers();
+
+        REQUIRE(eventMarkers.contains(aapl));
+        auto& markers = eventMarkers.at(aapl);
+        REQUIRE(markers.size() == 1);
+        REQUIRE(markers[0].title == "Signal with Constant");
+
+        // Verify 3 schemas (signal + constant + pivot)
+        REQUIRE(markers[0].schemas.size() == 3);
+        REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // Boolean comparison result
+        REQUIRE(markers[0].schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
+        REQUIRE(markers[0].schemas[1].column_id == "number_1#result");  // Constant 42.5
+        REQUIRE(markers[0].schemas[1].slot == epoch_core::CardSlot::Hero);
+        REQUIRE(markers[0].schemas[2].column_id == "pivot");
+
+        // Verify filtered rows (2 rows where c > 100)
+        REQUIRE(markers[0].data.num_rows() == 2);
+        REQUIRE(markers[0].data.contains("pivot"));
+    }
+
+    SECTION("Event marker with mixed literals and node references") {
+        std::string sourceCode = R"(
+src = market_data_source(timeframe="1D")()
+signal = src.c > 100
+event_marker(
+    schema=EventMarkerSchema(
+        title="Mixed Inputs",
+        select_key="SLOT0",
+        schemas=[
+            CardColumnSchema(column_id="SLOT0", slot="PrimaryBadge", render_type="Badge", color_map={}),
+            CardColumnSchema(column_id="SLOT1", slot="Hero", render_type="Decimal", color_map={}),
+            CardColumnSchema(column_id="SLOT2", slot="Subtitle", render_type="Integer", color_map={}),
+            CardColumnSchema(column_id="SLOT3", slot="Footer", render_type="Text", color_map={})
+        ]
+    )
+)(signal, src.c, 100, "breakout")
+)";
+
+        auto transformManager = CompileSource(sourceCode);
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(transformManager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto eventMarkers = orch.GetGeneratedEventMarkers();
+
+        REQUIRE(eventMarkers.contains(aapl));
+        auto& markers = eventMarkers.at(aapl);
+        REQUIRE(markers.size() == 1);
+        REQUIRE(markers[0].title == "Mixed Inputs");
+
+        // Verify all 5 schemas (4 input + pivot)
+        REQUIRE(markers[0].schemas.size() == 5);
+
+        // Verify column IDs (SLOT refs resolve to actual column names)
+        REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // signal: src.c > 100
+        REQUIRE(markers[0].schemas[1].column_id == "src#c");  // src.c -> market data close
+        REQUIRE(markers[0].schemas[2].column_id == "number_0#result");  // 100 -> literal number
+        REQUIRE(markers[0].schemas[3].column_id == "text_0#result");  // "breakout" -> literal string
+        REQUIRE(markers[0].schemas[4].column_id == "pivot");
+
+        // Verify slots
+        REQUIRE(markers[0].schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
+        REQUIRE(markers[0].schemas[1].slot == epoch_core::CardSlot::Hero);
+        REQUIRE(markers[0].schemas[2].slot == epoch_core::CardSlot::Subtitle);
+        REQUIRE(markers[0].schemas[3].slot == epoch_core::CardSlot::Footer);
+
+        // Verify render types
+        REQUIRE(markers[0].schemas[0].render_type == epoch_core::CardRenderType::Badge);
+        REQUIRE(markers[0].schemas[1].render_type == epoch_core::CardRenderType::Decimal);
+        REQUIRE(markers[0].schemas[2].render_type == epoch_core::CardRenderType::Integer);
+        REQUIRE(markers[0].schemas[3].render_type == epoch_core::CardRenderType::Text);
+        REQUIRE(markers[0].schemas[4].render_type == epoch_core::CardRenderType::Timestamp);
+
+        // Verify filtered rows and pivot column
+        REQUIRE(markers[0].data.num_rows() == 2);
+        REQUIRE(markers[0].data.contains("pivot"));
+    }
+
+    SECTION("Event marker with only literal inputs (except filter)") {
+        std::string sourceCode = R"(
+src = market_data_source(timeframe="1D")()
+signal = src.c > 100
+event_marker(
+    schema=EventMarkerSchema(
+        title="All Literals",
+        select_key="SLOT0",
+        schemas=[
+            CardColumnSchema(column_id="SLOT0", slot="PrimaryBadge", render_type="Badge", color_map={}),
+            CardColumnSchema(column_id="SLOT1", slot="Hero", render_type="Decimal", color_map={}),
+            CardColumnSchema(column_id="SLOT2", slot="Subtitle", render_type="Text", color_map={})
+        ]
+    )
+)(signal, 99.99, "BUY")
+)";
+
+        auto transformManager = CompileSource(sourceCode);
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(transformManager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto eventMarkers = orch.GetGeneratedEventMarkers();
+
+        REQUIRE(eventMarkers.contains(aapl));
+        auto& markers = eventMarkers.at(aapl);
+        REQUIRE(markers.size() == 1);
+        REQUIRE(markers[0].title == "All Literals");
+
+        // Verify 4 schemas (3 input + pivot)
+        REQUIRE(markers[0].schemas.size() == 4);
+
+        // Verify column IDs (SLOT refs resolve to actual column names)
+        REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // signal: src.c > 100
+        REQUIRE(markers[0].schemas[1].column_id == "number_1#result");  // 99.99 -> literal number
+        REQUIRE(markers[0].schemas[2].column_id == "text_0#result");  // "BUY" -> literal string
+        REQUIRE(markers[0].schemas[3].column_id == "pivot");
+
+        // Verify slots
+        REQUIRE(markers[0].schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
+        REQUIRE(markers[0].schemas[1].slot == epoch_core::CardSlot::Hero);
+        REQUIRE(markers[0].schemas[2].slot == epoch_core::CardSlot::Subtitle);
+
+        // Verify render types
+        REQUIRE(markers[0].schemas[0].render_type == epoch_core::CardRenderType::Badge);
+        REQUIRE(markers[0].schemas[1].render_type == epoch_core::CardRenderType::Decimal);
+        REQUIRE(markers[0].schemas[2].render_type == epoch_core::CardRenderType::Text);
+        REQUIRE(markers[0].schemas[3].render_type == epoch_core::CardRenderType::Timestamp);
+
+        // Verify filtered rows (literals broadcast to match signal rows)
+        REQUIRE(markers[0].data.num_rows() == 2);
+        REQUIRE(markers[0].data.contains("pivot"));
+    }
+
+    SECTION("Event marker with empty filter result") {
+        std::string sourceCode = R"(
+src = market_data_source(timeframe="1D")()
+signal = src.c > 200
+event_marker(
+    schema=EventMarkerSchema(
+        title="No Matches",
+        select_key="SLOT0",
+        schemas=[CardColumnSchema(
+            column_id="SLOT0",
+            slot="PrimaryBadge",
+            render_type="Badge",
+            color_map={}
+        )]
+    )
+)(signal)
+)";
+
+        auto transformManager = CompileSource(sourceCode);
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(transformManager));
+
+        // All values < 200, so signal is all false
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto eventMarkers = orch.GetGeneratedEventMarkers();
+
+        REQUIRE(eventMarkers.contains(aapl));
+        auto& markers = eventMarkers.at(aapl);
+        REQUIRE(markers.size() == 1);
+        REQUIRE(markers[0].title == "No Matches");
+
+        // Verify schema is still complete even with empty data
+        REQUIRE(markers[0].schemas.size() == 2);  // 1 input + pivot
+        REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // signal: src.c > 200
+        REQUIRE(markers[0].schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
+        REQUIRE(markers[0].schemas[1].column_id == "pivot");
+        REQUIRE(markers[0].schemas[1].render_type == epoch_core::CardRenderType::Timestamp);
+
+        // Empty result - no rows pass the filter
+        REQUIRE(markers[0].data.num_rows() == 0);
     }
 }

@@ -28,10 +28,8 @@ namespace epoch_script
         const auto& false_handle = ctx.args[2];      // Position 2: false value
 
         // Get the types of the true and false inputs
-        DataType true_type = ctx.type_checker.GetNodeOutputType(
-            true_handle.node_id, true_handle.handle);
-        DataType false_type = ctx.type_checker.GetNodeOutputType(
-            false_handle.node_id, false_handle.handle);
+        DataType true_type = ctx.type_checker.GetNodeOutputType(true_handle);
+        DataType false_type = ctx.type_checker.GetNodeOutputType(false_handle);
 
         // If either type is still Any after GetNodeOutputType (which tries to resolve),
         // we still need to validate - numeric vs string types should be caught

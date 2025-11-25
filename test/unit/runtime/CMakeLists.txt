@@ -4,9 +4,11 @@ target_sources(epoch_script_test PRIVATE
     orchestrator_error_handling_test.cpp
     orchestrator_parallel_execution_test.cpp
     orchestrator_report_caching_test.cpp
+    orchestrator_report_generation_test.cpp
     orchestrator_event_marker_caching_test.cpp
-    orchestrator_cross_sectional_test.cpp
-    orchestrator_graph_topologies_test.cpp
+    orchestrator_graph_topologies_real_test.cpp
+    orchestrator_basic_all_datasource.cpp
+    orchestrator_cross_sectional.cpp
 )
 
 target_include_directories(epoch_script_test PRIVATE

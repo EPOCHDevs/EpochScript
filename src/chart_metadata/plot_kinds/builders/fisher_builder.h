@@ -17,8 +17,8 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"fisher", cfg.GetOutputId("fisher")},
-      {"fisher_signal", cfg.GetOutputId("fisher_signal")}
+      {"fisher", cfg.GetOutputId("fisher").GetColumnName()},
+      {"fisher_signal", cfg.GetOutputId("fisher_signal").GetColumnName()}
     };
   }
 

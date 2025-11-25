@@ -200,10 +200,20 @@ namespace epoch_script
             }
 
             // Parse the value and resolve to a handle
-            ValueHandle handle = expr_compiler_.VisitExpr(value);
+            strategy::InputValue input_value = expr_compiler_.VisitExpr(value);
 
-            // Bind the variable to the source node.handle
-            context_.var_to_binding[node_id] = handle.node_id + "." + handle.handle;
+            // Bind the variable to the column identifier using "." format for expression compiler lookup
+            // (e.g., "number_0.result" not "number_0#result")
+            if (input_value.IsNodeReference()) {
+                const auto& ref = input_value.GetNodeReference();
+                context_.var_to_binding[node_id] = ref.GetNodeId() + "." + ref.GetHandle();
+            } else if (input_value.IsLiteral()) {
+                // Literal constant - store the column name for lookup
+                context_.var_to_binding[node_id] = input_value.GetLiteral().GetColumnName();
+            } else {
+                // Null/empty value - shouldn't happen in valid code
+                ThrowError("Cannot assign null value to variable '" + node_id + "'", assign.lineno, assign.col_offset);
+            }
             return;
         }
 
@@ -273,8 +283,8 @@ namespace epoch_script
     void NodeBuilder::WireInputs(
         const std::string& target_node_id,
         const std::string& component_name,
-        const std::vector<ValueHandle>& args,
-        const std::unordered_map<std::string, ValueHandle>& kwargs)
+        const std::vector<strategy::InputValue>& args,
+        const std::unordered_map<std::string, strategy::InputValue>& kwargs)
     {
         // Get component metadata
         if (!context_.HasComponent(component_name))
@@ -339,7 +349,7 @@ namespace epoch_script
             }
 
             // Type checking: get source and target types
-            DataType source_type = type_checker_.GetNodeOutputType(handle.node_id, handle.handle);
+            DataType source_type = type_checker_.GetNodeOutputType(handle);
             DataType target_type = input_types[name];
 
             // Check if types are compatible
@@ -350,12 +360,12 @@ namespace epoch_script
                 if (cast_result.has_value() && cast_result.value() != "incompatible")
                 {
                     // Insert cast node (this may reallocate algorithms_ vector)
-                    ValueHandle casted = type_checker_.InsertTypeCast(handle, source_type, target_type);
+                    strategy::InputValue casted = type_checker_.InsertTypeCast(handle, source_type, target_type);
                     // Find target node by ID after potential reallocation
                     auto* target_node = find_target_node(target_node_id);
                     if (target_node)
                     {
-                        target_node->inputs[name].push_back(JoinId(casted.node_id, casted.handle));
+                        target_node->inputs[name].push_back(casted);
                     }
                 }
                 else
@@ -364,7 +374,7 @@ namespace epoch_script
                     std::string error_msg = "Type error calling '" + component_name + "()': ";
                     error_msg += "keyword argument '" + name + "' must be " + TypeChecker::DataTypeToString(target_type);
                     error_msg += ", but received " + TypeChecker::DataTypeToString(source_type);
-                    error_msg += " from '" + handle.node_id + "." + handle.handle + "'";
+                    error_msg += " from '" + handle.GetColumnIdentifier() + "'";
                     ThrowError(error_msg);
                 }
             }
@@ -374,7 +384,7 @@ namespace epoch_script
                 auto* target_node = find_target_node(target_node_id);
                 if (target_node)
                 {
-                    target_node->inputs[name].push_back(JoinId(handle.node_id, handle.handle));
+                    target_node->inputs[name].push_back({handle});
                 }
             }
         }
@@ -412,7 +422,7 @@ namespace epoch_script
                 std::string dst_handle = (i < input_ids.size()) ? input_ids[i] : input_ids.back();
 
                 // Type checking: get source and target types
-                DataType source_type = type_checker_.GetNodeOutputType(handle.node_id, handle.handle);
+                DataType source_type = type_checker_.GetNodeOutputType(handle);
                 DataType target_type = input_types[dst_handle];
 
                 // Check if types are compatible
@@ -423,12 +433,12 @@ namespace epoch_script
                     if (cast_result.has_value() && cast_result.value() != "incompatible")
                     {
                         // Insert cast node (this may reallocate algorithms_ vector)
-                        ValueHandle casted = type_checker_.InsertTypeCast(handle, source_type, target_type);
+                        strategy::InputValue casted = type_checker_.InsertTypeCast(handle, source_type, target_type);
                         // Find target node by ID after potential reallocation
                         auto* target_node = find_target_node(target_node_id);
                         if (target_node)
                         {
-                            target_node->inputs[dst_handle].push_back(JoinId(casted.node_id, casted.handle));
+                            target_node->inputs[dst_handle].push_back(casted);
                         }
                     }
                     else
@@ -437,7 +447,7 @@ namespace epoch_script
                         std::string error_msg = "Type error calling '" + component_name + "()': ";
                         error_msg += "argument " + std::to_string(i + 1) + " ('" + dst_handle + "') must be " + TypeChecker::DataTypeToString(target_type);
                         error_msg += ", but received " + TypeChecker::DataTypeToString(source_type);
-                        error_msg += " from '" + handle.node_id + "." + handle.handle + "'";
+                        error_msg += " from '" + handle.GetColumnIdentifier() + "'";
                         ThrowError(error_msg);
                     }
                 }
@@ -447,7 +457,7 @@ namespace epoch_script
                     auto* target_node = find_target_node(target_node_id);
                     if (target_node)
                     {
-                        target_node->inputs[dst_handle].push_back(JoinId(handle.node_id, handle.handle));
+                        target_node->inputs[dst_handle].emplace_back(handle);
                     }
                 }
             }
@@ -487,14 +497,9 @@ namespace epoch_script
         return candidate;
     }
 
-    std::string NodeBuilder::JoinId(const std::string& node_id, const std::string& handle)
-    {
-        return node_id + "#" + handle;
-    }
-
     void NodeBuilder::ResolveSlotReferencesInOptions(
         const std::string& target_node_id,
-        const std::vector<ValueHandle>& args)
+        const std::vector<strategy::InputValue>& args)
     {
         // Find the target node
         auto it = context_.node_lookup.find(target_node_id);
@@ -522,8 +527,13 @@ namespace epoch_script
                     {
                         try {
                             slot_idx = std::stoull(slot_suffix);
+                        } catch (const std::exception& exp) {
+                            // Not a valid slot reference number
+                            SPDLOG_WARN("Invalid SLOT reference suffix '{}' in string value: {}. Skipping.", slot_suffix, exp.what());
+                            return;
                         } catch (...) {
-                            // Not a valid slot reference, skip
+                            // Not a valid slot reference number (unknown error)
+                            SPDLOG_WARN("Invalid SLOT reference suffix '{}' in string value (unknown error). Skipping.", slot_suffix);
                             return;
                         }
                     }
@@ -535,9 +545,9 @@ namespace epoch_script
                                    std::to_string(args.size()) + " arguments provided)");
                     }
 
-                    // Resolve to node_id#handle
-                    const auto& arg_handle = args[slot_idx];
-                    str = JoinId(arg_handle.node_id, arg_handle.handle);
+                    // Resolve to column identifier (handles both NodeReference and Constants)
+                    const auto& arg_value = args[slot_idx];
+                    str = arg_value.GetColumnIdentifier();
                 }
             }
             // Handle EventMarkerSchema
@@ -559,8 +569,10 @@ namespace epoch_script
                     {
                         try {
                             slot_idx = std::stoull(slot_suffix);
+                        } catch (const std::exception& exp) {
+                            ThrowError("Invalid SLOT reference '" + filter.select_key + "' in select_key: " + std::string(exp.what()) + ". Use 'SLOT' for first argument, 'SLOT0', 'SLOT1', etc. for subsequent arguments.");
                         } catch (...) {
-                            ThrowError("Invalid SLOT reference '" + filter.select_key + "' in select_key. Use 'SLOT' for first argument, 'SLOT0', 'SLOT1', etc. for subsequent arguments.");
+                            ThrowError("Invalid SLOT reference '" + filter.select_key + "' in select_key (unknown error). Use 'SLOT' for first argument, 'SLOT0', 'SLOT1', etc. for subsequent arguments.");
                         }
                     }
 
@@ -575,7 +587,7 @@ namespace epoch_script
                     }
 
                     const auto& arg_handle = args[slot_idx];
-                    filter.select_key = JoinId(arg_handle.node_id, arg_handle.handle);
+                    filter.select_key = arg_handle.GetColumnIdentifier();
                 }
                 else
                 {
@@ -597,8 +609,13 @@ namespace epoch_script
                         {
                             try {
                                 slot_idx = std::stoull(slot_suffix);
+                            } catch (const std::exception& exp) {
+                                // Not a valid slot reference number
+                                SPDLOG_WARN("Invalid SLOT reference suffix '{}' in EventMarkerSchema column_id: {}. Skipping.", slot_suffix, exp.what());
+                                continue;
                             } catch (...) {
-                                // Not a valid slot reference, skip
+                                // Not a valid slot reference number (unknown error)
+                                SPDLOG_WARN("Invalid SLOT reference suffix '{}' in EventMarkerSchema column_id (unknown error). Skipping.", slot_suffix);
                                 continue;
                             }
                         }
@@ -609,7 +626,7 @@ namespace epoch_script
                         }
 
                         const auto& arg_handle = args[slot_idx];
-                        schema.column_id = JoinId(arg_handle.node_id, arg_handle.handle);
+                        schema.column_id = arg_handle.GetColumnIdentifier();
 
                         // Note: color_map values are auto-serialized to strings at parse time,
                         // so we accept any type here (Boolean, Integer, Decimal, Number, String, Any)
@@ -631,8 +648,13 @@ namespace epoch_script
                     {
                         try {
                             slot_idx = std::stoull(slot_suffix);
+                        } catch (const std::exception& exp) {
+                            // Not a valid slot reference number
+                            SPDLOG_WARN("Invalid SLOT reference suffix '{}' in TableReportSchema select_key: {}. Skipping.", slot_suffix, exp.what());
+                            return;
                         } catch (...) {
-                            // Not a valid slot reference, skip
+                            // Not a valid slot reference number (unknown error)
+                            SPDLOG_WARN("Invalid SLOT reference suffix '{}' in TableReportSchema select_key (unknown error). Skipping.", slot_suffix);
                             return;
                         }
                     }
@@ -643,7 +665,7 @@ namespace epoch_script
                     }
 
                     const auto& arg_handle = args[slot_idx];
-                    table.select_key = JoinId(arg_handle.node_id, arg_handle.handle);
+                    table.select_key = arg_handle.GetColumnIdentifier();
                 }
 
                 // Resolve column_id in columns
@@ -657,8 +679,13 @@ namespace epoch_script
                         {
                             try {
                                 slot_idx = std::stoull(slot_suffix);
+                            } catch (const std::exception& exp) {
+                                // Not a valid slot reference number
+                                SPDLOG_WARN("Invalid SLOT reference suffix '{}' in TableReportSchema column_id: {}. Skipping.", slot_suffix, exp.what());
+                                continue;
                             } catch (...) {
-                                // Not a valid slot reference, skip
+                                // Not a valid slot reference number (unknown error)
+                                SPDLOG_WARN("Invalid SLOT reference suffix '{}' in TableReportSchema column_id (unknown error). Skipping.", slot_suffix);
                                 continue;
                             }
                         }
@@ -669,7 +696,7 @@ namespace epoch_script
                         }
 
                         const auto& arg_handle = args[slot_idx];
-                        column.column_id = JoinId(arg_handle.node_id, arg_handle.handle);
+                        column.column_id = arg_handle.GetColumnIdentifier();
                     }
                 }
             }

@@ -20,7 +20,7 @@ std::string TypeMismatchError::Format(int line, int col) const {
     // Expected vs received
     oss << Indent("Expected type: " + TypeChecker::DataTypeToString(expected_type_), 4) << "\n";
     oss << Indent("Received type: " + TypeChecker::DataTypeToString(received_type_), 4) << "\n";
-    oss << Indent("Source: " + source_handle_.node_id + "." + source_handle_.handle, 4);
+    oss << Indent("Source: " + source_handle_.GetColumnIdentifier(), 4);
 
     return AddLocationInfo(oss.str(), line, col);
 }
@@ -34,7 +34,7 @@ std::string BinaryOpTypeError::Format(int line, int col) const {
     oss << Indent("Operand name: " + operand_name_) << "\n";
     oss << Indent("Expected type: " + TypeChecker::DataTypeToString(expected_type_)) << "\n";
     oss << Indent("Received type: " + TypeChecker::DataTypeToString(received_type_)) << "\n";
-    oss << Indent("Source: " + source_handle_.node_id + "." + source_handle_.handle);
+    oss << Indent("Source: " + source_handle_.GetColumnIdentifier());
 
     return AddLocationInfo(oss.str(), line, col);
 }

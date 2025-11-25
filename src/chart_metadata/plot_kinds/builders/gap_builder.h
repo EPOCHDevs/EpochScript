@@ -17,11 +17,11 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"gap_filled", cfg.GetOutputId("gap_filled")},
-      {"gap_retrace", cfg.GetOutputId("gap_retrace")},
-      {"gap_size", cfg.GetOutputId("gap_size")},
-      {"psc", cfg.GetOutputId("psc")},
-      {"psc_timestamp", cfg.GetOutputId("psc_timestamp")}
+      {"gap_filled", cfg.GetOutputId("gap_filled").GetColumnName()},
+      {"gap_retrace", cfg.GetOutputId("gap_retrace").GetColumnName()},
+      {"gap_size", cfg.GetOutputId("gap_size").GetColumnName()},
+      {"psc", cfg.GetOutputId("psc").GetColumnName()},
+      {"psc_timestamp", cfg.GetOutputId("psc_timestamp").GetColumnName()}
     };
   }
 

@@ -75,7 +75,13 @@ namespace epoch_script
             {
                 for (const auto& ref : refs)
                 {
-                    std::string dep_id = extractNodeId(ref);
+                    // Skip literal values - only process node references
+                    if (!ref.IsNodeReference())
+                    {
+                        continue;
+                    }
+
+                    std::string dep_id = extractNodeId(ref.GetNodeReference().GetRef());
 
                     // Only count dependency if it's an internal node (not external like "src")
                     if (node_index.find(dep_id) != node_index.end())
@@ -468,8 +474,14 @@ namespace epoch_script
                 {
                     for (const auto& ref : refs)
                     {
+                        // Skip literal values - only process node references
+                        if (!ref.IsNodeReference())
+                        {
+                            continue;
+                        }
+
                         // Extract node_id from "node_id#handle" format
-                        std::string dep_id = extractNodeId(ref);
+                        std::string dep_id = extractNodeId(ref.GetNodeReference().GetRef());
 
                         // Only process if not already marked reachable
                         if (reachable_nodes.find(dep_id) == reachable_nodes.end())

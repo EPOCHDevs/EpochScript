@@ -23,7 +23,7 @@ public:
         const std::string& arg_identifier,  // "SLOT0" or "data" or "1" (for positional arg number)
         DataType expected_type,
         DataType received_type,
-        const ValueHandle& source_handle
+        const strategy::InputValue& source_handle
     ) : component_name_(component_name),
         kind_(kind),
         arg_identifier_(arg_identifier),
@@ -39,7 +39,7 @@ private:
     std::string arg_identifier_;
     DataType expected_type_;
     DataType received_type_;
-    ValueHandle source_handle_;
+    strategy::InputValue source_handle_;
 };
 
 /**
@@ -58,7 +58,7 @@ public:
         const std::string& operand_name,
         DataType expected_type,
         DataType received_type,
-        const ValueHandle& source_handle
+        const strategy::InputValue& source_handle
     ) : operator_name_(operator_name),
         operand_(operand),
         operand_name_(operand_name),
@@ -74,7 +74,7 @@ private:
     std::string operand_name_;
     DataType expected_type_;
     DataType received_type_;
-    ValueHandle source_handle_;
+    strategy::InputValue source_handle_;
 };
 
 } // namespace error_formatting

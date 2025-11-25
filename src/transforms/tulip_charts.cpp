@@ -37,7 +37,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Abandoned Baby Bear",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Error
+          .color = epoch_core::Color::Error,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["abandoned_baby_bull"] = CandlePatternMetaData{
@@ -50,7 +52,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Abandoned Baby Bull",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Success
+          .color = epoch_core::Color::Success,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["big_black_candle"] = CandlePatternMetaData{
@@ -62,7 +66,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Big Black Candle",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Error
+          .color = epoch_core::Color::Error,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["big_white_candle"] = CandlePatternMetaData{
@@ -74,7 +80,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Big White Candle",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Success
+          .color = epoch_core::Color::Success,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["black_marubozu"] = CandlePatternMetaData{
@@ -85,7 +93,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Black Marubozu",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Error
+          .color = epoch_core::Color::Error,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["doji"] = CandlePatternMetaData{
@@ -102,7 +112,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Doji",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Default
+          .color = epoch_core::Color::Default,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -119,7 +131,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Dragonfly Doji",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Success
+          .color = epoch_core::Color::Success,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -137,7 +151,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Bearish Engulfing",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Error
+          .color = epoch_core::Color::Error,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -155,7 +171,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Bullish Engulfing",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Success
+          .color = epoch_core::Color::Success,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -168,7 +186,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Evening Doji Star",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Error
+          .color = epoch_core::Color::Error,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["evening_star"] = CandlePatternMetaData{
@@ -184,7 +204,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Evening Star",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Error
+          .color = epoch_core::Color::Error,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -196,7 +218,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Four Price Doji",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Default
+          .color = epoch_core::Color::Default,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["gravestone_doji"] = CandlePatternMetaData{
@@ -212,7 +236,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Gravestone Doji",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Error
+          .color = epoch_core::Color::Error,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -230,7 +256,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Hammer",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Success
+          .color = epoch_core::Color::Success,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -248,7 +276,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Hanging Man",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Error
+          .color = epoch_core::Color::Error,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -260,7 +290,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Inverted Hammer",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Success
+          .color = epoch_core::Color::Success,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["long_legged_doji"] = CandlePatternMetaData{
@@ -272,7 +304,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Long Legged Doji",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Default
+          .color = epoch_core::Color::Default,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["marubozu"] = CandlePatternMetaData{
@@ -284,7 +318,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Marubozu",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Default
+          .color = epoch_core::Color::Default,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["morning_doji_star"] = CandlePatternMetaData{
@@ -296,7 +332,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Morning Doji Star",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Success
+          .color = epoch_core::Color::Success,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["morning_star"] = CandlePatternMetaData{
@@ -312,7 +350,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Morning Star",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Success
+          .color = epoch_core::Color::Success,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -330,7 +370,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Shooting Star",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Error
+          .color = epoch_core::Color::Error,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -343,7 +385,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Spinning Top",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Default
+          .color = epoch_core::Color::Default,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["star"] = CandlePatternMetaData{
@@ -354,7 +398,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Star",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Default
+          .color = epoch_core::Color::Default,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   patternMetaData["three_black_crows"] = CandlePatternMetaData{
@@ -371,7 +417,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Three Black Crows",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Error
+          .color = epoch_core::Color::Error,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -390,7 +438,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "Three White Soldiers",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Success
+          .color = epoch_core::Color::Success,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
 
@@ -402,7 +452,9 @@ MakeCandlePatternMetaData() {
           .icon = epoch_core::Icon::CandlestickChart,
           .text = "White Marubozu",
           .textIsTemplate = false,
-          .color = epoch_core::Color::Success
+          .color = epoch_core::Color::Success,
+          .title = std::nullopt,
+          .valueKey = "result"
       }};
 
   return patternMetaData;

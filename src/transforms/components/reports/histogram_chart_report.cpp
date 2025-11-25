@@ -20,7 +20,7 @@ namespace epoch_script::reports {
                 .setYAxisLabel(m_yAxisLabel);
 
     // Use fromDataFrame to populate chart
-    chartBuilder.fromDataFrame(normalizedDf, valuesColumn, m_bins);
+    chartBuilder.fromDataFrame(normalizedDf, valuesColumn.GetColumnIdentifier(), m_bins);
 
     auto chart = chartBuilder.build();
     dashboard.addChart(chart);

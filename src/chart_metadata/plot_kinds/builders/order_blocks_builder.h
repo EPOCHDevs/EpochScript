@@ -17,12 +17,12 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"ob", cfg.GetOutputId("ob")},
-      {"top", cfg.GetOutputId("top")},
-      {"bottom", cfg.GetOutputId("bottom")},
-      {"ob_volume", cfg.GetOutputId("ob_volume")},
-      {"mitigated_index", cfg.GetOutputId("mitigated_index")},
-      {"percentage", cfg.GetOutputId("percentage")}
+      {"ob", cfg.GetOutputId("ob").GetColumnName()},
+      {"top", cfg.GetOutputId("top").GetColumnName()},
+      {"bottom", cfg.GetOutputId("bottom").GetColumnName()},
+      {"ob_volume", cfg.GetOutputId("ob_volume").GetColumnName()},
+      {"mitigated_index", cfg.GetOutputId("mitigated_index").GetColumnName()},
+      {"percentage", cfg.GetOutputId("percentage").GetColumnName()}
     };
   }
 

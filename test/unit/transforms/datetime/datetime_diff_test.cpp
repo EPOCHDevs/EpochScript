@@ -46,7 +46,7 @@ DataFrame createTestDataFrameWithTwoTimestamps() {
   // Create DataFrame with double and DateTime columns
   auto price_df = make_dataframe<double>(index, {{10.0, 20.0, 30.0}}, {"price"});
   auto timestamp_df = make_dataframe<DateTime>(index, {start_timestamps, end_timestamps},
-                                               {"start_date", "end_date"});
+                                               {"node#start_date", "node#end_date"});
 
   // Combine the two dataframes by merging their tables
   std::vector<arrow::ChunkedArrayPtr> combined_columns;
@@ -66,7 +66,7 @@ DataFrame createTestDataFrameWithTwoTimestamps() {
 TEST_CASE("datetime_diff - days unit", "[datetime][diff]") {
   auto input = createTestDataFrameWithTwoTimestamps();
 
-  auto config = datetime_diff_cfg("days_diff", "start_date", "end_date", "days",
+  auto config = datetime_diff_cfg("days_diff", strategy::InputValue(strategy::NodeReference("node", "start_date")), strategy::InputValue(strategy::NodeReference("node", "end_date")), "days",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -75,9 +75,9 @@ TEST_CASE("datetime_diff - days unit", "[datetime][diff]") {
   DataFrame output = transform->TransformData(input);
 
   REQUIRE(output.size() == 3);
-  REQUIRE(output.contains(config.GetOutputId()));
+  REQUIRE(output.contains(config.GetOutputId().GetColumnName()));
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto diff_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   // Differences: 0 days, 1 day, 31 days
@@ -88,7 +88,7 @@ TEST_CASE("datetime_diff - days unit", "[datetime][diff]") {
 
 TEST_CASE("datetime_diff - hours unit", "[datetime][diff]") {
   auto input = createTestDataFrameWithTwoTimestamps();
-  auto config = datetime_diff_cfg("hours_diff", "start_date", "end_date", "hours",
+  auto config = datetime_diff_cfg("hours_diff", strategy::InputValue(strategy::NodeReference("node", "start_date")), strategy::InputValue(strategy::NodeReference("node", "end_date")), "hours",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -96,7 +96,7 @@ TEST_CASE("datetime_diff - hours unit", "[datetime][diff]") {
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto diff_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   // Differences: 2 hours, 24 hours, 744 hours (31 days)
@@ -106,57 +106,61 @@ TEST_CASE("datetime_diff - hours unit", "[datetime][diff]") {
 }
 
 TEST_CASE("datetime_diff - minutes unit", "[datetime][diff]") {
-  auto index = epoch_frame::factory::index::make_datetime_index(
-      {epoch_frame::DateTime{2020y, std::chrono::January, 1d}});
+    auto index = epoch_frame::factory::index::make_datetime_index(
+        {epoch_frame::DateTime{2020y, std::chrono::January, 1d}});
 
-  std::vector<epoch_frame::DateTime> start_timestamps = {
-      epoch_frame::DateTime{2020y, std::chrono::January, 1d, 10h, 0min, 0s}};
+    std::vector<epoch_frame::DateTime> start_timestamps = {
+        epoch_frame::DateTime{2020y, std::chrono::January, 1d, 10h, 0min, 0s}};
 
-  std::vector<epoch_frame::DateTime> end_timestamps = {
-      epoch_frame::DateTime{2020y, std::chrono::January, 1d, 10h, 30min, 0s}};
+    std::vector<epoch_frame::DateTime> end_timestamps = {
+        epoch_frame::DateTime{2020y, std::chrono::January, 1d, 10h, 30min, 0s}};
 
-  auto input = make_dataframe<DateTime>(index, {start_timestamps, end_timestamps},
-                                        {"start_time", "end_time"});
+    auto input = make_dataframe<DateTime>(index, {start_timestamps, end_timestamps},
+                                          {"node#start_time", "node#end_time"});
 
-  auto config = datetime_diff_cfg("minutes_diff", "start_time", "end_time", "minutes",
-          epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
+    auto config = datetime_diff_cfg("minutes_diff",
+        strategy::InputValue(strategy::NodeReference("node", "start_time")),
+        strategy::InputValue(strategy::NodeReference("node", "end_time")), "minutes",
+            epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
-  auto transformBase = MAKE_TRANSFORM(config);
-  auto transform = dynamic_cast<ITransform *>(transformBase.get());
+    auto transformBase = MAKE_TRANSFORM(config);
+    auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
-  DataFrame output = transform->TransformData(input);
+    DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
-  auto diff_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
+    auto series = output[config.GetOutputId().GetColumnName()];
+    auto diff_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
-  REQUIRE(diff_array->Value(0) == 30);  // 30 minutes difference
+    REQUIRE(diff_array->Value(0) == 30);  // 30 minutes difference
 }
 
 TEST_CASE("datetime_diff - seconds unit", "[datetime][diff]") {
-  auto index = epoch_frame::factory::index::make_datetime_index(
-      {epoch_frame::DateTime{2020y, std::chrono::January, 1d}});
+    auto index = epoch_frame::factory::index::make_datetime_index(
+        {epoch_frame::DateTime{2020y, std::chrono::January, 1d}});
 
-  std::vector<epoch_frame::DateTime> start_timestamps = {
-      epoch_frame::DateTime{2020y, std::chrono::January, 1d, 10h, 0min, 0s}};
+    std::vector<epoch_frame::DateTime> start_timestamps = {
+        epoch_frame::DateTime{2020y, std::chrono::January, 1d, 10h, 0min, 0s}};
 
-  std::vector<epoch_frame::DateTime> end_timestamps = {
-      epoch_frame::DateTime{2020y, std::chrono::January, 1d, 10h, 0min, 45s}};
+    std::vector<epoch_frame::DateTime> end_timestamps = {
+        epoch_frame::DateTime{2020y, std::chrono::January, 1d, 10h, 0min, 45s}};
 
-  auto input = make_dataframe<DateTime>(index, {start_timestamps, end_timestamps},
-                                        {"start_time", "end_time"});
+    auto input = make_dataframe<DateTime>(index, {start_timestamps, end_timestamps},
+                                          {"node#start_time", "node#end_time"});
 
-  auto config = datetime_diff_cfg("seconds_diff", "start_time", "end_time", "seconds",
-          epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
+    auto config = datetime_diff_cfg("seconds_diff",
+        strategy::InputValue(strategy::NodeReference("node", "start_time")),
+        strategy::InputValue(strategy::NodeReference("node", "end_time")), "seconds",
+            epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
-  auto transformBase = MAKE_TRANSFORM(config);
-  auto transform = dynamic_cast<ITransform *>(transformBase.get());
+    auto transformBase = MAKE_TRANSFORM(config);
+    auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
-  DataFrame output = transform->TransformData(input);
+    DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
-  auto diff_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
+    auto series = output[config.GetOutputId().GetColumnName()];
+    auto diff_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
-  REQUIRE(diff_array->Value(0) == 45);  // 45 seconds difference
+    REQUIRE(diff_array->Value(0) == 45);  // 45 seconds difference
 }
 
 TEST_CASE("datetime_diff - weeks unit", "[datetime][diff]") {
@@ -173,9 +177,9 @@ TEST_CASE("datetime_diff - weeks unit", "[datetime][diff]") {
       epoch_frame::DateTime{2020y, std::chrono::February, 15d}};  // ~4.4 weeks later
 
   auto input = make_dataframe<DateTime>(index, {start_timestamps, end_timestamps},
-                                        {"start_date", "end_date"});
+                                        {"node#start_date", "node#end_date"});
 
-  auto config = datetime_diff_cfg("weeks_diff", "start_date", "end_date", "weeks",
+  auto config = datetime_diff_cfg("weeks_diff", strategy::InputValue(strategy::NodeReference("node", "start_date")), strategy::InputValue(strategy::NodeReference("node", "end_date")), "weeks",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -183,7 +187,7 @@ TEST_CASE("datetime_diff - weeks unit", "[datetime][diff]") {
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto diff_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   REQUIRE(diff_array->Value(0) == 2);  // 14 days = 2 weeks
@@ -204,9 +208,9 @@ TEST_CASE("datetime_diff - months unit", "[datetime][diff]") {
       epoch_frame::DateTime{2021y, std::chrono::January, 15d}}; // 12 months later
 
   auto input = make_dataframe<DateTime>(index, {start_timestamps, end_timestamps},
-                                        {"start_date", "end_date"});
+                                        {"node#start_date", "node#end_date"});
 
-  auto config = datetime_diff_cfg("months_diff", "start_date", "end_date", "months",
+  auto config = datetime_diff_cfg("months_diff", strategy::InputValue(strategy::NodeReference("node", "start_date")), strategy::InputValue(strategy::NodeReference("node", "end_date")), "months",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -214,7 +218,7 @@ TEST_CASE("datetime_diff - months unit", "[datetime][diff]") {
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
 
   // Check actual array type first
   auto array = series.contiguous_array().value();
@@ -240,9 +244,9 @@ TEST_CASE("datetime_diff - quarters unit", "[datetime][diff]") {
       epoch_frame::DateTime{2021y, std::chrono::January, 1d}};   // Q1 next year
 
   auto input = make_dataframe<DateTime>(index, {start_timestamps, end_timestamps},
-                                        {"start_date", "end_date"});
+                                        {"node#start_date", "node#end_date"});
 
-  auto config = datetime_diff_cfg("quarters_diff", "start_date", "end_date", "quarters",
+  auto config = datetime_diff_cfg("quarters_diff", strategy::InputValue(strategy::NodeReference("node", "start_date")), strategy::InputValue(strategy::NodeReference("node", "end_date")), "quarters",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -250,7 +254,7 @@ TEST_CASE("datetime_diff - quarters unit", "[datetime][diff]") {
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto diff_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   REQUIRE(diff_array->Value(0) == 2);  // Q1 to Q3 = 2 quarters
@@ -271,9 +275,9 @@ TEST_CASE("datetime_diff - years unit", "[datetime][diff]") {
       epoch_frame::DateTime{2020y, std::chrono::June, 15d}};    // 2 years later
 
   auto input = make_dataframe<DateTime>(index, {start_timestamps, end_timestamps},
-                                        {"start_date", "end_date"});
+                                        {"node#start_date", "node#end_date"});
 
-  auto config = datetime_diff_cfg("years_diff", "start_date", "end_date", "years",
+  auto config = datetime_diff_cfg("years_diff", strategy::InputValue(strategy::NodeReference("node", "start_date")), strategy::InputValue(strategy::NodeReference("node", "end_date")), "years",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -281,7 +285,7 @@ TEST_CASE("datetime_diff - years unit", "[datetime][diff]") {
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto diff_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   REQUIRE(diff_array->Value(0) == 3);  // 3 years
@@ -300,9 +304,9 @@ TEST_CASE("datetime_diff - negative differences", "[datetime][diff]") {
       epoch_frame::DateTime{2020y, std::chrono::January, 5d}};
 
   auto input = make_dataframe<DateTime>(index, {start_timestamps, end_timestamps},
-                                        {"start_date", "end_date"});
+                                        {"node#start_date", "node#end_date"});
 
-  auto config = datetime_diff_cfg("negative_diff", "start_date", "end_date", "days",
+  auto config = datetime_diff_cfg("negative_diff", strategy::InputValue(strategy::NodeReference("node", "start_date")), strategy::InputValue(strategy::NodeReference("node", "end_date")), "days",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -310,7 +314,7 @@ TEST_CASE("datetime_diff - negative differences", "[datetime][diff]") {
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto diff_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   REQUIRE(diff_array->Value(0) == -5);  // end is 5 days before start
@@ -320,7 +324,7 @@ TEST_CASE("datetime_diff - default unit is days", "[datetime][diff]") {
   auto input = createTestDataFrameWithTwoTimestamps();
 
   // Don't specify unit option - should default to days
-  auto config = datetime_diff_cfg("default_diff", "start_date", "end_date", "days",
+  auto config = datetime_diff_cfg("default_diff", strategy::InputValue(strategy::NodeReference("node", "start_date")), strategy::InputValue(strategy::NodeReference("node", "end_date")), "days",
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
   auto transformBase = MAKE_TRANSFORM(config);
@@ -328,7 +332,7 @@ TEST_CASE("datetime_diff - default unit is days", "[datetime][diff]") {
 
   DataFrame output = transform->TransformData(input);
 
-  auto series = output[config.GetOutputId()];
+  auto series = output[config.GetOutputId().GetColumnName()];
   auto diff_array = std::static_pointer_cast<arrow::Int64Array>(series.contiguous_array().value());
 
   // Should compute difference in days by default

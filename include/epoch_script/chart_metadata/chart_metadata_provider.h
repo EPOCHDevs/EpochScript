@@ -22,6 +22,7 @@ struct SeriesInfo {
   std::string type;                  ///< Chart type (line, candlestick, macd, etc.)
   std::string name;                  ///< Display name
   std::unordered_map<std::string, std::string> dataMapping; ///< Semantic name → column mapping
+  std::unordered_map<std::string, std::string> templateDataMapping; ///< Template placeholder → column mapping (for flags)
   uint32_t zIndex{0};                ///< Rendering layer (higher = on top)
   uint32_t yAxis{0};                 ///< Which Y-axis this series uses
   std::optional<std::string> linkedTo; ///< Optional series ID to link to

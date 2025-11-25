@@ -31,7 +31,7 @@ DataFrame createStringTestDataFrame() {
   return make_dataframe<std::string>(
       index,
       {{"HELLO", "world", "Hello World", "  trimme  ", "123abc"}},
-      {"text"});
+      {"node#text"});
 }
 
 TEST_CASE("String Case Transform", "[string][string_case]") {
@@ -40,7 +40,7 @@ TEST_CASE("String Case Transform", "[string][string_case]") {
   const auto tf = EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   SECTION("Uppercase") {
-    auto config = string_case_cfg("test_upper", "upper", "text", tf);
+    auto config = string_case_cfg("test_upper", "upper", strategy::InputValue(strategy::NodeReference("node", "text")), tf);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
@@ -48,13 +48,13 @@ TEST_CASE("String Case Transform", "[string][string_case]") {
     DataFrame expected = make_dataframe<std::string>(
         index,
         {{"HELLO", "WORLD", "HELLO WORLD", "  TRIMME  ", "123ABC"}},
-        {config.GetOutputId()});
+        {config.GetOutputId().GetColumnName()});
 
     REQUIRE(output.equals(expected));
   }
 
   SECTION("Lowercase") {
-    auto config = string_case_cfg("test_lower", "lower", "text", tf);
+    auto config = string_case_cfg("test_lower", "lower", strategy::InputValue(strategy::NodeReference("node", "text")), tf);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
@@ -62,7 +62,7 @@ TEST_CASE("String Case Transform", "[string][string_case]") {
     DataFrame expected = make_dataframe<std::string>(
         index,
         {{"hello", "world", "hello world", "  trimme  ", "123abc"}},
-        {config.GetOutputId()});
+        {config.GetOutputId().GetColumnName()});
 
     REQUIRE(output.equals(expected));
   }
@@ -74,7 +74,7 @@ TEST_CASE("String Trim Transform", "[string][string_trim]") {
   const auto tf = EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   SECTION("Trim whitespace") {
-    auto config = string_trim_cfg("test_trim", "trim", "text", "", tf);
+    auto config = string_trim_cfg("test_trim", "trim", strategy::InputValue(strategy::NodeReference("node", "text")), "", tf);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
@@ -82,7 +82,7 @@ TEST_CASE("String Trim Transform", "[string][string_trim]") {
     DataFrame expected = make_dataframe<std::string>(
         index,
         {{"HELLO", "world", "Hello World", "trimme", "123abc"}},
-        {config.GetOutputId()});
+        {config.GetOutputId().GetColumnName()});
 
     REQUIRE(output.equals(expected));
   }
@@ -94,7 +94,7 @@ TEST_CASE("String Contains Transform", "[string][string_contains]") {
   const auto tf = EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   SECTION("Contains pattern") {
-    auto config = string_contains_cfg("test_contains", "contains", "text", "o", tf);
+    auto config = string_contains_cfg("test_contains", "contains", strategy::InputValue(strategy::NodeReference("node", "text")), "o", tf);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
@@ -102,13 +102,13 @@ TEST_CASE("String Contains Transform", "[string][string_contains]") {
     DataFrame expected = make_dataframe<bool>(
         index,
         {{false, true, true, false, false}},
-        {config.GetOutputId()});
+        {config.GetOutputId().GetColumnName()});
 
     REQUIRE(output.equals(expected));
   }
 
   SECTION("Starts with pattern") {
-    auto config = string_contains_cfg("test_starts", "starts_with", "text", "H", tf);
+    auto config = string_contains_cfg("test_starts", "starts_with", strategy::InputValue(strategy::NodeReference("node", "text")), "H", tf);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
@@ -116,7 +116,7 @@ TEST_CASE("String Contains Transform", "[string][string_contains]") {
     DataFrame expected = make_dataframe<bool>(
         index,
         {{true, false, true, false, false}},
-        {config.GetOutputId()});
+        {config.GetOutputId().GetColumnName()});
 
     REQUIRE(output.equals(expected));
   }
@@ -130,13 +130,13 @@ TEST_CASE("String Check Transform", "[string][string_check]") {
            epoch_frame::DateTime{2020y, std::chrono::January, 3d},
            epoch_frame::DateTime{2020y, std::chrono::January, 4d}}),
       {{"abc", "123", "ABC", " "}},
-      {"text"});
+      {"node#text"});
 
   auto index = input.index();
   const auto tf = EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   SECTION("Is alpha") {
-    auto config = string_check_cfg("test_check", "is_alpha", "text", tf);
+    auto config = string_check_cfg("test_check", "is_alpha", strategy::InputValue(strategy::NodeReference("node", "text")), tf);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
@@ -144,13 +144,13 @@ TEST_CASE("String Check Transform", "[string][string_check]") {
     DataFrame expected = make_dataframe<bool>(
         index,
         {{true, false, true, false}},
-        {config.GetOutputId()});
+        {config.GetOutputId().GetColumnName()});
 
     REQUIRE(output.equals(expected));
   }
 
   SECTION("Is digit") {
-    auto config = string_check_cfg("test_digit", "is_digit", "text", tf);
+    auto config = string_check_cfg("test_digit", "is_digit", strategy::InputValue(strategy::NodeReference("node", "text")), tf);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
     DataFrame output = transform->TransformData(input);
@@ -158,7 +158,7 @@ TEST_CASE("String Check Transform", "[string][string_check]") {
     DataFrame expected = make_dataframe<bool>(
         index,
         {{false, true, false, false}},
-        {config.GetOutputId()});
+        {config.GetOutputId().GetColumnName()});
 
     REQUIRE(output.equals(expected));
   }

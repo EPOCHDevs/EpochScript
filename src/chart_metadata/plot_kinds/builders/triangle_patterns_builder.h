@@ -17,10 +17,10 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"pattern_detected", cfg.GetOutputId("pattern_detected")},
-      {"upper_slope", cfg.GetOutputId("upper_slope")},
-      {"lower_slope", cfg.GetOutputId("lower_slope")},
-      {"triangle_type", cfg.GetOutputId("triangle_type")}
+      {"pattern_detected", cfg.GetOutputId("pattern_detected").GetColumnName()},
+      {"upper_slope", cfg.GetOutputId("upper_slope").GetColumnName()},
+      {"lower_slope", cfg.GetOutputId("lower_slope").GetColumnName()},
+      {"triangle_type", cfg.GetOutputId("triangle_type").GetColumnName()}
     };
   }
 

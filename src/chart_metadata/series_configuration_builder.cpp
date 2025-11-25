@@ -84,6 +84,13 @@ SeriesInfo SeriesConfigurationBuilder::BuildSeries(
   series.yAxis = chosenAxis;
   series.linkedTo = linkedTo;
 
+  // For flags, populate templateDataMapping with all outputs for template substitution
+  if (plotKind == epoch_core::TransformPlotKind::flag) {
+    for (const auto &output : cfg.GetOutputs()) {
+      series.templateDataMapping[output.id] = cfg.GetOutputId(output.id).GetColumnName();
+    }
+  }
+
   // Build config options for annotations and thresholds
   series.configOptions = BuildConfigOptions(cfg);
 
@@ -213,10 +220,14 @@ SeriesConfigurationBuilder::BuildConfigOptions(
       }
     }
 
+  } catch (const std::exception& exp) {
+    // If any error occurs, return empty options, but log the error with details
+    SPDLOG_WARN("Failed to build config options for transform {}: {}. Returning empty options.",
+                cfg.GetId(), exp.what());
   } catch (...) {
-    // If any error occurs, return empty options (which is fine)
-    SPDLOG_DEBUG("Failed to build config options for transform: {}",
-                 cfg.GetId());
+    // If any unknown error occurs, return empty options
+    SPDLOG_WARN("Failed to build config options for transform {} (unknown error). Returning empty options.",
+                cfg.GetId());
   }
 
   return configOptions;

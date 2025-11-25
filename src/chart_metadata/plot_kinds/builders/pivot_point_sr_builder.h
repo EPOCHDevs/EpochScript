@@ -17,13 +17,13 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"pivot", cfg.GetOutputId("pivot")},
-      {"resist_1", cfg.GetOutputId("resist_1")},
-      {"support_1", cfg.GetOutputId("support_1")},
-      {"resist_2", cfg.GetOutputId("resist_2")},
-      {"support_2", cfg.GetOutputId("support_2")},
-      {"resist_3", cfg.GetOutputId("resist_3")},
-      {"support_3", cfg.GetOutputId("support_3")}
+      {"pivot", cfg.GetOutputId("pivot").GetColumnName()},
+      {"resist_1", cfg.GetOutputId("resist_1").GetColumnName()},
+      {"support_1", cfg.GetOutputId("support_1").GetColumnName()},
+      {"resist_2", cfg.GetOutputId("resist_2").GetColumnName()},
+      {"support_2", cfg.GetOutputId("support_2").GetColumnName()},
+      {"resist_3", cfg.GetOutputId("resist_3").GetColumnName()},
+      {"support_3", cfg.GetOutputId("support_3").GetColumnName()}
     };
   }
 

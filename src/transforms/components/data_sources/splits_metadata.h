@@ -44,7 +44,9 @@ MakeSplitsDataSource() {
               .icon = epoch_core::Icon::Split,
               .text = "Stock Split: {split_from}:{split_to}",
               .textIsTemplate = true,
-              .color = epoch_core::Color::Warning
+              .color = epoch_core::Color::Warning,
+              .title = std::nullopt,
+              .valueKey = "split_from"
           },
           .strategyTypes = {"corporate-actions", "event-driven"},
           .assetRequirements = {"single-asset"},

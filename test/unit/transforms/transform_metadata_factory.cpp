@@ -22,6 +22,27 @@ using namespace epoch_script::transform;
 using namespace std::chrono_literals;
 using namespace epoch_frame;
 
+// Helper to create InputValue YAML node in the new format: {type: ref, value: {node_id: "", handle: "col"}}
+// Uses empty node_id - column name in DataFrame matches the handle directly
+YAML::Node makeInputRef(const std::string& col) {
+  YAML::Node node;
+  node["type"] = "ref";
+  YAML::Node value;
+  value["node_id"] = "";
+  value["handle"] = col;
+  node["value"] = value;
+  return node;
+}
+
+// Helper to create a sequence of InputValue YAML nodes
+YAML::Node makeInputRefSeq(const std::vector<std::string>& cols) {
+  YAML::Node seq;
+  for (const auto& col : cols) {
+    seq.push_back(makeInputRef(col));
+  }
+  return seq;
+}
+
 // Virtual data generator for creating appropriate test data based on transform requirements
 class VirtualDataGenerator {
 public:
@@ -67,6 +88,7 @@ public:
     std::vector<double> vwap(numBars, 100.0);
     std::vector<int64_t> tradeCount(numBars, 500);  // Integer type for trade count
 
+    // Raw column names (o, h, l, c, v) - transforms access these directly
     return {
       {"o", factory::array::make_array(openPrices)},
       {"c", factory::array::make_array(closePrices)},
@@ -249,15 +271,17 @@ TEST_CASE("Transform Metadata Factory") {
       if (metadata.inputs.size() == 1 &&
           metadata.inputs.front().allowMultipleConnections) {
         // Single input accepting multiple connections - provide multi-asset data
-        config["inputs"][epoch_script::ARG] = col_names;
-        fields_vec = col_names;
+        config["inputs"][epoch_script::ARG] = makeInputRefSeq(col_names);
+        // Column names need # prefix to match GetInputId() format
         for (const auto& col : col_names) {
+          fields_vec.push_back("#" + col);
           inputs_vec.push_back(cs_data[col].array());
         }
       } else if (metadata.inputs.size() == 1) {
         // Single non-multi-connection input (edge case for cross-sectional)
-        config["inputs"][epoch_script::ARG] = col_names.front();
-        fields_vec = {col_names.front()};
+        config["inputs"][epoch_script::ARG] = makeInputRef(col_names.front());
+        // Column name needs # prefix to match GetInputId() format
+        fields_vec = {"#" + col_names.front()};
         inputs_vec.push_back(cs_data[col_names.front()].array());
       } else {
         // Transforms with multiple inputs (e.g., beta with asset_returns and market_returns)
@@ -269,9 +293,10 @@ TEST_CASE("Transform Metadata Factory") {
               VirtualDataGenerator::DEFAULT_NUM_ASSETS, NUM_TEST_BARS);
 
           auto input_col_names = input_cs_data.column_names();
-          config["inputs"][inputMetadata.id] = input_col_names;
+          config["inputs"][inputMetadata.id] = makeInputRefSeq(input_col_names);
           for (const auto& col : input_col_names) {
-            fields_vec.push_back(col);
+            // Column names need # prefix to match GetInputId() format
+            fields_vec.push_back("#" + col);
             inputs_vec.push_back(input_cs_data[col].array());
           }
         }
@@ -284,8 +309,9 @@ TEST_CASE("Transform Metadata Factory") {
       // conditional_select requires: condition0, value0, [condition1, value1, ...], [default_value]
       if (id.starts_with("conditional_select_")) {
         // Provide 2 inputs: condition (Boolean) + value (type-specific)
-        config["inputs"][epoch_script::ARG] = std::vector{"condition", "value"};
-        fields_vec = {"condition", "value"};
+        config["inputs"][epoch_script::ARG] = makeInputRefSeq({"condition", "value"});
+        // Column names need # prefix to match GetInputId() format
+        fields_vec = {"#condition", "#value"};
         inputs_vec.emplace_back(getArrayFromType(IODataType::Boolean));  // condition
 
         // Determine value type from transform name suffix
@@ -304,16 +330,19 @@ TEST_CASE("Transform Metadata Factory") {
         inputs_vec.emplace_back(getArrayFromType(valueType));
       } else {
         // Default: provide single input for other VARARG transforms
-        config["inputs"][epoch_script::ARG] = std::vector{"1#result"};
-        fields_vec = {"1#result"};
+        config["inputs"][epoch_script::ARG] = makeInputRefSeq({"result"});
+        // Column name needs # prefix to match GetInputId() format
+        fields_vec = {"#result"};
         inputs_vec.emplace_back(getArrayFromType(metadata.inputs.front().type));
       }
     } else {
       // Regular transforms with one or more single-connection inputs
       for (auto const &[i, inputMetadata] :
            metadata.inputs | std::views::enumerate) {
-        config["inputs"][inputMetadata.id] =
-            fields_vec.emplace_back(std::to_string(i));
+        std::string col = std::to_string(i);
+        config["inputs"][inputMetadata.id] = makeInputRef(col);
+        // Column names need # prefix to match GetInputId() format (node_id + "#" + handle)
+        fields_vec.emplace_back("#" + col);
 
         // Special handling for select_N transforms: limit index values to valid range [0, N-1]
         if (id.starts_with("select_") && inputMetadata.id == "index") {
@@ -354,11 +383,14 @@ TEST_CASE("Transform Metadata Factory") {
     }
 
     // Get required data sources from metadata and provide OHLCV data
+    // Column names need # prefix to match GetInputId() format (node_id + "#" + handle)
     auto requiredDataSources = metadata.requiredDataSources;
 
     for (auto const &[i, dataSource] :
          requiredDataSources | std::views::enumerate) {
-      config["inputs"][dataSource] = fields_vec.emplace_back(dataSource);
+      config["inputs"][dataSource] = makeInputRef(dataSource);
+      // Column names need # prefix to match GetInputId() format
+      fields_vec.emplace_back("#" + dataSource);
       inputs_vec.emplace_back(dataSources.at(dataSource));
     }
 
@@ -492,6 +524,14 @@ TEST_CASE("Transform Metadata Factory") {
 
     // NOTE: static_cast_* transforms now have special input overrides (lines 304-318)
     // They receive inputs matching their output types instead of Any type
+
+    // SKIP: Scalar category transforms - they now run as inlined constant values at compile time
+    // Scalar transforms (number, string, pi, e, etc.) are handled by scalar inlining pass
+    // They no longer need to run as runtime transforms
+    if (metadataMap.contains(id) &&
+        metadataMap.at(id).category == epoch_core::TransformCategory::Scalar) {
+      continue;
+    }
 
     // =============================================================================
     // TEST EXECUTION - All other transforms should work with auto-generated config

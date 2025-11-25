@@ -57,13 +57,11 @@ TEST_CASE("KPSS vs HMDF", "[hosseinmoein][kpss]") {
     exp[i] = v.get_result();
   }
 
-  YAML::Node inputs_yaml;
-  inputs_yaml[epoch_script::ARG] = C.CLOSE();
-  YAML::Node options_yaml;
-  options_yaml["window"] = window;
-  options_yaml["alpha"] = alpha;
-  auto cfg =
-      run_op("stationary_check", "kpss_id", inputs_yaml, options_yaml, tf);
+  auto cfg = run_op("stationary_check", "kpss_id",
+      {{epoch_script::ARG, {input_ref(C.CLOSE())}}},
+      {{"window", epoch_script::MetaDataOptionDefinition{static_cast<double>(window)}},
+       {"alpha", epoch_script::MetaDataOptionDefinition{alpha}}},
+      tf);
 
   // StationaryCheck transform must exist and output 'result'
   StationaryCheck kpss{cfg};

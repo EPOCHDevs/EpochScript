@@ -32,9 +32,11 @@ TEST_CASE("[static_cast] StaticCastToInteger with normal input", "[operators]") 
     epoch_frame::DateTime{2024y, std::chrono::January, 2d},
     epoch_frame::DateTime{2024y, std::chrono::January, 3d}
   });
-  auto input_df = make_dataframe<int64_t>(index, {{10, 20, 30}}, {"input"});
+  strategy::NodeReference in{"node", "input"};
 
-  auto config = static_cast_to_integer_cfg("static_cast_test", "input", timeframe);
+  auto input_df = make_dataframe<int64_t>(index, {{10, 20, 30}}, {in.GetColumnName()});
+
+  auto config = static_cast_to_integer_cfg("static_cast_test", in, timeframe);
   auto transformBase = MAKE_TRANSFORM(config);
   auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
@@ -49,6 +51,7 @@ TEST_CASE("[static_cast] StaticCastToInteger with normal input", "[operators]") 
 
 TEST_CASE("[static_cast] StaticCastToInteger with null type input", "[operators]") {
   const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
+  strategy::NodeReference in{"node", "input"};
 
   // Create input with null type (simulates empty DataFrame from missing data)
   auto index = epoch_frame::factory::index::make_datetime_index({
@@ -58,9 +61,10 @@ TEST_CASE("[static_cast] StaticCastToInteger with null type input", "[operators]
   });
   auto null_array = arrow::MakeArrayOfNull(arrow::null(), 3).ValueOrDie();
   auto chunked_null = std::make_shared<arrow::ChunkedArray>(null_array);
-  auto input_df = epoch_frame::make_dataframe(index, {chunked_null}, {"input"});
+  auto input_df = epoch_frame::make_dataframe(index, {chunked_null}, {in.GetColumnName()});
 
-  auto config = static_cast_to_integer_cfg("static_cast_test", "input", timeframe);
+
+  auto config = static_cast_to_integer_cfg("static_cast_test", in, timeframe);
   auto transformBase = MAKE_TRANSFORM(config);
   auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
@@ -81,9 +85,11 @@ TEST_CASE("[static_cast] StaticCastToDecimal with normal input", "[operators]") 
     epoch_frame::DateTime{2024y, std::chrono::January, 1d},
     epoch_frame::DateTime{2024y, std::chrono::January, 2d}
   });
-  auto input_df = make_dataframe<double>(index, {{1.5, 2.5}}, {"input"});
+  strategy::NodeReference in{"node", "input"};
 
-  auto config = static_cast_to_decimal_cfg("static_cast_test", "input", timeframe);
+  auto input_df = make_dataframe<double>(index, {{1.5, 2.5}}, {in.GetColumnName()});
+
+  auto config = static_cast_to_decimal_cfg("static_cast_test", in, timeframe);
   auto transformBase = MAKE_TRANSFORM(config);
   auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
@@ -97,6 +103,7 @@ TEST_CASE("[static_cast] StaticCastToDecimal with normal input", "[operators]") 
 
 TEST_CASE("[static_cast] StaticCastToBoolean with null type input", "[operators]") {
   const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
+  strategy::NodeReference in{"node", "input"};
 
   auto index = epoch_frame::factory::index::make_datetime_index({
     epoch_frame::DateTime{2024y, std::chrono::January, 1d},
@@ -104,9 +111,9 @@ TEST_CASE("[static_cast] StaticCastToBoolean with null type input", "[operators]
   });
   auto null_array = arrow::MakeArrayOfNull(arrow::null(), 2).ValueOrDie();
   auto chunked_null = std::make_shared<arrow::ChunkedArray>(null_array);
-  auto input_df = epoch_frame::make_dataframe(index, {chunked_null}, {"input"});
+  auto input_df = epoch_frame::make_dataframe(index, {chunked_null}, {in.GetColumnName()});
 
-  auto config = static_cast_to_boolean_cfg("static_cast_test", "input", timeframe);
+  auto config = static_cast_to_boolean_cfg("static_cast_test", in, timeframe);
   auto transformBase = MAKE_TRANSFORM(config);
   auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
@@ -120,15 +127,16 @@ TEST_CASE("[static_cast] StaticCastToBoolean with null type input", "[operators]
 
 TEST_CASE("[static_cast] StaticCastToString with null type input", "[operators]") {
   const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
+  strategy::NodeReference in{"node", "input"};
 
   auto index = epoch_frame::factory::index::make_datetime_index({
     epoch_frame::DateTime{2024y, std::chrono::January, 1d}
   });
   auto null_array = arrow::MakeArrayOfNull(arrow::null(), 1).ValueOrDie();
   auto chunked_null = std::make_shared<arrow::ChunkedArray>(null_array);
-  auto input_df = epoch_frame::make_dataframe(index, {chunked_null}, {"input"});
+  auto input_df = epoch_frame::make_dataframe(index, {chunked_null}, {in.GetColumnName()});
 
-  auto config = static_cast_to_string_cfg("static_cast_test", "input", timeframe);
+  auto config = static_cast_to_string_cfg("static_cast_test", in, timeframe);
   auto transformBase = MAKE_TRANSFORM(config);
   auto transform = dynamic_cast<ITransform *>(transformBase.get());
 

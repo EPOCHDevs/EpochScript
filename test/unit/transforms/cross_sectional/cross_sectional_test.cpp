@@ -39,7 +39,7 @@ TEST_CASE("Cross-sectional Transforms") {
                                {"aapl", "msft", "tsla"});
     // Define metadata
     TransformConfiguration config = cs_momentum(
-        19, "returns",
+        19, strategy::InputValue(strategy::NodeReference("", "returns")),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
     // Use registry to create the transform
@@ -51,7 +51,7 @@ TEST_CASE("Cross-sectional Transforms") {
          epoch_frame::DateTime{2020y, std::chrono::January, 4d}});
 
     epoch_frame::DataFrame expected = make_dataframe<double>(
-        output_index, {{1.006667, 1.005726, 1.036315}}, {config.GetOutputId()});
+        output_index, {{1.006667, 1.005726, 1.036315}}, {config.GetOutputId().GetColumnName()});
 
     // Apply transform
     epoch_frame::DataFrame output = transform->TransformData(
@@ -91,7 +91,7 @@ TEST_CASE("Cross-sectional Transforms") {
 
       SECTION("TopK with k=2") {
         // Create TopK transform with k=2
-        TransformConfiguration config = cs_topk(1, scores_input, 2, daily_tf);
+        TransformConfiguration config = cs_topk(1, strategy::InputValue(strategy::NodeReference("", scores_input)), 2, daily_tf);
 
         auto transform = MAKE_TRANSFORM(config);
 
@@ -122,7 +122,7 @@ TEST_CASE("Cross-sectional Transforms") {
       SECTION("BottomK with k=2") {
         // Create BottomK transform with k=2
         TransformConfiguration config =
-            cs_bottomk(1, scores_input, 2, daily_tf);
+            cs_bottomk(1, strategy::InputValue(strategy::NodeReference("", scores_input)), 2, daily_tf);
 
         auto transform = MAKE_TRANSFORM(config);
 
@@ -154,7 +154,7 @@ TEST_CASE("Cross-sectional Transforms") {
       SECTION("TopKPercentile with k=40") {
         // Create TopKPercentile transform with k=40%
         TransformConfiguration config =
-            cs_topk_percentile(1, scores_input, 40, daily_tf);
+            cs_topk_percentile(1, strategy::InputValue(strategy::NodeReference("", scores_input)), 40, daily_tf);
 
         auto transform = MAKE_TRANSFORM(config);
 
@@ -184,7 +184,7 @@ TEST_CASE("Cross-sectional Transforms") {
       SECTION("BottomKPercentile with k=40") {
         // Create BottomKPercentile transform with k=40%
         TransformConfiguration config =
-            cs_bottomk_percentile(1, scores_input, 40, daily_tf);
+            cs_bottomk_percentile(1, strategy::InputValue(strategy::NodeReference("", scores_input)), 40, daily_tf);
 
         auto transform = MAKE_TRANSFORM(config);
 
@@ -226,7 +226,7 @@ TEST_CASE("Cross-sectional Transforms") {
 
         // TopK with k=1
         {
-          TransformConfiguration config = cs_topk(1, scores_input, 1, daily_tf);
+          TransformConfiguration config = cs_topk(1, strategy::InputValue(strategy::NodeReference("", scores_input)), 1, daily_tf);
           auto transform =
               std::make_unique<CrossSectionalTopKOperation>(config);
           epoch_frame::DataFrame output = transform->TransformData(scores_data);
@@ -253,7 +253,7 @@ TEST_CASE("Cross-sectional Transforms") {
         // BottomK with k=1
         {
           TransformConfiguration config =
-              cs_bottomk(1, scores_input, 1, daily_tf);
+              cs_bottomk(1, strategy::InputValue(strategy::NodeReference("", scores_input)), 1, daily_tf);
           auto transform =
               std::make_unique<CrossSectionalBottomKOperation>(config);
           epoch_frame::DataFrame output = transform->TransformData(scores_data);
@@ -291,7 +291,7 @@ TEST_CASE("Cross-sectional Transforms") {
 
         // TopK with k=5 (all assets)
         {
-          TransformConfiguration config = cs_topk(1, scores_input, 5, daily_tf);
+          TransformConfiguration config = cs_topk(1, strategy::InputValue(strategy::NodeReference("", scores_input)), 5, daily_tf);
           auto transform = MAKE_TRANSFORM(config);
           epoch_frame::DataFrame output = transform->TransformData(scores_data);
 
@@ -315,7 +315,7 @@ TEST_CASE("Cross-sectional Transforms") {
         // BottomK with k=5 (all assets)
         {
           TransformConfiguration config =
-              cs_bottomk(1, scores_input, 5, daily_tf);
+              cs_bottomk(1, strategy::InputValue(strategy::NodeReference("", scores_input)), 5, daily_tf);
           auto transform = MAKE_TRANSFORM(config);
           epoch_frame::DataFrame output = transform->TransformData(scores_data);
 
@@ -353,7 +353,7 @@ TEST_CASE("Cross-sectional Transforms") {
 
         // TopK with k=2, but three assets are tied
         {
-          TransformConfiguration config = cs_topk(1, scores_input, 2, daily_tf);
+          TransformConfiguration config = cs_topk(1, strategy::InputValue(strategy::NodeReference("", scores_input)), 2, daily_tf);
           auto transform = MAKE_TRANSFORM(config);
 
           // In case of ties, we just verify we get a result without error

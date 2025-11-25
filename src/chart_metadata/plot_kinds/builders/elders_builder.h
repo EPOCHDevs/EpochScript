@@ -17,10 +17,10 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"result", cfg.GetOutputId("result")},
-      {"ema", cfg.GetOutputId("ema")},
-      {"buy_signal", cfg.GetOutputId("buy_signal")},
-      {"sell_signal", cfg.GetOutputId("sell_signal")}
+      {"result", cfg.GetOutputId("result").GetColumnName()},
+      {"ema", cfg.GetOutputId("ema").GetColumnName()},
+      {"buy_signal", cfg.GetOutputId("buy_signal").GetColumnName()},
+      {"sell_signal", cfg.GetOutputId("sell_signal").GetColumnName()}
     };
   }
 

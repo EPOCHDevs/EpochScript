@@ -56,7 +56,7 @@ timeframe: {}
       {epoch_frame::DateTime{2020y, std::chrono::January, 3d}});
   DataFrame expected = make_dataframe<double>(
       expectedIndex, {{expectedValue}},
-      {config.GetOutputId()});
+      std::vector<std::string>{config.GetOutputId().GetColumnName()});
 
   INFO("Comparing " << transformType << " values\n"
                     << output << "\n!=\n"
@@ -90,7 +90,7 @@ timeframe: {}
   auto expectedIndex = epoch_frame::factory::index::make_datetime_index(
       {epoch_frame::DateTime{2020y, std::chrono::January, 3d}});
   DataFrame expected =
-      make_dataframe<double>(expectedIndex, {{5.0}}, {config.GetOutputId()});
+      make_dataframe<double>(expectedIndex, {{5.0}}, std::vector<std::string>{config.GetOutputId().GetColumnName()});
 
   INFO("Comparing numeric scalar values\n" << output << "\n!=\n" << expected);
   REQUIRE(output.equals(expected));
@@ -139,7 +139,7 @@ TEST_CASE("Using Helper Functions", "[scalar]") {
     auto expectedIndex = epoch_frame::factory::index::make_datetime_index(
         {epoch_frame::DateTime{2020y, std::chrono::January, 3d}});
     DataFrame expected = make_dataframe<double>(expectedIndex, {{42.0}},
-                                                {config.GetOutputId()});
+                                                std::vector<std::string>{config.GetOutputId().GetColumnName()});
 
     INFO("Testing numeric helper function\n" << output << "\n!=\n" << expected);
     REQUIRE(output.equals(expected));
@@ -158,7 +158,7 @@ TEST_CASE("Using Helper Functions", "[scalar]") {
         {epoch_frame::DateTime{2020y, std::chrono::January, 3d}});
     DataFrame expected = make_dataframe<double>(
         expectedIndex, {{std::numbers::pi}},
-        {config.GetOutputId()});
+        std::vector<std::string>{config.GetOutputId().GetColumnName()});
 
     INFO("Testing pi helper function\n" << output << "\n!=\n" << expected);
     REQUIRE(output.equals(expected));
@@ -171,7 +171,7 @@ TEST_CASE("Using Helper Functions", "[scalar]") {
     output = transform->TransformData(input);
     expected = make_dataframe<double>(
         expectedIndex, {{std::numbers::e}},
-        {config.GetOutputId()});
+        std::vector<std::string>{config.GetOutputId().GetColumnName()});
 
     INFO("Testing e helper function\n" << output << "\n!=\n" << expected);
     REQUIRE(output.equals(expected));
@@ -189,7 +189,7 @@ TEST_CASE("Using Helper Functions", "[scalar]") {
     auto expectedIndex = epoch_frame::factory::index::make_datetime_index(
         {epoch_frame::DateTime{2020y, std::chrono::January, 3d}});
     DataFrame expected = make_dataframe<double>(expectedIndex, {{0.0}},
-                                                {config.GetOutputId()});
+                                                std::vector<std::string>{config.GetOutputId().GetColumnName()});
 
     INFO("Testing zero helper function\n" << output << "\n!=\n" << expected);
     REQUIRE(output.equals(expected));
@@ -201,7 +201,7 @@ TEST_CASE("Using Helper Functions", "[scalar]") {
 
     output = transform->TransformData(input);
     expected = make_dataframe<double>(expectedIndex, {{1.0}},
-                                      {config.GetOutputId()});
+                                      std::vector<std::string>{config.GetOutputId().GetColumnName()});
 
     INFO("Testing one helper function\n" << output << "\n!=\n" << expected);
     REQUIRE(output.equals(expected));

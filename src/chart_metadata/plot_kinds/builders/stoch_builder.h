@@ -17,8 +17,8 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"stoch_k", cfg.GetOutputId("stoch_k")},
-      {"stoch_d", cfg.GetOutputId("stoch_d")}
+      {"stoch_k", cfg.GetOutputId("stoch_k").GetColumnName()},
+      {"stoch_d", cfg.GetOutputId("stoch_d").GetColumnName()}
     };
   }
 

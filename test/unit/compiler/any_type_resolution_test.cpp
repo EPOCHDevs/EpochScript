@@ -99,7 +99,7 @@ TEST_CASE("Real-world scenario: bottom_k_percent with boolean_select_string", "[
         const char* code = R"(
             # This is the exact pattern from the failing test
             fr = financial_ratios(timeframe="1D")
-            value_picks = bottom_k_percent(k=20)(fr.pe)
+            value_picks = bottom_k_percent(k=20)(fr.price_to_earnings)
             value_pick_label = boolean_select_string()(value_picks, "ValuePick", "Other")
 
             # value_pick_label should now be String type

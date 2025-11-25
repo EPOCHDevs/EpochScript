@@ -66,7 +66,7 @@ namespace epoch_script::runtime {
             .first->second;
 
     for (auto const &outputMetadata : ptr->GetOutputs()) {
-      m_configurationsByOutput.emplace(ptr->GetOutputId(outputMetadata.id), ptr);
+      m_configurationsByOutput.emplace(ptr->GetOutputId(outputMetadata.id).GetColumnName(), ptr);
     }
     return ptr;
   }

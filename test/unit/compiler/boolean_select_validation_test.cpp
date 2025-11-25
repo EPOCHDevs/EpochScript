@@ -17,7 +17,7 @@ TEST_CASE("Typed boolean_select compilation", "[compiler][validation][boolean_se
     SECTION("boolean_select_string with string literals compiles successfully") {
         const char* compatible_string_code = R"(
 fr = financial_ratios(timeframe="1D")
-value_picks = bottom_k_percent(k=20)(fr.pe)
+value_picks = bottom_k_percent(k=20)(fr.price_to_earnings)
 value_pick_label = boolean_select_string()(value_picks, "ValuePick", "Other")
 )";
 
@@ -29,7 +29,7 @@ value_pick_label = boolean_select_string()(value_picks, "ValuePick", "Other")
     SECTION("boolean_select_number with numeric literals compiles successfully") {
         const char* compatible_numeric_code = R"(
 fr = financial_ratios(timeframe="1D")
-high_pe = gt()(fr.pe, 20)
+high_pe = gt()(fr.price_to_earnings, 20)
 signal = boolean_select_number()(high_pe, 1, 0)
 )";
 
@@ -41,8 +41,8 @@ signal = boolean_select_number()(high_pe, 1, 0)
     SECTION("boolean_select_boolean with boolean variables compiles successfully") {
         const char* compatible_bool_code = R"(
 fr = financial_ratios(timeframe="1D")
-high_pe = gt()(fr.pe, 20)
-low_roe = lt()(fr.roe, 0.1)
+high_pe = gt()(fr.price_to_earnings, 20)
+low_roe = lt()(fr.return_on_equity, 0.1)
 signal = boolean_select_boolean()(high_pe, low_roe, high_pe)
 )";
 

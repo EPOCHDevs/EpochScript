@@ -39,10 +39,15 @@ namespace epoch_script::chart_metadata {
       auto inputs = cfg.GetInputs();
       for (const auto &[inputKey, connections] : inputs) {
         for (const auto &handle : connections) {
+          // Skip literal values - only process node references
+          if (!handle.IsNodeReference()) {
+            continue;
+          }
+          const std::string& handle_ref = handle.GetNodeReference().GetColumnName();
           // If this input comes from another transform (not a base data source)
-          if (outputHandlesToSeriesId.find(handle) !=
+          if (outputHandlesToSeriesId.find(handle_ref) !=
               outputHandlesToSeriesId.end()) {
-            descriptiveName += "_CHAINED_" + handle;
+            descriptiveName += "_CHAINED_" + handle_ref;
             break; // Only need to mark as chained once
               }
         }
@@ -71,7 +76,12 @@ namespace epoch_script::chart_metadata {
     auto inputs = cfg.GetInputs();
     for (const auto &connections : inputs | std::views::values) {
       for (const auto &handle : connections) {
-        auto it = outputHandlesToSeriesId.find(handle);
+        // Skip literal values - only process node references
+        if (!handle.IsNodeReference()) {
+          continue;
+        }
+        const std::string& handle_ref = handle.GetNodeReference().GetColumnName();
+        auto it = outputHandlesToSeriesId.find(handle_ref);
         if (it != outputHandlesToSeriesId.end() &&
             static_cast<size_t>(it->second) < m_seriesOrder[timeframe].size()) {
           const auto &seriesRef = m_seriesOrder[timeframe][it->second];
@@ -200,7 +210,12 @@ namespace epoch_script::chart_metadata {
       const std::unordered_set<std::string> &priceInputs) {
     const auto &inputs = cfg.GetInputs() | std::views::values;
     return std::ranges::any_of(inputs, [&](const auto &inputList) {
-      return std::ranges::any_of(inputList, [&](auto input) {
+      return std::ranges::any_of(inputList, [&](const auto& input_value) {
+        // Skip literals - only check node references
+        if (!input_value.IsNodeReference()) {
+          return false;
+        }
+        std::string input = input_value.GetNodeReference().GetColumnName();
         auto sepPosition = input.find("#");
         input =
             (sepPosition == std::string::npos ? input
@@ -214,11 +229,12 @@ namespace epoch_script::chart_metadata {
                                    const std::string &volumeInput) {
     const auto &inputs = cfg.GetInputs() | std::views::values;
     return std::ranges::any_of(inputs, [&](const auto &inputList) {
-      auto view = inputList | std::views::transform([](auto const &input) {
-                    auto sepPosition = input.find("#");
-                    return sepPosition == std::string::npos
-                               ? input
-                               : input.substr(sepPosition + 1);
+      auto view = inputList | std::views::filter([](const auto& input_value) {
+                    // Only include node references
+                    return input_value.IsNodeReference();
+                  })
+                  | std::views::transform([](const auto& input_value) {
+                    return input_value.GetNodeReference().GetHandle();
                   });
       return std::ranges::find(view, volumeInput) != view.end();
       ;

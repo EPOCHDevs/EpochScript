@@ -8,6 +8,7 @@
 #include <epoch_script/strategy/metadata.h>
 #include <epoch_script/transforms/core/metadata.h>
 #include <epoch_script/transforms/core/registry.h>
+#include <epoch_script/transforms/core/constant_value.h>
 #include <yaml-cpp/yaml.h>
 
 namespace epoch_script {
@@ -18,7 +19,7 @@ struct TransformDefinitionData {
   std::string id{};
   epoch_script::MetaDataArgDefinitionMapping options{};
   std::optional<epoch_script::TimeFrame> timeframe;
-  InputMapping inputs{};
+  InputMapping inputs{};  // Unified: contains InputValue variants (node references OR literals)
   epoch_script::transforms::TransformsMetaData metaData{};
   std::optional<epoch_frame::SessionRange> sessionRange{};
 };
@@ -98,13 +99,13 @@ public:
 
   std::string GetId() const { return m_data.id; }
 
-  InputMapping GetInputs() const { return m_data.inputs; }
+  const InputMapping& GetInputs() const { return m_data.inputs; }
 
-  epoch_script::MetaDataArgDefinitionMapping GetOptions() const {
+  const epoch_script::MetaDataArgDefinitionMapping& GetOptions() const {
     return m_data.options;
   }
 
-  epoch_script::transforms::TransformsMetaData GetMetadata() const {
+  const epoch_script::transforms::TransformsMetaData& GetMetadata() const {
     return m_data.metaData;
   }
 

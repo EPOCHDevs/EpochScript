@@ -17,8 +17,8 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"plus_indicator", cfg.GetOutputId("plus_indicator")},
-      {"minus_indicator", cfg.GetOutputId("minus_indicator")}
+      {"plus_indicator", cfg.GetOutputId("plus_indicator").GetColumnName()},
+      {"minus_indicator", cfg.GetOutputId("minus_indicator").GetColumnName()}
     };
   }
 

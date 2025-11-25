@@ -91,7 +91,14 @@ namespace epoch_script
         std::vector<std::string> inputIds;
         for (const auto &[key, values] : node.inputs)
         {
-            inputIds.insert(inputIds.end(), values.begin(), values.end());
+            for (const auto& input_value : values)
+            {
+                // Only process node references, skip literals
+                if (input_value.IsNodeReference())
+                {
+                    inputIds.push_back(input_value.GetNodeReference().GetRef());
+                }
+            }
         }
 
         // If node has inputs, resolve timeframe from them
@@ -137,11 +144,15 @@ namespace epoch_script
             {
                 for (const auto &ref : inputRefs)
                 {
-                    // Extract node ID from "node_id#handle"
-                    auto hashPos = ref.find('#');
-                    std::string inputNodeId = (hashPos != std::string::npos)
-                        ? ref.substr(0, hashPos)
-                        : ref;
+                    // Skip literal values - only process node references
+                    if (!ref.IsNodeReference())
+                    {
+                        continue;
+                    }
+
+                    // Extract node ID from NodeReference
+                    const auto& node_ref = ref.GetNodeReference();
+                    std::string inputNodeId = node_ref.GetNodeId();
 
                     if (inputNodeId == nodeId)
                     {

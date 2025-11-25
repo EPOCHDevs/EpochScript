@@ -17,12 +17,12 @@ public:
     // After validation, we know exactly which output exists
     std::string valueCol;
     if (cfg.ContainsOutputId("result")) {
-      valueCol = cfg.GetOutputId("result");
+      valueCol = cfg.GetOutputId("result").GetColumnName();
     } else if (cfg.ContainsOutputId("value")) {
-      valueCol = cfg.GetOutputId("value");
+      valueCol = cfg.GetOutputId("value").GetColumnName();
     } else {
       // Validation ensures at least one output exists
-      valueCol = cfg.GetOutputId(cfg.GetOutputs()[0].id);
+      valueCol = cfg.GetOutputId(cfg.GetOutputs()[0].id).GetColumnName();
     }
 
     return {

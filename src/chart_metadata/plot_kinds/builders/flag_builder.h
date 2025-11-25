@@ -21,10 +21,22 @@ public:
       {"index", INDEX_COLUMN}
     };
 
-    // Add ALL output columns for template substitution (e.g., {column_name})
-    for (const auto &output : cfg.GetOutputs()) {
-      dataMapping[output.id] = cfg.GetOutputId(output.id);
+    // Get flagSchema to determine valueKey
+    const auto &metadata = cfg.GetTransformDefinition().GetMetadata();
+    if (!metadata.flagSchema.has_value()) {
+      throw std::runtime_error(
+        "Flag transform '" + cfg.GetId() + "' missing required flagSchema"
+      );
     }
+    const auto& schema = metadata.flagSchema.value();
+
+    // Add "value" mapping for flag positioning (required by UI)
+    if (!schema.valueKey.empty()) {
+      dataMapping["value"] = cfg.GetOutputId(schema.valueKey).GetColumnName();
+    }
+
+    // Note: Template substitution data (e.g., {column_name}) should be handled
+    // in a separate field, NOT in dataMapping
 
     return dataMapping;
   }
@@ -37,6 +49,24 @@ public:
     // Flag transforms must have at least one output for template substitution
     if (outputs.empty()) {
       throw std::runtime_error("Flag transform has no outputs");
+    }
+
+    // Flag PlotKind MUST have flagSchema defined
+    const auto &metadata = cfg.GetTransformDefinition().GetMetadata();
+    if (!metadata.flagSchema.has_value()) {
+      throw std::runtime_error(
+        "Flag transform '" + cfg.GetId() + "' missing required flagSchema"
+      );
+    }
+
+    const auto& schema = metadata.flagSchema.value();
+
+    // If valueKey is specified, it must reference a valid output
+    if (!schema.valueKey.empty() && !cfg.ContainsOutputId(schema.valueKey)) {
+      throw std::runtime_error(
+        "Flag transform '" + cfg.GetId() + "' flagSchema.valueKey '" +
+        schema.valueKey + "' does not match any output"
+      );
     }
 
     // All outputs must be accessible (validation confirms structure)

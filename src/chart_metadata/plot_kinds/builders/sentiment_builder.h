@@ -23,8 +23,8 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"sentiment", cfg.GetOutputId("sentiment")},
-      {"score", cfg.GetOutputId("score")}
+      {"sentiment", cfg.GetOutputId("sentiment").GetColumnName()},
+      {"score", cfg.GetOutputId("score").GetColumnName()}
     };
   }
 

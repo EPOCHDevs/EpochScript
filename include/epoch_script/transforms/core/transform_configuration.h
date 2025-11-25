@@ -17,7 +17,7 @@ public:
       : m_transformDefinition(std::move(def)) {
     for (auto const &output : m_transformDefinition.GetMetadata().outputs) {
       m_globalOutputMapping[output.id] =
-          std::format("{}#{}", GetId(), output.id);
+          strategy::NodeReference{GetId(), output.id};
     }
   }
 
@@ -35,27 +35,27 @@ public:
     return m_transformDefinition.GetMetadata().outputs;
   }
 
-  InputMapping GetInputs() const { return m_transformDefinition.GetInputs(); }
+  const InputMapping& GetInputs() const { return m_transformDefinition.GetInputs(); }
 
-  std::string GetInput() const {
+  epoch_script::strategy::InputValue GetInput() const {
     AssertFromStream(m_transformDefinition.GetInputs().size() == 1,
                      "Expected only one input\n"
                          << ToString());
-    AssertFromStream(m_transformDefinition.GetInputs().begin()->second.size() ==
-                         1,
+    const auto& input_values = m_transformDefinition.GetInputs().begin()->second;
+    AssertFromStream(input_values.size() == 1,
                      "Expected only one input\n"
                          << ToString());
-    return m_transformDefinition.GetInputs().begin()->second.front();
+    return input_values.front();
   }
 
-  std::string GetInput(std::string const &parameter) const {
+  epoch_script::strategy::InputValue GetInput(std::string const &parameter) const {
     auto inputs = epoch_core::lookup(GetInputs(), parameter);
     AssertFromStream(inputs.size() == 1, "Expected only one input\n"
                                              << ToString());
     return inputs.front();
   }
 
-  std::vector<std::string> GetInputs(std::string const &parameter) const {
+  std::vector<epoch_script::strategy::InputValue> GetInputs(std::string const &parameter) const {
     auto inputs = GetInputs();
     if (auto iter = inputs.find(parameter); iter != inputs.end()) {
       return iter->second;
@@ -76,7 +76,7 @@ public:
         epoch_core::lookupDefault(GetOptions(), key, defaultValue)};
   }
 
-  epoch_script::MetaDataArgDefinitionMapping GetOptions() const {
+  const epoch_script::MetaDataArgDefinitionMapping& GetOptions() const {
     return m_transformDefinition.GetOptions();
   }
 
@@ -84,7 +84,7 @@ public:
     return m_transformDefinition.GetMetadata().isCrossSectional;
   }
 
-  std::string GetOutputId() const {
+  strategy::NodeReference GetOutputId() const {
     AssertFromStream(m_globalOutputMapping.size() == 1,
                      "Expected exactly 1 output, but transform has "
                          << m_globalOutputMapping.size() << " outputs\n"
@@ -92,7 +92,7 @@ public:
     return m_globalOutputMapping.cbegin()->second;
   }
 
-  std::string GetOutputId(std::string const &transformOutputId) const {
+  strategy::NodeReference GetOutputId(std::string const &transformOutputId) const {
     return epoch_core::lookup(m_globalOutputMapping, transformOutputId);
   }
 
@@ -104,7 +104,7 @@ public:
     return m_globalOutputMapping | std::views::values;
   }
 
-  TransformDefinition GetTransformDefinition() const {
+  const TransformDefinition& GetTransformDefinition() const {
     return m_transformDefinition;
   }
 
@@ -121,7 +121,7 @@ public:
 
 private:
   TransformDefinition m_transformDefinition;
-  std::unordered_map<std::string, std::string> m_globalOutputMapping;
+  std::unordered_map<std::string, strategy::NodeReference> m_globalOutputMapping;
 };
 
 using TransformConfigurationPtrList =

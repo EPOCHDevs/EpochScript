@@ -13,7 +13,7 @@ public:
   explicit DataSourceTransform(const TransformConfiguration &config)
       : ITransform(config) {
     for (auto const &outputMetaData : config.GetOutputs()) {
-      m_replacements[outputMetaData.id] = config.GetOutputId(outputMetaData.id);
+      m_replacements[outputMetaData.id] = config.GetOutputId(outputMetaData.id).GetColumnName();
     }
   }
 

@@ -12,7 +12,7 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   SECTION("Resolves standard single-output indicators") {
-    auto sma = transform::ma("sma", 1, "c", 10, tf);
+    auto sma = transform::ma("sma", "1", strategy::InputValue(strategy::NodeReference("", "c")), 10, tf);
     auto columns = DataColumnResolver::ResolveColumns(sma);
 
     REQUIRE(columns.size() == 2);
@@ -21,7 +21,7 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves Bollinger Bands with special handling") {
-    auto bbands = transform::bbands("1", 10, 2, "c", tf);
+    auto bbands = transform::bbands("1", 10, 2, strategy::InputValue(strategy::NodeReference("", "c")), tf);
     auto columns = DataColumnResolver::ResolveColumns(bbands);
 
     REQUIRE(columns.size() == 4);
@@ -32,14 +32,12 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves MACD with multiple outputs") {
-    YAML::Node inputs;
-    inputs[epoch_script::ARG] = "c";
-    YAML::Node options;
-    options["short_period"] = 12;
-    options["long_period"] = 26;
-    options["signal_period"] = 9;
-
-    auto macd = transform::run_op("macd", "1", inputs, options, tf);
+    auto macd = transform::run_op("macd", "1",
+        {{epoch_script::ARG, {transform::input_ref("c")}}},
+        {{"short_period", MetaDataOptionDefinition{12.0}},
+         {"long_period", MetaDataOptionDefinition{26.0}},
+         {"signal_period", MetaDataOptionDefinition{9.0}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(macd);
 
     REQUIRE(columns.size() == 4);
@@ -50,14 +48,12 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves Stochastic oscillator") {
-    YAML::Node inputs;
-    inputs[epoch_script::ARG] = "c";
-    YAML::Node options;
-    options["k_period"] = 14;
-    options["k_slowing_period"] = 3;
-    options["d_period"] = 3;
-
-    auto stoch = transform::run_op("stoch", "1", inputs, options, tf);
+    auto stoch = transform::run_op("stoch", "1",
+        {},
+        {{"k_period", MetaDataOptionDefinition{14.0}},
+         {"k_slowing_period", MetaDataOptionDefinition{3.0}},
+         {"d_period", MetaDataOptionDefinition{3.0}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(stoch);
 
     REQUIRE(columns.size() == 3);
@@ -67,12 +63,10 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves Aroon indicator") {
-    YAML::Node inputs;
-    inputs[epoch_script::ARG] = "c";
-    YAML::Node options;
-    options["period"] = 14;
-
-    auto aroon = transform::run_op("aroon", "1", inputs, options, tf);
+    auto aroon = transform::run_op("aroon", "1",
+        {},
+        {{"period", MetaDataOptionDefinition{14.0}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(aroon);
 
     REQUIRE(columns.size() == 3);
@@ -82,12 +76,10 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves Fisher Transform") {
-    YAML::Node inputs;
-    inputs[epoch_script::ARG] = "c";
-    YAML::Node options;
-    options["period"] = 10;
-
-    auto fisher = transform::run_op("fisher", "1", inputs, options, tf);
+    auto fisher = transform::run_op("fisher", "1",
+        {},
+        {{"period", MetaDataOptionDefinition{10.0}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(fisher);
 
     REQUIRE(columns.size() == 3);
@@ -97,14 +89,12 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves QQE indicator") {
-    YAML::Node inputs;
-    inputs[epoch_script::ARG] = "c";
-    YAML::Node options;
-    options["avg_period"] = 14;
-    options["smooth_period"] = 5;
-    options["width_factor"] = 4.236;
-
-    auto qqe = transform::run_op("qqe", "1", inputs, options, tf);
+    auto qqe = transform::run_op("qqe", "1",
+        {{epoch_script::ARG, {transform::input_ref("c")}}},
+        {{"avg_period", MetaDataOptionDefinition{14.0}},
+         {"smooth_period", MetaDataOptionDefinition{5.0}},
+         {"width_factor", MetaDataOptionDefinition{4.236}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(qqe);
 
     REQUIRE(columns.size() == 5);
@@ -116,13 +106,10 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves SMC indicators - Order Blocks") {
-    YAML::Node inputs;
-    inputs["high_low"] = "1#high_low";
-    YAML::Node options;
-    options["close_mitigation"] = false;
-
-    auto order_blocks =
-        transform::run_op("order_blocks", "2", inputs, options, tf);
+    auto order_blocks = transform::run_op("order_blocks", "2",
+        {{"high_low", {transform::input_ref("1", "high_low")}}},
+        {{"close_mitigation", MetaDataOptionDefinition{false}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(order_blocks);
 
     REQUIRE(columns.size() == 7);
@@ -136,10 +123,10 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves Fair Value Gap") {
-    YAML::Node inputs;
-    YAML::Node options;
-    options["join_consecutive"] = true;
-    auto fvg = transform::run_op("fair_value_gap", "1", inputs, options, tf);
+    auto fvg = transform::run_op("fair_value_gap", "1",
+        {},
+        {{"join_consecutive", MetaDataOptionDefinition{true}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(fvg);
 
     REQUIRE(columns.size() == 5); // index + 4 outputs
@@ -151,13 +138,11 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves Liquidity indicator") {
-    YAML::Node inputs;
-    inputs["high_low"] = "1#high_low";
-    inputs["level"] = "1#level";
-    YAML::Node options;
-    options["range_percent"] = 0.001;
-
-    auto liquidity = transform::run_op("liquidity", "2", inputs, options, tf);
+    auto liquidity = transform::run_op("liquidity", "2",
+        {{"high_low", {transform::input_ref("1", "high_low")}},
+         {"level", {transform::input_ref("1", "level")}}},
+        {{"range_percent", MetaDataOptionDefinition{0.001}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(liquidity);
 
     REQUIRE(columns.size() == 5);
@@ -169,11 +154,10 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves Sessions indicator") {
-    YAML::Node inputs;
-    YAML::Node options;
-    options["session_type"] = "London";
-
-    auto sessions = transform::run_op("sessions", "1", inputs, options, tf);
+    auto sessions = transform::run_op("sessions", "1",
+        {},
+        {{"session_type", MetaDataOptionDefinition{std::string{"London"}}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(sessions);
 
     REQUIRE(columns.size() == 6);
@@ -186,13 +170,11 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves Previous High Low") {
-    YAML::Node inputs;
-    YAML::Node options;
-    options["interval"] = 1;
-    options["type"] = "day";
-
-    auto prev_hl =
-        transform::run_op("previous_high_low", "1", inputs, options, tf);
+    auto prev_hl = transform::run_op("previous_high_low", "1",
+        {},
+        {{"interval", MetaDataOptionDefinition{1.0}},
+         {"type", MetaDataOptionDefinition{std::string{"day"}}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(prev_hl);
 
     REQUIRE(columns.size() == 5);
@@ -204,12 +186,10 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves Swing Highs and Lows") {
-    YAML::Node inputs;
-    YAML::Node options;
-    options["swing_length"] = 5;
-
-    auto swing_hl =
-        transform::run_op("swing_highs_lows", "1", inputs, options, tf);
+    auto swing_hl = transform::run_op("swing_highs_lows", "1",
+        {},
+        {{"swing_length", MetaDataOptionDefinition{5.0}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(swing_hl);
 
     REQUIRE(columns.size() == 3);
@@ -219,13 +199,11 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves BOS/CHOCH") {
-    YAML::Node inputs;
-    inputs["high_low"] = "1#high_low";
-    inputs["level"] = "1#level";
-    YAML::Node options;
-    options["close_break"] = false;
-
-    auto bos_choch = transform::run_op("bos_choch", "2", inputs, options, tf);
+    auto bos_choch = transform::run_op("bos_choch", "2",
+        {{"high_low", {transform::input_ref("1", "high_low")}},
+         {"level", {transform::input_ref("1", "level")}}},
+        {{"close_break", MetaDataOptionDefinition{false}}},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(bos_choch);
 
     REQUIRE(columns.size() == 5);
@@ -238,13 +216,11 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
   }
 
   SECTION("Resolves Retracements") {
-    YAML::Node inputs;
-    inputs["high_low"] = "1#high_low";
-    inputs["level"] = "1#level";
-    YAML::Node options;
-
-    auto retracements =
-        transform::run_op("retracements", "2", inputs, options, tf);
+    auto retracements = transform::run_op("retracements", "2",
+        {{"high_low", {transform::input_ref("1", "high_low")}},
+         {"level", {transform::input_ref("1", "level")}}},
+        {},
+        tf);
     auto columns = DataColumnResolver::ResolveColumns(retracements);
 
     REQUIRE(columns.size() == 4);
@@ -256,7 +232,7 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
 
   SECTION("Falls back to default for unknown indicators") {
     // Create a custom transform that's not in the special handling list
-    auto rsi = transform::single_operand_period_op("rsi", 1, 14, "c", tf);
+    auto rsi = transform::single_operand_period_op("rsi", "1", 14, strategy::InputValue(strategy::NodeReference("", "c")), tf);
     auto columns = DataColumnResolver::ResolveColumns(rsi);
 
     REQUIRE(columns.size() == 2);
@@ -272,14 +248,12 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
 
   SECTION("Verifies actual output IDs match static mappings") {
     SECTION("MACD outputs") {
-      YAML::Node inputs;
-      inputs[epoch_script::ARG] = "c";
-      YAML::Node options;
-      options["short_period"] = 12;
-      options["long_period"] = 26;
-      options["signal_period"] = 9;
-
-      auto macd = transform::run_op("macd", "1", inputs, options, tf);
+      auto macd = transform::run_op("macd", "1",
+          {{epoch_script::ARG, {transform::input_ref("c")}}},
+          {{"short_period", MetaDataOptionDefinition{12.0}},
+           {"long_period", MetaDataOptionDefinition{26.0}},
+           {"signal_period", MetaDataOptionDefinition{9.0}}},
+          tf);
       auto outputs = macd.GetOutputs();
 
       REQUIRE(outputs.size() == 3);
@@ -301,14 +275,12 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
     }
 
     SECTION("Stochastic outputs") {
-      YAML::Node inputs;
-      inputs[epoch_script::ARG] = "c";
-      YAML::Node options;
-      options["k_period"] = 14;
-      options["k_slowing_period"] = 3;
-      options["d_period"] = 3;
-
-      auto stoch = transform::run_op("stoch", "1", inputs, options, tf);
+      auto stoch = transform::run_op("stoch", "1",
+          {},
+          {{"k_period", MetaDataOptionDefinition{14.0}},
+           {"k_slowing_period", MetaDataOptionDefinition{3.0}},
+           {"d_period", MetaDataOptionDefinition{3.0}}},
+          tf);
       auto outputs = stoch.GetOutputs();
 
       REQUIRE(outputs.size() == 2);
@@ -322,12 +294,10 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
     }
 
     SECTION("Aroon outputs") {
-      YAML::Node inputs;
-      inputs[epoch_script::ARG] = "c";
-      YAML::Node options;
-      options["period"] = 14;
-
-      auto aroon = transform::run_op("aroon", "1", inputs, options, tf);
+      auto aroon = transform::run_op("aroon", "1",
+          {},
+          {{"period", MetaDataOptionDefinition{14.0}}},
+          tf);
       auto outputs = aroon.GetOutputs();
 
       REQUIRE(outputs.size() == 2);
@@ -341,12 +311,10 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
     }
 
     SECTION("Fisher Transform outputs") {
-      YAML::Node inputs;
-      inputs[epoch_script::ARG] = "c";
-      YAML::Node options;
-      options["period"] = 10;
-
-      auto fisher = transform::run_op("fisher", "1", inputs, options, tf);
+      auto fisher = transform::run_op("fisher", "1",
+          {},
+          {{"period", MetaDataOptionDefinition{10.0}}},
+          tf);
       auto outputs = fisher.GetOutputs();
 
       REQUIRE(outputs.size() == 2);
@@ -360,14 +328,12 @@ TEST_CASE("DataColumnResolver", "[chart_metadata][data_column_resolver][!mayfail
     }
 
     SECTION("QQE outputs") {
-      YAML::Node inputs;
-      inputs[epoch_script::ARG] = "c";
-      YAML::Node options;
-      options["avg_period"] = 14;
-      options["smooth_period"] = 5;
-      options["width_factor"] = 4.236;
-
-      auto qqe = transform::run_op("qqe", "1", inputs, options, tf);
+      auto qqe = transform::run_op("qqe", "1",
+          {{epoch_script::ARG, {transform::input_ref("c")}}},
+          {{"avg_period", MetaDataOptionDefinition{14.0}},
+           {"smooth_period", MetaDataOptionDefinition{5.0}},
+           {"width_factor", MetaDataOptionDefinition{4.236}}},
+          tf);
       auto outputs = qqe.GetOutputs();
 
       REQUIRE(outputs.size() == 4);

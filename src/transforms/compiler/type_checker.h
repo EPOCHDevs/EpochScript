@@ -24,6 +24,9 @@ namespace epoch_script
         // Get the output type of a node's handle
         DataType GetNodeOutputType(const std::string& node_id, const std::string& handle);
 
+        // Get the type of an InputValue (handles both NodeReference and Constants)
+        DataType GetNodeOutputType(const strategy::InputValue& input);
+
         // Check if source type is compatible with target type
         bool IsTypeCompatible(DataType source, DataType target);
 
@@ -32,7 +35,7 @@ namespace epoch_script
         std::optional<std::string> NeedsTypeCast(DataType source, DataType target);
 
         // Insert a type cast node and return the casted value handle
-        ValueHandle InsertTypeCast(const ValueHandle& source, DataType source_type, DataType target_type);
+        strategy::InputValue InsertTypeCast(const strategy::InputValue& source, DataType source_type, DataType target_type);
 
         // Convert DataType enum to human-readable string
         static std::string DataTypeToString(DataType type);
@@ -53,10 +56,10 @@ namespace epoch_script
         CompilationContext& context_;
 
         // Helper to create number literal nodes for casting
-        ValueHandle MaterializeNumber(double value);
+        strategy::InputValue MaterializeNumber(double value);
 
         // Helper to create string literal nodes for casting
-        ValueHandle MaterializeString(const std::string& value);
+        strategy::InputValue MaterializeString(const std::string& value);
 
         // Helper to generate unique node ID
         std::string UniqueNodeId(const std::string& base);

@@ -39,25 +39,25 @@ namespace epoch_script
         void SetConstructorParser(ConstructorParser* parser) { constructor_parser_ = parser; }
 
         // Visit expression and return value handle
-        ValueHandle VisitExpr(const Expr& expr);
+        strategy::InputValue VisitExpr(const Expr& expr);
 
         // Visit specific expression types
-        ValueHandle VisitCall(const Call& call);
-        ValueHandle VisitAttribute(const Attribute& attr);
-        ValueHandle VisitName(const Name& name);
-        ValueHandle VisitConstant(const Constant& constant);
-        ValueHandle VisitBinOp(const BinOp& binOp);
-        ValueHandle VisitUnaryOp(const UnaryOp& unaryOp);
-        ValueHandle VisitCompare(const Compare& compare);
-        ValueHandle VisitBoolOp(const BoolOp& boolOp);
-        ValueHandle VisitIfExp(const IfExp& ifExp);
-        ValueHandle VisitSubscript(const Subscript& subscript);
+        strategy::InputValue VisitCall(const Call& call);
+        strategy::InputValue VisitAttribute(const Attribute& attr);
+        strategy::InputValue VisitName(const Name& name);
+        strategy::InputValue VisitConstant(const Constant& constant);
+        strategy::InputValue VisitBinOp(const BinOp& binOp);
+        strategy::InputValue VisitUnaryOp(const UnaryOp& unaryOp);
+        strategy::InputValue VisitCompare(const Compare& compare);
+        strategy::InputValue VisitBoolOp(const BoolOp& boolOp);
+        strategy::InputValue VisitIfExp(const IfExp& ifExp);
+        strategy::InputValue VisitSubscript(const Subscript& subscript);
 
         // Materialize literal nodes
-        ValueHandle MaterializeNumber(double value);
-        ValueHandle MaterializeBoolean(bool value);
-        ValueHandle MaterializeText(const std::string& value);
-        ValueHandle MaterializeNull();
+        strategy::InputValue MaterializeNumber(double value);
+        strategy::InputValue MaterializeBoolean(bool value);
+        strategy::InputValue MaterializeText(const std::string& value);
+        strategy::InputValue MaterializeNull();
 
     private:
         CompilationContext& context_;
@@ -68,7 +68,7 @@ namespace epoch_script
 
         // Attribute resolution helpers
         std::pair<std::string, std::string> AttributeToTuple(const Attribute& attr);
-        ValueHandle ResolveHandle(const std::string& var, const std::string& handle);
+        strategy::InputValue ResolveHandle(const std::string& var, const std::string& handle);
 
         // Helper utilities
         std::string UniqueNodeId(const std::string& base);
@@ -76,8 +76,8 @@ namespace epoch_script
         void WireInputs(
             const std::string& target_node_id,
             const std::string& component_name,
-            const std::vector<ValueHandle>& args,
-            const std::unordered_map<std::string, ValueHandle>& kwargs);
+            const std::vector<strategy::InputValue>& args,
+            const std::unordered_map<std::string, strategy::InputValue>& kwargs);
 
         // Type specialization helpers
         std::string DetermineBooleanSelectVariant(DataType true_type, DataType false_type);

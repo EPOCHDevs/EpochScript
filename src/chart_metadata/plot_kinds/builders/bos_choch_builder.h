@@ -17,10 +17,10 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"bos", cfg.GetOutputId("bos")},
-      {"choch", cfg.GetOutputId("choch")},
-      {"level", cfg.GetOutputId("level")},
-      {"broken_index", cfg.GetOutputId("broken_index")}
+      {"bos", cfg.GetOutputId("bos").GetColumnName()},
+      {"choch", cfg.GetOutputId("choch").GetColumnName()},
+      {"level", cfg.GetOutputId("level").GetColumnName()},
+      {"broken_index", cfg.GetOutputId("broken_index").GetColumnName()}
     };
   }
 

@@ -16,13 +16,21 @@ using namespace epoch_script;
 using namespace epoch_script::transform;
 using namespace epoch_frame;
 
+using InputVal = strategy::InputValue;
+
+// Helper to create NodeReference InputVal from column name (using src as node_id)
+inline InputVal src_ref(const std::string& col) {
+  return InputVal(strategy::NodeReference("src", col));
+}
+
 namespace {
 // Helper function to create test dataframes with double values
+// Column name must match the NodeReference format: "#signal" for NodeReference("", "signal")
 epoch_frame::DataFrame createTestDataFrame(const std::vector<double> &values) {
   auto index = epoch_frame::factory::index::make_datetime_index(
       std::vector<epoch_frame::DateTime>(
           values.size(), epoch_frame::DateTime{2020y, January, 18d}));
-  return epoch_frame::make_dataframe<double>(index, {values}, {"signal"});
+  return epoch_frame::make_dataframe<double>(index, {values}, {"#signal"});
 }
 
 // Helper function to create standard 3-row index
@@ -37,18 +45,18 @@ epoch_frame::IndexPtr createStandardIndex() {
 TEST_CASE("TradeExecutorAdapter") {
   SECTION("Constructor initializes correctly") {
     auto config = trade_executor_adapter_cfg(
-        "test_adapter", "test_input",
+        "test_adapter", input_ref("", "test_input"),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     TradeExecutorAdapter adapter(config);
 
-    REQUIRE(adapter.GetInputId() == "test_input");
+    REQUIRE(adapter.GetInputId() == "#test_input");
     REQUIRE(adapter.GetOutputId("long") == "test_adapter#long");
     REQUIRE(adapter.GetOutputId("short") == "test_adapter#short");
   }
 
   SECTION("TransformData with positive values") {
     auto config = trade_executor_adapter_cfg(
-        "test_adapter", "signal",
+        "test_adapter", input_ref("", "signal"),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     TradeExecutorAdapter adapter(config);
 
@@ -83,7 +91,7 @@ TEST_CASE("TradeExecutorAdapter") {
 
   SECTION("TransformData with all zero values") {
     auto config = trade_executor_adapter_cfg(
-        "test_adapter", "signal",
+        "test_adapter", input_ref("", "signal"),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     TradeExecutorAdapter adapter(config);
 
@@ -102,8 +110,8 @@ TEST_CASE("TradeExecutorAdapter") {
 
 TEST_CASE("TradeExecutorTransform - SingleExecutor") {
   SECTION("Constructor with only long input") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {TE_ENTER_LONG_KEY, "long_signal"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {TE_ENTER_LONG_KEY, src_ref("long_signal")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -112,7 +120,7 @@ TEST_CASE("TradeExecutorTransform - SingleExecutor") {
 
     auto index = createStandardIndex();
     auto testDataWithCorrectColumns = epoch_frame::make_dataframe<bool>(
-        index, {{true, false, true}}, {"long_signal"});
+        index, {{true, false, true}}, {"src#long_signal"});
 
     auto result = transform.TransformData(testDataWithCorrectColumns);
     REQUIRE(result.contains(TE_ENTER_LONG_KEY));
@@ -124,8 +132,8 @@ TEST_CASE("TradeExecutorTransform - SingleExecutor") {
   }
 
   SECTION("Constructor with only short input") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {TE_ENTER_SHORT_KEY, "short_signal"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {TE_ENTER_SHORT_KEY, src_ref("short_signal")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -134,7 +142,7 @@ TEST_CASE("TradeExecutorTransform - SingleExecutor") {
 
     auto index = createStandardIndex();
     auto testDataWithCorrectColumns = epoch_frame::make_dataframe<bool>(
-        index, {{true, false, true}}, {"short_signal"});
+        index, {{true, false, true}}, {"src#short_signal"});
 
     auto result = transform.TransformData(testDataWithCorrectColumns);
     REQUIRE(result.contains(TE_ENTER_SHORT_KEY));
@@ -148,9 +156,9 @@ TEST_CASE("TradeExecutorTransform - SingleExecutor") {
 
 TEST_CASE("TradeExecutorTransform - SingleExecutorWithExit") {
   SECTION("Constructor with long and close inputs") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {TE_ENTER_LONG_KEY, "long_signal"},
-        {TE_EXIT_LONG_KEY, "exit_long_signal"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {TE_ENTER_LONG_KEY, src_ref("long_signal")},
+        {TE_EXIT_LONG_KEY, src_ref("exit_long_signal")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -160,7 +168,7 @@ TEST_CASE("TradeExecutorTransform - SingleExecutorWithExit") {
     auto index = createStandardIndex();
     auto testDataWithCorrectColumns = epoch_frame::make_dataframe<bool>(
         index, {{true, false, true}, {false, true, false}},
-        {"long_signal", "exit_long_signal"});
+        {"src#long_signal", "src#exit_long_signal"});
 
     auto result = transform.TransformData(testDataWithCorrectColumns);
     REQUIRE(result.contains(TE_ENTER_LONG_KEY));
@@ -173,9 +181,9 @@ TEST_CASE("TradeExecutorTransform - SingleExecutorWithExit") {
   }
 
   SECTION("Constructor with short and close inputs") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {TE_ENTER_SHORT_KEY, "short_signal"},
-        {TE_EXIT_SHORT_KEY, "exit_short_signal"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {TE_ENTER_SHORT_KEY, src_ref("short_signal")},
+        {TE_EXIT_SHORT_KEY, src_ref("exit_short_signal")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -185,7 +193,7 @@ TEST_CASE("TradeExecutorTransform - SingleExecutorWithExit") {
     auto index = createStandardIndex();
     auto testDataWithCorrectColumns = epoch_frame::make_dataframe<bool>(
         index, {{true, false, true}, {false, true, false}},
-        {"short_signal", "exit_short_signal"});
+        {"src#short_signal", "src#exit_short_signal"});
 
     auto result = transform.TransformData(testDataWithCorrectColumns);
     REQUIRE(result.contains(TE_ENTER_SHORT_KEY));
@@ -200,9 +208,9 @@ TEST_CASE("TradeExecutorTransform - SingleExecutorWithExit") {
 
 TEST_CASE("TradeExecutorTransform - MultipleExecutor") {
   SECTION("Constructor with long and short inputs") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {TE_ENTER_LONG_KEY, "long_signal"},
-        {TE_ENTER_SHORT_KEY, "short_signal"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {TE_ENTER_LONG_KEY, src_ref("long_signal")},
+        {TE_ENTER_SHORT_KEY, src_ref("short_signal")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -212,7 +220,7 @@ TEST_CASE("TradeExecutorTransform - MultipleExecutor") {
     auto index = createStandardIndex();
     auto testDataWithCorrectColumns = epoch_frame::make_dataframe<bool>(
         index, {{true, false, true}, {false, true, false}},
-        {"long_signal", "short_signal"});
+        {"src#long_signal", "src#short_signal"});
 
     auto result = transform.TransformData(testDataWithCorrectColumns);
     REQUIRE(result.contains(TE_ENTER_LONG_KEY));
@@ -227,10 +235,10 @@ TEST_CASE("TradeExecutorTransform - MultipleExecutor") {
 
 TEST_CASE("TradeExecutorTransform - MultipleExecutorWithExit") {
   SECTION("Constructor with long, short and close inputs") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {TE_ENTER_LONG_KEY, "long_signal"},
-        {TE_ENTER_SHORT_KEY, "short_signal"},
-        {TE_EXIT_LONG_KEY, "exit_long_signal"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {TE_ENTER_LONG_KEY, src_ref("long_signal")},
+        {TE_ENTER_SHORT_KEY, src_ref("short_signal")},
+        {TE_EXIT_LONG_KEY, src_ref("exit_long_signal")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -240,7 +248,7 @@ TEST_CASE("TradeExecutorTransform - MultipleExecutorWithExit") {
     auto index = createStandardIndex();
     auto testDataWithCorrectColumns = epoch_frame::make_dataframe<bool>(
         index, {{true, false, true}, {false, true, false}, {true, false, true}},
-        {"long_signal", "short_signal", "exit_long_signal"});
+        {"src#long_signal", "src#short_signal", "src#exit_long_signal"});
 
     auto result = transform.TransformData(testDataWithCorrectColumns);
     REQUIRE(result.contains(TE_ENTER_LONG_KEY));
@@ -258,9 +266,9 @@ TEST_CASE("TradeExecutorTransform - MultipleExecutorWithExit") {
 
 TEST_CASE("TradeExecutorTransform - Basic Pass-through") {
   SECTION("Long/Short signals pass-through without allow masking") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {TE_ENTER_LONG_KEY, "long_signal"},
-        {TE_ENTER_SHORT_KEY, "short_signal"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {TE_ENTER_LONG_KEY, src_ref("long_signal")},
+        {TE_ENTER_SHORT_KEY, src_ref("short_signal")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -270,7 +278,7 @@ TEST_CASE("TradeExecutorTransform - Basic Pass-through") {
     auto index = createStandardIndex();
     auto testDataWithCorrectColumns = epoch_frame::make_dataframe<bool>(
         index, {{true, true, true}, {true, true, true}},
-        {"long_signal", "short_signal"});
+        {"src#long_signal", "src#short_signal"});
 
     auto result = transform.TransformData(testDataWithCorrectColumns);
 
@@ -292,10 +300,10 @@ TEST_CASE("TradeExecutorTransform - Basic Pass-through") {
   }
 
   SECTION("Long/Short with exit pass-through") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {TE_ENTER_LONG_KEY, "long_signal"},
-        {TE_ENTER_SHORT_KEY, "short_signal"},
-        {TE_EXIT_LONG_KEY, "exit_long_signal"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {TE_ENTER_LONG_KEY, src_ref("long_signal")},
+        {TE_ENTER_SHORT_KEY, src_ref("short_signal")},
+        {TE_EXIT_LONG_KEY, src_ref("exit_long_signal")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -305,7 +313,7 @@ TEST_CASE("TradeExecutorTransform - Basic Pass-through") {
     auto index = createStandardIndex();
     auto testDataWithCorrectColumns = epoch_frame::make_dataframe<bool>(
         index, {{true, false, true}, {false, true, false}, {true, false, true}},
-        {"long_signal", "short_signal", "exit_long_signal"});
+        {"src#long_signal", "src#short_signal", "src#exit_long_signal"});
 
     auto result = transform.TransformData(testDataWithCorrectColumns);
 
@@ -338,8 +346,8 @@ TEST_CASE("TradeExecutorTransform - Basic Pass-through") {
 
 TEST_CASE("TradeExecutorTransform - Error Cases") {
   SECTION("Invalid input key is ignored") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {"invalid_key", "signal"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {"invalid_key", src_ref("signal")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -356,7 +364,7 @@ TEST_CASE("TradeExecutorTransform - Error Cases") {
   }
 
   SECTION("Empty inputs") {
-    std::unordered_map<std::string, std::string> inputs = {};
+    std::unordered_map<std::string, InputVal> inputs = {};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -371,8 +379,8 @@ TEST_CASE("TradeExecutorTransform - Error Cases") {
   }
 
   SECTION("Missing input columns in data") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {TE_ENTER_LONG_KEY, "missing_column"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {TE_ENTER_LONG_KEY, src_ref("missing_column")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -391,8 +399,8 @@ TEST_CASE("TradeExecutorTransform - Error Cases") {
 TEST_CASE("TradeExecutorTransform - Types selection") {
   SECTION("Single input type determines correct executor type") {
     SECTION("Long only -> SingleExecutor") {
-      std::unordered_map<std::string, std::string> inputs = {
-          {TE_ENTER_LONG_KEY, "long_signal"}};
+      std::unordered_map<std::string, InputVal> inputs = {
+          {TE_ENTER_LONG_KEY, src_ref("long_signal")}};
       auto config = trade_signal_executor_cfg(
           "test", inputs,
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -400,8 +408,8 @@ TEST_CASE("TradeExecutorTransform - Types selection") {
     }
 
     SECTION("Short only -> SingleExecutor") {
-      std::unordered_map<std::string, std::string> inputs = {
-          {TE_ENTER_SHORT_KEY, "short_signal"}};
+      std::unordered_map<std::string, InputVal> inputs = {
+          {TE_ENTER_SHORT_KEY, src_ref("short_signal")}};
       auto config = trade_signal_executor_cfg(
           "test", inputs,
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -409,9 +417,9 @@ TEST_CASE("TradeExecutorTransform - Types selection") {
     }
 
     SECTION("Long + Close -> SingleExecutorWithExit") {
-      std::unordered_map<std::string, std::string> inputs = {
-          {TE_ENTER_LONG_KEY, "long_signal"},
-          {TE_EXIT_LONG_KEY, "exit_long_signal"}};
+      std::unordered_map<std::string, InputVal> inputs = {
+          {TE_ENTER_LONG_KEY, src_ref("long_signal")},
+          {TE_EXIT_LONG_KEY, src_ref("exit_long_signal")}};
       auto config = trade_signal_executor_cfg(
           "test", inputs,
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -419,9 +427,9 @@ TEST_CASE("TradeExecutorTransform - Types selection") {
     }
 
     SECTION("Long + Short -> MultipleExecutor") {
-      std::unordered_map<std::string, std::string> inputs = {
-          {TE_ENTER_LONG_KEY, "long_signal"},
-          {TE_ENTER_SHORT_KEY, "short_signal"}};
+      std::unordered_map<std::string, InputVal> inputs = {
+          {TE_ENTER_LONG_KEY, src_ref("long_signal")},
+          {TE_ENTER_SHORT_KEY, src_ref("short_signal")}};
       auto config = trade_signal_executor_cfg(
           "test", inputs,
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -429,10 +437,10 @@ TEST_CASE("TradeExecutorTransform - Types selection") {
     }
 
     SECTION("Long + Short + Close -> MultipleExecutorWithExit") {
-      std::unordered_map<std::string, std::string> inputs = {
-          {TE_ENTER_LONG_KEY, "long_signal"},
-          {TE_ENTER_SHORT_KEY, "short_signal"},
-          {TE_EXIT_LONG_KEY, "exit_long_signal"}};
+      std::unordered_map<std::string, InputVal> inputs = {
+          {TE_ENTER_LONG_KEY, src_ref("long_signal")},
+          {TE_ENTER_SHORT_KEY, src_ref("short_signal")},
+          {TE_EXIT_LONG_KEY, src_ref("exit_long_signal")}};
       auto config = trade_signal_executor_cfg(
           "test", inputs,
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -443,9 +451,9 @@ TEST_CASE("TradeExecutorTransform - Types selection") {
 
 TEST_CASE("TradeExecutorTransform - Data Type Handling") {
   SECTION("Mixed boolean and null handling") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {TE_ENTER_LONG_KEY, "long_signal"},
-        {TE_ENTER_SHORT_KEY, "short_signal"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {TE_ENTER_LONG_KEY, src_ref("long_signal")},
+        {TE_ENTER_SHORT_KEY, src_ref("short_signal")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -458,7 +466,7 @@ TEST_CASE("TradeExecutorTransform - Data Type Handling") {
         index,
         {{Scalar{true}, Scalar{}, Scalar{false}},
          {Scalar{false}, Scalar{true}, Scalar{}}},
-        {"long_signal", "short_signal"}, arrow::boolean());
+        {"src#long_signal", "src#short_signal"}, arrow::boolean());
 
     auto result = transform.TransformData(testDataMixed);
 
@@ -476,8 +484,8 @@ TEST_CASE("TradeExecutorTransform - Data Type Handling") {
   }
 
   SECTION("All null inputs") {
-    std::unordered_map<std::string, std::string> inputs = {
-        {TE_ENTER_LONG_KEY, "long_signal"}};
+    std::unordered_map<std::string, InputVal> inputs = {
+        {TE_ENTER_LONG_KEY, src_ref("long_signal")}};
     auto config = trade_signal_executor_cfg(
         "test_transform", inputs,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
@@ -488,7 +496,7 @@ TEST_CASE("TradeExecutorTransform - Data Type Handling") {
     // All null values
     auto testDataAllNulls =
         epoch_frame::make_dataframe(index, {{Scalar{}, Scalar{}, Scalar{}}},
-                                    {"long_signal"}, arrow::boolean());
+                                    {"src#long_signal"}, arrow::boolean());
 
     auto result = transform.TransformData(testDataAllNulls);
 
