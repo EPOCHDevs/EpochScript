@@ -219,8 +219,8 @@ namespace epoch_script
                 // Bind variable to the alias node's output
                 context_.var_to_binding[node_id] = node_id + ".result";
             } else if (input_value.IsLiteral()) {
-                // Literal constant - store the column name for lookup
-                context_.var_to_binding[node_id] = input_value.GetLiteral().GetColumnName();
+                // Literal constant - store the InputValue directly for later lookup
+                context_.var_to_literal[node_id] = input_value;
             } else {
                 // Null/empty value - shouldn't happen in valid code
                 ThrowError("Cannot assign null value to variable '" + node_id + "'", assign.lineno, assign.col_offset);

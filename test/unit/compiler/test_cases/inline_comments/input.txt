@@ -1,0 +1,9 @@
+src = market_data_source(timeframe="1D")()
+c = src.c
+# Test inline comments in various expression contexts
+result = conditional_select_number(
+    c > 100.0, 1.0,  # positive
+    c < 50.0, -1.0,  # negative
+    0.0  # neutral
+)
+numeric_cards_report(category="Test", title="Comment Test")(result)

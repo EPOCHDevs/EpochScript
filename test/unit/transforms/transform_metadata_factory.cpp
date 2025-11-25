@@ -371,6 +371,10 @@ TEST_CASE("Transform Metadata Factory") {
         } else if (id == "static_cast_to_timestamp") {
           // Provide timestamp input for timestamp type materializer
           inputs_vec.emplace_back(getArrayFromType(IODataType::Timestamp));
+        } else if (id.starts_with("alias_")) {
+          // Alias transforms need input matching their output type (identity transform)
+          auto outputType = metadata.outputs.front().type;
+          inputs_vec.emplace_back(getArrayFromType(outputType));
         // Special handling for groupby_* transforms: provide String for group_key, proper type for value
         } else if ((id == "groupby_numeric_agg" || id == "groupby_boolean_agg" || id == "groupby_any_agg")
                    && inputMetadata.id == "group_key") {

@@ -7,10 +7,19 @@
     "timeframe": "1D"
   },
   {
+    "id": "c",
+    "type": "alias_decimal",
+    "inputs": {
+      "SLOT": [{"type": "ref", "value": {"node_id": "src", "handle": "c"}}]
+    },
+    "options": {},
+    "timeframe": "1D"
+  },
+  {
     "id": "lag_0",
     "type": "lag_number",
     "inputs": {
-      "SLOT": [{"type": "ref", "value": {"node_id": "src", "handle": "c"}}]
+      "SLOT": [{"type": "ref", "value": {"node_id": "c", "handle": "result"}}]
     },
     "options": {
       "period": 1.0
@@ -18,10 +27,19 @@
     "timeframe": "1D"
   },
   {
+    "id": "c_lag1",
+    "type": "alias_decimal",
+    "inputs": {
+      "SLOT": [{"type": "ref", "value": {"node_id": "lag_0", "handle": "result"}}]
+    },
+    "options": {},
+    "timeframe": "1D"
+  },
+  {
     "id": "node_0",
     "type": "numeric_cards_report",
     "inputs": {
-      "SLOT": [{"type": "ref", "value": {"node_id": "lag_0", "handle": "result"}}]
+      "SLOT": [{"type": "ref", "value": {"node_id": "c_lag1", "handle": "result"}}]
     },
     "options": {
       "category": "Test",

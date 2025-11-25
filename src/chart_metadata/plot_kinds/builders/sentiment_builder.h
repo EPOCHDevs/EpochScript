@@ -8,11 +8,13 @@ namespace epoch_script::chart_metadata::plot_kinds {
  * @brief Builder for Sentiment PlotKind
  *
  * Visualizes sentiment analysis results with:
- * - sentiment: String label ("positive", "neutral", "negative")
- * - score: Confidence score (0.0 to 1.0)
+ * - positive: Boolean flag indicating positive sentiment
+ * - neutral: Boolean flag indicating neutral sentiment
+ * - negative: Boolean flag indicating negative sentiment
+ * - confidence: Confidence score (0.0 to 1.0)
  *
- * The visualization will color-code based on sentiment label
- * and use score as the value to plot.
+ * The visualization will color-code based on sentiment flags
+ * and use confidence as the value to plot.
  */
 class SentimentBuilder : public IPlotKindBuilder {
 public:
@@ -23,24 +25,38 @@ public:
 
     return {
       {"index", INDEX_COLUMN},
-      {"sentiment", cfg.GetOutputId("sentiment").GetColumnName()},
-      {"score", cfg.GetOutputId("score").GetColumnName()}
+      {"positive", cfg.GetOutputId("positive").GetColumnName()},
+      {"neutral", cfg.GetOutputId("neutral").GetColumnName()},
+      {"negative", cfg.GetOutputId("negative").GetColumnName()},
+      {"confidence", cfg.GetOutputId("confidence").GetColumnName()}
     };
   }
 
   void Validate(
     const epoch_script::transform::TransformConfiguration &cfg
   ) const override {
-    // Must have both sentiment and score outputs
-    if (!cfg.ContainsOutputId("sentiment")) {
+    // Must have positive, neutral, negative, and confidence outputs
+    if (!cfg.ContainsOutputId("positive")) {
       throw std::runtime_error(
-        "Sentiment transform must have 'sentiment' output"
+        "Sentiment transform must have 'positive' output"
       );
     }
 
-    if (!cfg.ContainsOutputId("score")) {
+    if (!cfg.ContainsOutputId("neutral")) {
       throw std::runtime_error(
-        "Sentiment transform must have 'score' output"
+        "Sentiment transform must have 'neutral' output"
+      );
+    }
+
+    if (!cfg.ContainsOutputId("negative")) {
+      throw std::runtime_error(
+        "Sentiment transform must have 'negative' output"
+      );
+    }
+
+    if (!cfg.ContainsOutputId("confidence")) {
+      throw std::runtime_error(
+        "Sentiment transform must have 'confidence' output"
       );
     }
   }

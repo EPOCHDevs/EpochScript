@@ -285,8 +285,8 @@ ExprPtr PythonParser::parseCall(const ts::Node& node, std::string_view source) {
             ts::Node child = argsNode.getChild(i);
             std::string childType{child.getType()};
 
-            if (childType == "(" || childType == ")" || childType == ",") {
-                continue;  // Skip delimiters
+            if (childType == "(" || childType == ")" || childType == "," || childType == "comment") {
+                continue;  // Skip delimiters and comments
             }
 
             if (childType == "keyword_argument") {
@@ -527,8 +527,8 @@ ExprPtr PythonParser::parseTuple(const ts::Node& node, std::string_view source) 
         ts::Node child = node.getChild(i);
         std::string childType{child.getType()};
 
-        if (childType == "(" || childType == ")" || childType == ",") {
-            continue;  // Skip delimiters
+        if (childType == "(" || childType == ")" || childType == "," || childType == "comment") {
+            continue;  // Skip delimiters and comments
         }
 
         tuple->elts.push_back(parseExpression(child, source));
@@ -545,8 +545,8 @@ ExprPtr PythonParser::parseList(const ts::Node& node, std::string_view source) {
         ts::Node child = node.getChild(i);
         std::string childType{child.getType()};
 
-        if (childType == "[" || childType == "]" || childType == ",") {
-            continue;  // Skip delimiters
+        if (childType == "[" || childType == "]" || childType == "," || childType == "comment") {
+            continue;  // Skip delimiters and comments
         }
 
         list->elts.push_back(parseExpression(child, source));
@@ -563,8 +563,8 @@ ExprPtr PythonParser::parseDict(const ts::Node& node, std::string_view source) {
         ts::Node child = node.getChild(i);
         std::string childType{child.getType()};
 
-        if (childType == "{" || childType == "}" || childType == ",") {
-            continue;  // Skip delimiters
+        if (childType == "{" || childType == "}" || childType == "," || childType == "comment") {
+            continue;  // Skip delimiters and comments
         }
 
         // Each child should be a "pair" node with key and value

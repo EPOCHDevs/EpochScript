@@ -3,6 +3,7 @@
 #include "data_column_resolver.h"
 #include "epoch_script/data/common/constants.h"
 #include "plot_kinds/registry.h"
+#include "plot_kinds/builders/flag_builder.h"  // For GetActualColumnName
 #include <algorithm>
 #include <functional>
 #include <regex>
@@ -85,9 +86,10 @@ SeriesInfo SeriesConfigurationBuilder::BuildSeries(
   series.linkedTo = linkedTo;
 
   // For flags, populate templateDataMapping with all outputs for template substitution
+  // For DataSource transforms, use actual column names from requiredDataSources
   if (plotKind == epoch_core::TransformPlotKind::flag) {
     for (const auto &output : cfg.GetOutputs()) {
-      series.templateDataMapping[output.id] = cfg.GetOutputId(output.id).GetColumnName();
+      series.templateDataMapping[output.id] = plot_kinds::GetActualColumnName(cfg, output.id);
     }
   }
 

@@ -37,6 +37,10 @@ namespace epoch_script
         // Variable bindings: variable -> "node.handle" or "component_name"
         std::unordered_map<std::string, std::string> var_to_binding;
 
+        // Variable bindings for literals: variable -> InputValue (ConstantValue)
+        // Used when a variable is assigned a constant value directly (e.g., threshold = 100.0)
+        std::unordered_map<std::string, strategy::InputValue> var_to_literal;
+
         // Main output: topologically sorted algorithms (includes executor)
         std::vector<strategy::AlgorithmNode> algorithms;
 

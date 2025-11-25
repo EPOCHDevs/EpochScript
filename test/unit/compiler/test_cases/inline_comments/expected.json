@@ -1,0 +1,76 @@
+[
+  {
+    "id": "src",
+    "type": "market_data_source",
+    "inputs": {},
+    "options": {},
+    "timeframe": "1D"
+  },
+  {
+    "id": "c",
+    "type": "alias_decimal",
+    "inputs": {
+      "SLOT": [{"type": "ref", "value": {"node_id": "src", "handle": "c"}}]
+    },
+    "options": {},
+    "timeframe": "1D"
+  },
+  {
+    "id": "gt_0",
+    "type": "gt",
+    "inputs": {
+      "SLOT0": [{"type": "ref", "value": {"node_id": "c", "handle": "result"}}],
+      "SLOT1": [{"type": "literal", "value": 100}]
+    },
+    "options": {},
+    "timeframe": "1D"
+  },
+  {
+    "id": "lt_0",
+    "type": "lt",
+    "inputs": {
+      "SLOT0": [{"type": "ref", "value": {"node_id": "c", "handle": "result"}}],
+      "SLOT1": [{"type": "literal", "value": 50}]
+    },
+    "options": {},
+    "timeframe": "1D"
+  },
+  {
+    "id": "mul_0",
+    "type": "mul",
+    "inputs": {
+      "SLOT0": [{"type": "literal", "value": -1}],
+      "SLOT1": [{"type": "literal", "value": 1}]
+    },
+    "options": {},
+    "timeframe": "1D"
+  },
+  {
+    "id": "result",
+    "type": "conditional_select_number",
+    "inputs": {
+      "SLOT": [
+        {"type": "ref", "value": {"node_id": "gt_0", "handle": "result"}},
+        {"type": "literal", "value": 1},
+        {"type": "ref", "value": {"node_id": "lt_0", "handle": "result"}},
+        {"type": "ref", "value": {"node_id": "mul_0", "handle": "result"}},
+        {"type": "literal", "value": 0}
+      ]
+    },
+    "options": {},
+    "timeframe": "1D"
+  },
+  {
+    "id": "node_0",
+    "type": "numeric_cards_report",
+    "inputs": {
+      "SLOT": [{"type": "ref", "value": {"node_id": "result", "handle": "value"}}]
+    },
+    "options": {
+      "category": "Test",
+      "title": "Comment Test",
+      "agg": "mean"
+    },
+    "timeframe": "1D"
+  }
+]

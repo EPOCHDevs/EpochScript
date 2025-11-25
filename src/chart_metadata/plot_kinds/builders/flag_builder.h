@@ -5,6 +5,44 @@
 namespace epoch_script::chart_metadata::plot_kinds {
 
 /**
+ * @brief Helper to get actual column name for an output
+ *
+ * For DataSource transforms, looks up the prefixed column name from requiredDataSources
+ * (e.g., "title" -> "N:title" for News).
+ * For other transforms, uses the NodeReference format (e.g., "sma_1d#result").
+ *
+ * @param cfg Transform configuration
+ * @param outputId The simple output ID (e.g., "title", "event_type")
+ * @return The actual column name to use in dataMapping
+ */
+inline std::string GetActualColumnName(
+    const epoch_script::transform::TransformConfiguration &cfg,
+    const std::string &outputId) {
+  const auto &metadata = cfg.GetTransformDefinition().GetMetadata();
+
+  // For DataSource transforms, look up column name in requiredDataSources
+  if (metadata.category == epoch_core::TransformCategory::DataSource &&
+      !metadata.requiredDataSources.empty()) {
+    // Find matching entry in requiredDataSources
+    // Entries are like "N:title", "TE:event_type", etc.
+    for (const auto &col : metadata.requiredDataSources) {
+      // Check if column ends with ":" + outputId or equals outputId exactly
+      if (col == outputId) {
+        return col;
+      }
+      std::string suffix = ":" + outputId;
+      if (col.size() > suffix.size() &&
+          col.compare(col.size() - suffix.size(), suffix.size(), suffix) == 0) {
+        return col;
+      }
+    }
+  }
+
+  // For non-DataSource transforms or if not found, use NodeReference format
+  return cfg.GetOutputId(outputId).GetColumnName();
+}
+
+/**
  * @brief Builder for Flag PlotKind
  * Special case: maps ALL outputs dynamically for template substitution
  * Used for generic event markers like candle patterns, fundamentals, etc.
@@ -31,8 +69,9 @@ public:
     const auto& schema = metadata.flagSchema.value();
 
     // Add "value" mapping for flag positioning (required by UI)
+    // For DataSource transforms, use actual column names from requiredDataSources
     if (!schema.valueKey.empty()) {
-      dataMapping["value"] = cfg.GetOutputId(schema.valueKey).GetColumnName();
+      dataMapping["value"] = GetActualColumnName(cfg, schema.valueKey);
     }
 
     // Note: Template substitution data (e.g., {column_name}) should be handled

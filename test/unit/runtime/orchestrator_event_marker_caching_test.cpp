@@ -89,8 +89,8 @@ event_marker(
         // Verify pivot column exists for chart navigation
         REQUIRE(aaplMarkers[0].data.contains("pivot"));
 
-        // Verify column_id mapping - SLOT0 resolves to comparison result
-        REQUIRE(aaplMarkers[0].schemas[0].column_id == "gt_0#result");
+        // Verify column_id mapping - SLOT0 resolves to variable name (alias node)
+        REQUIRE(aaplMarkers[0].schemas[0].column_id == "signal#result");
 
         // Verify pivot schema was added correctly
         REQUIRE(aaplMarkers[0].schemas[1].column_id == "pivot");
@@ -144,8 +144,8 @@ event_marker(
             REQUIRE(markers[0].schemas.size() == 2);  // 1 input + pivot
             REQUIRE(markers[0].data.num_rows() == 2);
 
-            // Verify schema column IDs - SLOT0 resolves to actual column name
-            REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // signal: src.c > 100
+            // Verify schema column IDs - SLOT0 resolves to variable name (alias node)
+            REQUIRE(markers[0].schemas[0].column_id == "signal#result");  // signal: src.c > 100
             REQUIRE(markers[0].schemas[1].column_id == "pivot");
 
             // Verify pivot column exists in data
@@ -261,13 +261,13 @@ event_marker(
 
         // Verify high marker - concrete values
         REQUIRE(highMarker->schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
-        REQUIRE(highMarker->schemas[0].column_id == "gt_0#result");  // src.c > 110
+        REQUIRE(highMarker->schemas[0].column_id == "high_signal#result");  // src.c > 110 (variable name used as alias)
         REQUIRE(highMarker->data.num_rows() == 1);  // Only 120 > 110
         REQUIRE(highMarker->data.contains("pivot"));
 
         // Verify low marker - concrete values
         REQUIRE(lowMarker->schemas[0].slot == epoch_core::CardSlot::SecondaryBadge);
-        REQUIRE(lowMarker->schemas[0].column_id == "lt_0#result");  // src.c < 95
+        REQUIRE(lowMarker->schemas[0].column_id == "low_signal#result");  // src.c < 95 (variable name used as alias)
         REQUIRE(lowMarker->data.num_rows() == 2);  // 90 and 80 < 95
         REQUIRE(lowMarker->data.contains("pivot"));
     }
@@ -305,7 +305,7 @@ event_marker(
         // Verify multiple schemas (2 input + pivot = 3)
         REQUIRE(markers[0].schemas.size() == 3);
         REQUIRE(markers[0].schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
-        REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // signal: src.c > 100
+        REQUIRE(markers[0].schemas[0].column_id == "signal#result");  // signal: src.c > 100 (variable name used as alias)
         REQUIRE(markers[0].schemas[1].slot == epoch_core::CardSlot::Hero);
         REQUIRE(markers[0].schemas[1].column_id == "src#c");  // src.c -> market data close
         REQUIRE(markers[0].schemas[1].render_type == epoch_core::CardRenderType::Decimal);
@@ -350,9 +350,9 @@ event_marker(
 
         // Verify 3 schemas (signal + constant + pivot)
         REQUIRE(markers[0].schemas.size() == 3);
-        REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // Boolean comparison result
+        REQUIRE(markers[0].schemas[0].column_id == "signal#result");  // Boolean comparison result (variable name used as alias)
         REQUIRE(markers[0].schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
-        REQUIRE(markers[0].schemas[1].column_id == "number_1#result");  // Constant 42.5
+        REQUIRE(markers[0].schemas[1].column_id == "dec_42_5");  // Constant 42.5 (stored directly as ConstantValue)
         REQUIRE(markers[0].schemas[1].slot == epoch_core::CardSlot::Hero);
         REQUIRE(markers[0].schemas[2].column_id == "pivot");
 
@@ -398,10 +398,10 @@ event_marker(
         REQUIRE(markers[0].schemas.size() == 5);
 
         // Verify column IDs (SLOT refs resolve to actual column names)
-        REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // signal: src.c > 100
+        REQUIRE(markers[0].schemas[0].column_id == "signal#result");  // signal: src.c > 100 (variable name used as alias)
         REQUIRE(markers[0].schemas[1].column_id == "src#c");  // src.c -> market data close
-        REQUIRE(markers[0].schemas[2].column_id == "number_0#result");  // 100 -> literal number
-        REQUIRE(markers[0].schemas[3].column_id == "text_0#result");  // "breakout" -> literal string
+        REQUIRE(markers[0].schemas[2].column_id == "num_100");  // 100 -> literal number (stored directly as ConstantValue)
+        REQUIRE(markers[0].schemas[3].column_id == "text_breakout");  // "breakout" -> literal string (stored directly as ConstantValue)
         REQUIRE(markers[0].schemas[4].column_id == "pivot");
 
         // Verify slots
@@ -458,9 +458,9 @@ event_marker(
         REQUIRE(markers[0].schemas.size() == 4);
 
         // Verify column IDs (SLOT refs resolve to actual column names)
-        REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // signal: src.c > 100
-        REQUIRE(markers[0].schemas[1].column_id == "number_1#result");  // 99.99 -> literal number
-        REQUIRE(markers[0].schemas[2].column_id == "text_0#result");  // "BUY" -> literal string
+        REQUIRE(markers[0].schemas[0].column_id == "signal#result");  // signal: src.c > 100 (variable name used as alias)
+        REQUIRE(markers[0].schemas[1].column_id == "dec_99_99");  // 99.99 -> literal number (stored directly as ConstantValue)
+        REQUIRE(markers[0].schemas[2].column_id == "text_BUY");  // "BUY" -> literal string (stored directly as ConstantValue)
         REQUIRE(markers[0].schemas[3].column_id == "pivot");
 
         // Verify slots
@@ -515,7 +515,7 @@ event_marker(
 
         // Verify schema is still complete even with empty data
         REQUIRE(markers[0].schemas.size() == 2);  // 1 input + pivot
-        REQUIRE(markers[0].schemas[0].column_id == "gt_0#result");  // signal: src.c > 200
+        REQUIRE(markers[0].schemas[0].column_id == "signal#result");  // signal: src.c > 200 (variable name used as alias)
         REQUIRE(markers[0].schemas[0].slot == epoch_core::CardSlot::PrimaryBadge);
         REQUIRE(markers[0].schemas[1].column_id == "pivot");
         REQUIRE(markers[0].schemas[1].render_type == epoch_core::CardRenderType::Timestamp);

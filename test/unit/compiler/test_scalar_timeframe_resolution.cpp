@@ -23,21 +23,21 @@ numeric_cards_report(agg="mean", category="Test", title="Result")(result)
         auto result = compiler.compile(code, false);
         REQUIRE(!result.empty());
 
-        // Find scalar nodes
-        int scalar_count = 0;
+        // Constants are now stored directly as ConstantValue in inputs (no scalar nodes created)
+        // This is more efficient than creating number/text/bool nodes
+        // The main test is that compilation succeeds without timeframe resolution errors
+
+        // Verify boolean_select_number is present
+        bool has_boolean_select = false;
         for (const auto& node : result)
         {
-            if (node.type == "number" || node.type == "bool_true" ||
-                node.type == "bool_false" || node.type == "text" || node.type == "null")
+            if (node.type == "boolean_select_number")
             {
-                scalar_count++;
-                // Scalars should NOT have timeframes
-                INFO("Scalar node: " << node.id << " of type: " << node.type);
-                REQUIRE(!node.timeframe.has_value());
+                has_boolean_select = true;
+                break;
             }
         }
-
-        REQUIRE(scalar_count > 0);  // Should have at least one scalar (the 0 literal)
+        REQUIRE(has_boolean_select);
     }
 
     SECTION("Multiple scalar literals in complex expression")
@@ -55,18 +55,18 @@ numeric_cards_report(agg="sum", category="Test", title="R2")(result2)
 
         auto result = compiler.compile(code, false);
 
-        // Count scalars - should have 4 number literals (1, 0, 100, -100)
-        int scalar_count = 0;
+        // Constants are now stored directly as ConstantValue in inputs (no scalar nodes created)
+        // Count boolean_select_number nodes to verify compilation worked
+        int boolean_select_count = 0;
         for (const auto& node : result)
         {
-            if (node.type == "number")
+            if (node.type == "boolean_select_number")
             {
-                scalar_count++;
-                REQUIRE(!node.timeframe.has_value());
+                boolean_select_count++;
             }
         }
 
-        // Note: Exact count may vary due to CSE optimization
-        REQUIRE(scalar_count >= 2);
+        // Should have 2 boolean_select_number nodes
+        REQUIRE(boolean_select_count == 2);
     }
 }

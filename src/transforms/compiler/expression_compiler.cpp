@@ -181,11 +181,19 @@ namespace epoch_script
         // Handle lowercase boolean literals as special keywords
         if (name.id == "true")
         {
-            return MaterializeBoolean(true);
+            return strategy::InputValue{epoch_script::transform::ConstantValue(true)};
         }
         else if (name.id == "false")
         {
-            return MaterializeBoolean(false);
+            return strategy::InputValue{epoch_script::transform::ConstantValue(false)};
+        }
+
+        // First, check if variable is bound to a literal constant
+        auto lit_it = context_.var_to_literal.find(name.id);
+        if (lit_it != context_.var_to_literal.end())
+        {
+            // Return the stored literal InputValue directly
+            return lit_it->second;
         }
 
         // Look up variable in bindings
@@ -246,21 +254,24 @@ namespace epoch_script
 
     strategy::InputValue ExpressionCompiler::VisitConstant(const Constant& constant)
     {
-        // Materialize constants as nodes
+        // Return constants directly as ConstantValue (no node materialization needed)
+        // This avoids creating scalar nodes that ScalarInliningPass would later remove,
+        // and ensures schema column_ids match actual data column names from the start.
         return std::visit([this, &constant](auto&& value) -> strategy::InputValue
         {
             using T = std::decay_t<decltype(value)>;
 
             if constexpr (std::is_same_v<T, int>) {
-                return MaterializeNumber(static_cast<double>(value));
+                return strategy::InputValue{epoch_script::transform::ConstantValue(static_cast<double>(value))};
             } else if constexpr (std::is_same_v<T, double>) {
-                return MaterializeNumber(value);
+                return strategy::InputValue{epoch_script::transform::ConstantValue(value)};
             } else if constexpr (std::is_same_v<T, bool>) {
-                return MaterializeBoolean(value);
+                return strategy::InputValue{epoch_script::transform::ConstantValue(value)};
             } else if constexpr (std::is_same_v<T, std::string>) {
-                return MaterializeText(value);
+                return strategy::InputValue{epoch_script::transform::ConstantValue(value)};
             } else if constexpr (std::is_same_v<T, std::monostate>) {
-                return MaterializeNull();
+                // None/null - use typed null (default to Decimal for numeric contexts)
+                return strategy::InputValue{epoch_script::transform::ConstantValue::MakeNull(epoch_core::IODataType::Decimal)};
             } else {
                 ThrowError("Unsupported constant type", constant.lineno, constant.col_offset);
                 std::unreachable();
@@ -475,8 +486,8 @@ namespace epoch_script
         // Handle negation as multiplication by -1
         if (unary_op.op == UnaryOpType::USub)
         {
-            // Create -1 number node
-            strategy::InputValue minus_one = MaterializeNumber(-1.0);
+            // Create -1 constant value directly (no node materialization)
+            strategy::InputValue minus_one{epoch_script::transform::ConstantValue(-1.0)};
 
             // Resolve operand
             strategy::InputValue operand = VisitExpr(*unary_op.operand);

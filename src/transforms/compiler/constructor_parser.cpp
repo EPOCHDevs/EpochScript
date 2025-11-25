@@ -366,7 +366,7 @@ namespace epoch_script
                         obj[key] = nested_obj["sql"].get<std::string>();
                     }
                 }
-                else if (ctor_name == "CardColumnSchema")
+                else if (ctor_name == "CardColumnSchema" || ctor_name == "TableColumnSchema")
                 {
                     obj[key] = CallKwargsToGeneric(*nested_call);
                 }
@@ -401,6 +401,15 @@ namespace epoch_script
                             }
                             arr.push_back(elem_gen);
                         }, elem_const->value);
+                    }
+                    else if (dynamic_cast<const Dict*>(elem.get()))
+                    {
+                        // Dict literals in lists are not valid - must use constructor calls
+                        ThrowError("Inline dictionary literals {...} are not supported in lists. "
+                                   "Use constructor syntax instead. For example:\n"
+                                   "  columns=[TableColumnSchema(column_id=\"SLOT0\", title=\"My Column\"), ...]\n"
+                                   "  schemas=[CardColumnSchema(column_id=\"SLOT0\", slot=Details, ...), ...]",
+                                   call.lineno, call.col_offset);
                     }
                 }
 

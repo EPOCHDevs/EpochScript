@@ -571,6 +571,13 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::sentiment));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::sentiment));
+
+    const auto& builder = registry.GetBuilder(TransformPlotKind::sentiment);
+    auto dataMapping = builder.Build(sentiment_cfg);
+
+    // Sentiment has: positive, neutral, negative (bool flags), confidence (score)
+    REQUIRE(dataMapping.size() >= 4);
+    REQUIRE(builder.RequiresOwnAxis() == true);
   }
 
   SECTION("GetBuilder throws for unregistered PlotKind") {

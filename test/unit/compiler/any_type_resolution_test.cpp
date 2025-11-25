@@ -125,27 +125,42 @@ TEST_CASE("Real-world scenario: bottom_k_percent with boolean_select_string", "[
     }
 }
 
-TEST_CASE("MaterializeString helper creates string literals", "[compiler][type_cast][materialize]") {
+TEST_CASE("String literals are stored as ConstantValue", "[compiler][type_cast][materialize]") {
 
-    SECTION("String literals are created correctly") {
+    SECTION("String literals are stored directly and can be used in expressions") {
         const char* code = R"(
             # Test that string literals work correctly
-            label1 = "Test"
-            label2 = "Another Test"
+            # As of 2024, constants are stored directly as ConstantValue (no text nodes)
+            src = market_data_source(timeframe="1D")()
+            signal = src.c > 100
+            label1 = "BUY"
+            label2 = "SELL"
+
+            # Use the literals in boolean_select_string to verify they work
+            result = boolean_select_string()(signal, label1, label2)
         )";
 
         AlgorithmAstCompiler compiler;
         auto algorithms = compiler.compile(code, true);
 
-        // Find text nodes
+        // String literals no longer create text nodes - they're stored as ConstantValue
+        // Verify compilation succeeds and boolean_select_string exists
+        bool found_boolean_select = false;
         int text_node_count = 0;
+
         for (const auto& algo : algorithms) {
+            if (algo.type == "boolean_select_string") {
+                found_boolean_select = true;
+                // Verify it has inputs (the ConstantValue literals are passed as inputs)
+                REQUIRE(algo.inputs.count("true") > 0);
+                REQUIRE(algo.inputs.count("false") > 0);
+            }
             if (algo.type == "text") {
                 text_node_count++;
-                REQUIRE(algo.options.count("value") > 0);
             }
         }
 
-        REQUIRE(text_node_count >= 2);
+        REQUIRE(found_boolean_select);  // Verify constants were used successfully
+        REQUIRE(text_node_count == 0);  // Verify no text nodes were created
     }
 }

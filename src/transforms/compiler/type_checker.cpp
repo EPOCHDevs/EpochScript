@@ -235,10 +235,65 @@ namespace epoch_script
                                      " to " + DataTypeToString(target_type));
         }
 
+        // Handle ConstantValue inputs - cast at compile time instead of inserting a node
+        if (source.IsLiteral())
+        {
+            const auto& constant = source.GetLiteral();
+
+            // Decimal/Number to Boolean
+            if ((source_type == DataType::Decimal || source_type == DataType::Number ||
+                 source_type == DataType::Integer) && target_type == DataType::Boolean)
+            {
+                bool bool_val = false;
+                if (constant.IsDecimal()) {
+                    bool_val = constant.GetDecimal() != 0.0;
+                }
+                return strategy::InputValue{epoch_script::transform::ConstantValue(bool_val)};
+            }
+
+            // Boolean to Decimal/Number
+            if (source_type == DataType::Boolean &&
+                (target_type == DataType::Decimal || target_type == DataType::Number))
+            {
+                double num_val = constant.IsBoolean() && constant.GetBoolean() ? 1.0 : 0.0;
+                return strategy::InputValue{epoch_script::transform::ConstantValue(num_val)};
+            }
+
+            // Boolean to String
+            if (source_type == DataType::Boolean && target_type == DataType::String)
+            {
+                std::string str_val = constant.IsBoolean() && constant.GetBoolean() ? "true" : "false";
+                return strategy::InputValue{epoch_script::transform::ConstantValue(str_val)};
+            }
+
+            // For other constant type casts that we don't handle at compile time,
+            // we need to materialize the constant to a node and then cast it.
+            // This shouldn't happen for common cases - log a warning if it does.
+            spdlog::warn("InsertTypeCast: Falling back to node insertion for ConstantValue cast from {} to {}. "
+                         "Consider adding compile-time handling for this case.",
+                         DataTypeToString(source_type), DataTypeToString(target_type));
+
+            // Materialize the constant to a node first
+            strategy::InputValue materialized;
+            if (constant.IsDecimal()) {
+                materialized = MaterializeNumber(constant.GetDecimal());
+            } else if (constant.IsString()) {
+                materialized = MaterializeString(constant.GetString());
+            } else {
+                throw std::runtime_error("InsertTypeCast: Cannot materialize ConstantValue of type " +
+                                        DataTypeToString(source_type) + " for casting");
+            }
+
+            // Now cast the materialized node
+            const auto& mat_ref = materialized.GetNodeReference();
+            std::string cast_node_id = InsertStaticCast(mat_ref.GetNodeId(), mat_ref.GetHandle(), target_type);
+            return strategy::NodeReference(cast_node_id, "result");
+        }
+
+        // For NodeReference inputs, insert type cast nodes
         // Special case: Boolean to String uses stringify instead of static_cast
         if (cast_method.value() == "bool_to_string")
         {
-            // Extract NodeReference from source (casting only makes sense for node outputs, not constants)
             const auto& source_ref = source.GetNodeReference();
             std::string cast_node_id = InsertStringify(source_ref.GetNodeId(), source_ref.GetHandle());
             return strategy::NodeReference(cast_node_id, "result");
@@ -451,9 +506,42 @@ namespace epoch_script
             const auto& input_value = slot_it->second[0];
             if (!input_value.IsNodeReference())
             {
-                // Literal input - use alias_decimal as default
-                algo.type = "alias_decimal";
-                context_.node_output_types[algo.id]["result"] = DataType::Decimal;
+                // Literal input - determine alias type based on ConstantValue type
+                if (input_value.IsLiteral())
+                {
+                    DataType literal_type = GetNodeOutputType(input_value);
+                    switch (literal_type)
+                    {
+                        case DataType::Boolean:
+                            algo.type = "alias_boolean";
+                            context_.node_output_types[algo.id]["result"] = DataType::Boolean;
+                            break;
+                        case DataType::String:
+                            algo.type = "alias_string";
+                            context_.node_output_types[algo.id]["result"] = DataType::String;
+                            break;
+                        case DataType::Timestamp:
+                            algo.type = "alias_timestamp";
+                            context_.node_output_types[algo.id]["result"] = DataType::Timestamp;
+                            break;
+                        case DataType::Integer:
+                            algo.type = "alias_integer";
+                            context_.node_output_types[algo.id]["result"] = DataType::Integer;
+                            break;
+                        case DataType::Decimal:
+                        case DataType::Number:
+                        default:
+                            algo.type = "alias_decimal";
+                            context_.node_output_types[algo.id]["result"] = DataType::Decimal;
+                            break;
+                    }
+                }
+                else
+                {
+                    // Empty/null input - use alias_decimal as default
+                    algo.type = "alias_decimal";
+                    context_.node_output_types[algo.id]["result"] = DataType::Decimal;
+                }
                 continue;
             }
 
