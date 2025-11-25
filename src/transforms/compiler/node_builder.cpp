@@ -202,11 +202,22 @@ namespace epoch_script
             // Parse the value and resolve to a handle
             strategy::InputValue input_value = expr_compiler_.VisitExpr(value);
 
-            // Bind the variable to the column identifier using "." format for expression compiler lookup
-            // (e.g., "number_0.result" not "number_0#result")
             if (input_value.IsNodeReference()) {
-                const auto& ref = input_value.GetNodeReference();
-                context_.var_to_binding[node_id] = ref.GetNodeId() + "." + ref.GetHandle();
+                // Create an alias node to give this variable a unique column identifier.
+                // This allows the same source column to be referenced multiple times
+                // with distinct identifiers (e.g., pe, ps, pb all referencing src.price_to_earnings
+                // become pe#result, ps#result, pb#result).
+                epoch_script::strategy::AlgorithmNode alias_node;
+                alias_node.id = node_id;
+                alias_node.type = "alias";
+                alias_node.inputs["SLOT"] = {input_value};
+
+                // Add to algorithms list
+                context_.algorithms.push_back(std::move(alias_node));
+                context_.node_lookup[node_id] = context_.algorithms.size() - 1;
+
+                // Bind variable to the alias node's output
+                context_.var_to_binding[node_id] = node_id + ".result";
             } else if (input_value.IsLiteral()) {
                 // Literal constant - store the column name for lookup
                 context_.var_to_binding[node_id] = input_value.GetLiteral().GetColumnName();

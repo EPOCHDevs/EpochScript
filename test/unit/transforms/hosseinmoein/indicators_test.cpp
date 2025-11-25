@@ -34,14 +34,22 @@ TEST_CASE("IndicatorsTest", "[indicators]") {
   auto index = factory::index::make_index(
       index_arr.value(), MonotonicDirection::Increasing, "Date");
   auto vol = df.get_column<int64_t>("IBM_Volume");
-  // Column names with # prefix to match GetInputId() format (node_id + "#" + handle)
-  // When node_id is empty, columns are accessed as #c, #h, #l, #o, #v
+  // Create DataFrame with BOTH raw column names (c, h, l, o, v) AND #-prefixed columns (#c, #h, #l, #o, #v)
+  // - Raw names used by transforms that access columns directly via C.CLOSE() etc.
+  // - #-prefixed names used by transforms that access via GetInputId() (which returns #handle)
+  auto close_data = df.get_column<double>("IBM_Close");
+  auto high_data = df.get_column<double>("IBM_High");
+  auto low_data = df.get_column<double>("IBM_Low");
+  auto open_data = df.get_column<double>("IBM_Open");
+  auto vol_data = std::vector<double>(vol.begin(), vol.end());
+
   auto input_df = make_dataframe<double>(
       index,
-      {df.get_column<double>("IBM_Close"), df.get_column<double>("IBM_High"),
-       df.get_column<double>("IBM_Low"), df.get_column<double>("IBM_Open"),
-       std::vector<double>(vol.begin(), vol.end())},
-      {"#" + std::string(C.CLOSE()), "#" + std::string(C.HIGH()), "#" + std::string(C.LOW()),
+      {close_data, high_data, low_data, open_data, vol_data,
+       close_data, high_data, low_data, open_data, vol_data},
+      {std::string(C.CLOSE()), std::string(C.HIGH()), std::string(C.LOW()),
+       std::string(C.OPEN()), std::string(C.VOLUME()),
+       "#" + std::string(C.CLOSE()), "#" + std::string(C.HIGH()), "#" + std::string(C.LOW()),
        "#" + std::string(C.OPEN()), "#" + std::string(C.VOLUME())});
 
   // Test parameters

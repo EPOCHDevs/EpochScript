@@ -161,10 +161,12 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = createMinimalDataFrame();
 
-        // In parallel mode, exceptions are collected but may not propagate the same way
-        // The orchestrator logs errors but doesn't necessarily throw
-        // This test verifies that B's dependency on A is respected
-        REQUIRE_NOTHROW(orch.ExecutePipeline(std::move(inputData)));
+        // When B throws, the exception propagates and the pipeline fails
+        // C should not execute because B (its dependency) failed
+        REQUIRE_THROWS_WITH(
+            orch.ExecutePipeline(std::move(inputData)),
+            Catch::Matchers::ContainsSubstring("B failed")
+        );
     }
 
     SECTION("Multiple transforms failing - first exception wins") {

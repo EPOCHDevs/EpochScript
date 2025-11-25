@@ -383,14 +383,18 @@ TEST_CASE("Transform Metadata Factory") {
     }
 
     // Get required data sources from metadata and provide OHLCV data
-    // Column names need # prefix to match GetInputId() format (node_id + "#" + handle)
+    // Provide BOTH raw column names (c, h, l, o, v) AND #-prefixed columns (#c, #h, #l, #o, #v)
+    // - Raw names used by transforms that access data sources directly via C.CLOSE() etc.
+    // - #-prefixed names used by transforms that access via GetInputId()
     auto requiredDataSources = metadata.requiredDataSources;
 
     for (auto const &[i, dataSource] :
          requiredDataSources | std::views::enumerate) {
       config["inputs"][dataSource] = makeInputRef(dataSource);
-      // Column names need # prefix to match GetInputId() format
-      fields_vec.emplace_back("#" + dataSource);
+      // Add both raw column name and #-prefixed column name
+      fields_vec.emplace_back(dataSource);  // Raw name (e.g., "c", "h", "l")
+      inputs_vec.emplace_back(dataSources.at(dataSource));
+      fields_vec.emplace_back("#" + dataSource);  // Prefixed name (e.g., "#c", "#h", "#l")
       inputs_vec.emplace_back(dataSources.at(dataSource));
     }
 
@@ -609,8 +613,9 @@ TEST_CASE("Transform Metadata Factory") {
         }
       }
     } else {
-      // Non-cross-sectional: outputs should match 1:1 with result columns
-      REQUIRE(outputs.size() == result.num_cols());
+      // Non-cross-sectional: result should have AT LEAST the expected outputs
+      // May have more columns due to dual column naming (both raw and #-prefixed)
+      REQUIRE(outputs.size() <= result.num_cols());
 
       for (auto const &output : outputs) {
         auto outputCol = transform->GetOutputId(output.id);

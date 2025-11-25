@@ -430,4 +430,65 @@ namespace epoch_script
         return stringify_node_id;
     }
 
+    void TypeChecker::SpecializeAliasNodes()
+    {
+        // Iterate through all algorithm nodes and specialize alias nodes
+        for (auto& algo : context_.algorithms)
+        {
+            if (algo.type != "alias")
+            {
+                continue;
+            }
+
+            // Get the input to the alias node
+            auto slot_it = algo.inputs.find("SLOT");
+            if (slot_it == algo.inputs.end() || slot_it->second.empty())
+            {
+                // No input - skip (shouldn't happen for valid alias nodes)
+                continue;
+            }
+
+            const auto& input_value = slot_it->second[0];
+            if (!input_value.IsNodeReference())
+            {
+                // Literal input - use alias_decimal as default
+                algo.type = "alias_decimal";
+                context_.node_output_types[algo.id]["result"] = DataType::Decimal;
+                continue;
+            }
+
+            // Get the type of the input
+            const auto& ref = input_value.GetNodeReference();
+            DataType input_type = GetNodeOutputType(ref.GetNodeId(), ref.GetHandle());
+
+            // Specialize the alias type based on input type
+            switch (input_type)
+            {
+                case DataType::Boolean:
+                    algo.type = "alias_boolean";
+                    context_.node_output_types[algo.id]["result"] = DataType::Boolean;
+                    break;
+                case DataType::Integer:
+                    algo.type = "alias_integer";
+                    context_.node_output_types[algo.id]["result"] = DataType::Integer;
+                    break;
+                case DataType::String:
+                    algo.type = "alias_string";
+                    context_.node_output_types[algo.id]["result"] = DataType::String;
+                    break;
+                case DataType::Timestamp:
+                    algo.type = "alias_timestamp";
+                    context_.node_output_types[algo.id]["result"] = DataType::Timestamp;
+                    break;
+                case DataType::Decimal:
+                case DataType::Number:
+                case DataType::Any:
+                default:
+                    algo.type = "alias_decimal";
+                    context_.node_output_types[algo.id]["result"] = DataType::Decimal;
+                    break;
+            }
+        }
+    }
+
 } // namespace epoch_script

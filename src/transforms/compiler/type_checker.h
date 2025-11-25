@@ -52,6 +52,10 @@ namespace epoch_script
         // Returns the new node ID of the inserted stringify node
         std::string InsertStringify(const std::string& source_node_id, const std::string& source_handle);
 
+        // Specialize alias nodes based on their input types
+        // Rewrites generic "alias" nodes to typed versions (alias_decimal, alias_boolean, etc.)
+        void SpecializeAliasNodes();
+
     private:
         CompilationContext& context_;
 

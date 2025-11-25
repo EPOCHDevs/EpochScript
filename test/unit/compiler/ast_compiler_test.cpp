@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <algorithm>
+#include <set>
 #include "transforms/compiler/ast_compiler.h"
 
 using namespace epoch_script;
@@ -452,5 +453,107 @@ report = numeric_cards_report(agg="sum", category="Test", title="Test")(result)
         // Should be either 1Min or 5Min
         bool valid_timeframe = (tf_str == "1Min" || tf_str == "5Min");
         REQUIRE(valid_timeframe);
+    }
+}
+
+// ============================================================================
+// ALIAS NODE TESTS
+// ============================================================================
+
+TEST_CASE("Compiler: Creates alias nodes for variable assignments from node references", "[alias]")
+{
+    // When assigning a node output to a variable, an alias node should be created
+    // This gives each variable a unique column identifier
+    const std::string source = R"(
+mds = market_data_source(timeframe="1D")
+price = mds.c
+report = numeric_cards_report(agg="sum", category="Test", title="Test")(price)
+)";
+
+    AlgorithmAstCompiler compiler;
+    auto result = compiler.compile(source);
+
+    // Find the alias node named "price"
+    bool found_alias = false;
+    for (const auto &node : result)
+    {
+        if (node.id == "price")
+        {
+            found_alias = true;
+            // Should be a typed alias (alias_decimal for numeric data)
+            REQUIRE(node.type.find("alias_") != std::string::npos);
+            // Should have input wired to mds.c
+            REQUIRE(node.inputs.contains("SLOT"));
+            REQUIRE(!node.inputs.at("SLOT").empty());
+            REQUIRE(node.inputs.at("SLOT")[0].GetColumnIdentifier() == "mds#c");
+            break;
+        }
+    }
+    REQUIRE(found_alias);
+}
+
+TEST_CASE("Compiler: Multiple variables referencing same source get unique column identifiers", "[alias]")
+{
+    // Multiple variables assigned from the same source should each create
+    // their own alias node, giving them unique column identifiers
+    const std::string source = R"(
+mds = market_data_source(timeframe="1D")
+pe = mds.c
+ps = mds.c
+pb = mds.c
+sum_node = add()(pe, ps)
+report = numeric_cards_report(agg="sum", category="Test", title="Test")(sum_node)
+)";
+
+    AlgorithmAstCompiler compiler;
+    auto result = compiler.compile(source);
+
+    // Find all alias nodes and verify they have unique IDs
+    std::vector<std::string> alias_ids;
+    for (const auto &node : result)
+    {
+        if (node.type.find("alias_") != std::string::npos)
+        {
+            alias_ids.push_back(node.id);
+        }
+    }
+
+    // Should have at least pe and ps alias nodes (pb may be orphan-removed if unused)
+    REQUIRE(alias_ids.size() >= 2);
+
+    // All alias IDs should be unique
+    std::set<std::string> unique_ids(alias_ids.begin(), alias_ids.end());
+    REQUIRE(unique_ids.size() == alias_ids.size());
+
+    // Verify pe and ps exist with their variable names as node IDs
+    bool found_pe = std::find(alias_ids.begin(), alias_ids.end(), "pe") != alias_ids.end();
+    bool found_ps = std::find(alias_ids.begin(), alias_ids.end(), "ps") != alias_ids.end();
+    REQUIRE(found_pe);
+    REQUIRE(found_ps);
+}
+
+TEST_CASE("Compiler: Alias nodes preserve type information", "[alias]")
+{
+    // Alias nodes should be specialized based on their input type
+    const std::string source = R"(
+mds = market_data_source(timeframe="1D")
+price = mds.c
+is_up = gt()(price, price)
+signal = is_up
+report = boolean_cards_report(agg="any", category="Test", title="Test")(signal)
+)";
+
+    AlgorithmAstCompiler compiler;
+    auto result = compiler.compile(source);
+
+    // Find the signal alias node (should be alias_boolean since is_up is boolean)
+    for (const auto &node : result)
+    {
+        if (node.id == "signal")
+        {
+            // is_up is boolean (output of gt), so signal alias should be alias_boolean
+            REQUIRE(node.type == "alias_boolean");
+            break;
+        }
     }
 }

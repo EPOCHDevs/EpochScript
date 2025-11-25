@@ -318,6 +318,15 @@ bool CSEOptimizer::ShouldExcludeFromCSE(const std::string& type) const
         "portfolio_executor"
     };
 
+    // Alias nodes should never be deduplicated - each represents a distinct
+    // variable assignment that needs a unique column identifier.
+    // This prevents the "duplicate columns" error when the same source column
+    // is referenced by multiple variables.
+    if (type.starts_with("alias") || type == "alias")
+    {
+        return true;
+    }
+
     return excluded_types.count(type) > 0;
 }
 

@@ -78,6 +78,7 @@
 #include "operators/validation_metadata.h"
 #include "operators/static_cast_metadata.h"
 #include "operators/stringify_metadata.h"
+#include "operators/alias_metadata.h"
 #include "reports/numeric_card_report.h"
 #include "reports/boolean_card_report.h"
 #include "reports/any_card_report.h"
@@ -197,6 +198,13 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(static_cast_to_boolean, StaticCastToBoolean);
   REGISTER_TRANSFORM(static_cast_to_string, StaticCastToString);
   REGISTER_TRANSFORM(static_cast_to_timestamp, StaticCastToTimestamp);
+
+  // Alias Transforms (compiler-inserted for unique column identifiers)
+  REGISTER_TRANSFORM(alias_decimal, AliasDecimal);
+  REGISTER_TRANSFORM(alias_boolean, AliasBoolean);
+  REGISTER_TRANSFORM(alias_string, AliasString);
+  REGISTER_TRANSFORM(alias_integer, AliasInteger);
+  REGISTER_TRANSFORM(alias_timestamp, AliasTimestamp);
 
   REGISTER_TRANSFORM(modulo, ModuloTransform);
   REGISTER_TRANSFORM(power_op, PowerTransform);

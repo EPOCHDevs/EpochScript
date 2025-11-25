@@ -246,6 +246,10 @@ namespace epoch_script
             }
         }
 
+        // Specialize alias nodes based on their input types
+        // Rewrites generic "alias" nodes to typed versions (alias_decimal, alias_boolean, etc.)
+        type_checker_->SpecializeAliasNodes();
+
         // Remove orphan nodes (nodes not used by any sink/executor)
         // Must run BEFORE timeframe resolution to avoid resolving timeframes for dead code
         // Orphans occur when users write unused variables: x = 5.0 (never used)
