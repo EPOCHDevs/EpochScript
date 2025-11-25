@@ -780,13 +780,13 @@ namespace epoch_script
         {
             // Complex case: a and b and c ...
             context_.algorithms[node_indices[0]].inputs[ARG0].push_back(handles[0]);
-            context_.algorithms[node_indices[0]].inputs[ARG1].push_back(strategy::NodeReference(node_ids[1], "result"));
+            context_.algorithms[node_indices[0]].inputs[ARG1].emplace_back(strategy::NodeReference(node_ids[1], "result"));
 
             // Middle nodes
             for (size_t i = 1; i < node_ids.size() - 1; ++i)
             {
                 context_.algorithms[node_indices[i]].inputs[ARG0].push_back(handles[i]);
-                context_.algorithms[node_indices[i]].inputs[ARG1].push_back(strategy::NodeReference(node_ids[i + 1], "result"));
+                context_.algorithms[node_indices[i]].inputs[ARG1].emplace_back(strategy::NodeReference(node_ids[i + 1], "result"));
             }
 
             // Last node

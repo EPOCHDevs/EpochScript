@@ -22,6 +22,8 @@
 #include <trompeloeil.hpp>
 #include <stdexcept>
 #include <epoch_frame/factory/dataframe_factory.h>
+#include <epoch_frame/factory/index_factory.h>
+#include <epoch_frame/factory/array_factory.h>
 #include <index/datetime_index.h>
 
 using namespace epoch_script::runtime;
@@ -134,16 +136,20 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors
         auto mockB = CreateSimpleMockTransform("B", dailyTF, {"A#result"}, {"result"});
         auto mockC = CreateSimpleMockTransform("C", dailyTF, {"B#result"}, {"result"});
 
+        // Create named variables for return values (required by trompeloeil LR_RETURN macro)
+        epoch_frame::DataFrame dfForA = createMinimalDataFrame();
+        epoch_frame::DataFrame dfForC = createMinimalDataFrame();
+
         // mockA must return valid data so B gets executed
         ALLOW_CALL(*mockA, TransformData(trompeloeil::_))
-            .RETURN(createMinimalDataFrame());
+            .LR_RETURN(dfForA);
 
         ALLOW_CALL(*mockB, TransformData(trompeloeil::_))
             .THROW(std::runtime_error("B failed"));
 
         // mockC won't be called (either skipped or dependency failed)
         ALLOW_CALL(*mockC, TransformData(trompeloeil::_))
-            .LR_RETURN(createMinimalDataFrame());
+            .LR_RETURN(dfForC);
 
         std::vector<std::unique_ptr<epoch_script::transform::ITransformBase>> transforms;
         transforms.push_back(std::move(mockA));
