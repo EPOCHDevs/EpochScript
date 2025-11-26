@@ -389,7 +389,16 @@ namespace glz {
     {
       std::string source_code;
       parse<JSON>::op<Opts>(source_code, args...);
-      value = epoch_script::strategy::PythonSource(source_code);
+
+      // Try to compile - catch exceptions and re-throw with better context
+      try {
+        value = epoch_script::strategy::PythonSource(source_code);
+      } catch (const std::exception& ex) {
+        // Re-throw with EpochScript compilation context
+        throw std::runtime_error(
+          std::string("EpochScript compilation failed: ") + ex.what()
+        );
+      }
     }
   };
 } // namespace glz
