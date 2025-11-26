@@ -33,7 +33,7 @@ std::string SeriesConfigurationBuilder::BuildDescriptiveName(
   // Use the actual configured options, not the default ones
   const auto &configuredOptions = cfg.GetOptions();
   for (const auto &[optionId, optionValue] : configuredOptions) {
-    ss << " ";
+    ss << " " << optionId << "=";
     std::visit(
         [&ss]<typename T>(const T &arg) {
           if constexpr (std::is_same_v<T, std::string>) {

@@ -52,7 +52,7 @@ TEST_CASE("SeriesConfigurationBuilder",
 
     REQUIRE(series.id == "1");
     REQUIRE(series.type == "line");
-    REQUIRE(series.name == "SMA 10");
+    REQUIRE(series.name == "SMA period=10");
     REQUIRE(series.dataMapping.size() == 2);
     REQUIRE(series.dataMapping.at("index") == "index");
     REQUIRE(series.dataMapping.at("value") == "1#result");
@@ -243,8 +243,8 @@ TEST_CASE("SeriesConfigurationBuilder",
     auto series =
         SeriesConfigurationBuilder::BuildSeries(sma, 0, std::nullopt, "1");
 
-    // SMA should have a display name from metadata
-    REQUIRE(series.name == "SMA 10");
+    // SMA should have a display name from metadata with parameter names
+    REQUIRE(series.name == "SMA period=10");
   }
 
   SECTION("Falls back to transform name when metadata name is empty") {
