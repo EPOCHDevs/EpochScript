@@ -558,11 +558,54 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::trade_signal));
   }
 
-  SECTION("ML/AI indicators - Hidden Markov Model") {
-    auto hmm_cfg = transform::hmm_single_cfg("1", src.GetOutputId("c"), tf, 3, 1000, 1e-5, true, 100, 0);
+  SECTION("ML/AI indicators - Hidden Markov Model (2-state)") {
+    auto hmm_cfg = transform::hmm_single_cfg("1", src.GetOutputId("c"), tf, 2, 1000, 1e-5, true, 100, 0);
 
     REQUIRE(registry.IsRegistered(TransformPlotKind::hmm));
     REQUIRE_NOTHROW(registry.GetBuilder(TransformPlotKind::hmm));
+
+    const auto& builder = registry.GetBuilder(TransformPlotKind::hmm);
+    auto dataMapping = builder.Build(hmm_cfg);
+
+    // HMM 2-state has: index, state, state_0_prob, state_1_prob
+    REQUIRE(dataMapping.size() == 4);
+    REQUIRE(dataMapping.count("index") == 1);
+    REQUIRE(dataMapping.count("state") == 1);
+    REQUIRE(dataMapping.count("state_0_prob") == 1);
+    REQUIRE(dataMapping.count("state_1_prob") == 1);
+    REQUIRE(builder.RequiresOwnAxis() == false);
+  }
+
+  SECTION("ML/AI indicators - Hidden Markov Model (3-state)") {
+    auto hmm_cfg = transform::hmm_single_cfg("1", src.GetOutputId("c"), tf, 3, 1000, 1e-5, true, 100, 0);
+
+    const auto& builder = registry.GetBuilder(TransformPlotKind::hmm);
+    auto dataMapping = builder.Build(hmm_cfg);
+
+    // HMM 3-state has: index, state, state_0_prob, state_1_prob, state_2_prob
+    REQUIRE(dataMapping.size() == 5);
+    REQUIRE(dataMapping.count("index") == 1);
+    REQUIRE(dataMapping.count("state") == 1);
+    REQUIRE(dataMapping.count("state_0_prob") == 1);
+    REQUIRE(dataMapping.count("state_1_prob") == 1);
+    REQUIRE(dataMapping.count("state_2_prob") == 1);
+  }
+
+  SECTION("ML/AI indicators - Hidden Markov Model (5-state)") {
+    auto hmm_cfg = transform::hmm_single_cfg("1", src.GetOutputId("c"), tf, 5, 1000, 1e-5, true, 100, 0);
+
+    const auto& builder = registry.GetBuilder(TransformPlotKind::hmm);
+    auto dataMapping = builder.Build(hmm_cfg);
+
+    // HMM 5-state has: index, state, state_0_prob through state_4_prob
+    REQUIRE(dataMapping.size() == 7);
+    REQUIRE(dataMapping.count("index") == 1);
+    REQUIRE(dataMapping.count("state") == 1);
+    REQUIRE(dataMapping.count("state_0_prob") == 1);
+    REQUIRE(dataMapping.count("state_1_prob") == 1);
+    REQUIRE(dataMapping.count("state_2_prob") == 1);
+    REQUIRE(dataMapping.count("state_3_prob") == 1);
+    REQUIRE(dataMapping.count("state_4_prob") == 1);
   }
 
   SECTION("ML/AI indicators - Sentiment Analysis") {

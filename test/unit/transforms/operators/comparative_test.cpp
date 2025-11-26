@@ -85,8 +85,8 @@ TEST_CASE("Comparative Transforms") {
     // Vector-based comparisons
     SECTION("Vector Equals (vector_eq)") {
       TransformConfiguration config = vector_op(
-          "eq", 7, strategy::InputValue(strategy::NodeReference("actual")),
-          strategy::InputValue(strategy::NodeReference("expected")),
+          "eq", "7", strategy::InputValue(strategy::NodeReference("actual", "actual")),
+          strategy::InputValue(strategy::NodeReference("expected", "expected")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -103,8 +103,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Vector Not Equals (vector_neq)") {
       TransformConfiguration config = vector_op(
-          "neq", 8, strategy::InputValue(strategy::NodeReference("actual")),
-          strategy::InputValue(strategy::NodeReference("expected")),
+          "neq", "8", strategy::InputValue(strategy::NodeReference("actual", "actual")),
+          strategy::InputValue(strategy::NodeReference("expected", "expected")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -121,8 +121,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Vector Less Than (vector_lt)") {
       TransformConfiguration config = vector_op(
-          "lt", 9, strategy::InputValue(strategy::NodeReference("previous")),
-          strategy::InputValue(strategy::NodeReference("current")),
+          "lt", "9", strategy::InputValue(strategy::NodeReference("previous", "previous")),
+          strategy::InputValue(strategy::NodeReference("current", "current")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -139,8 +139,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Vector Less Than Equals (vector_lte)") {
       TransformConfiguration config = vector_op(
-          "lte", 10, strategy::InputValue(strategy::NodeReference("previous")),
-          strategy::InputValue(strategy::NodeReference("current")),
+          "lte", "10", strategy::InputValue(strategy::NodeReference("previous", "previous")),
+          strategy::InputValue(strategy::NodeReference("current", "current")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -161,8 +161,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Logical OR (logical_or)") {
       TransformConfiguration config = logical_op(
-          "or", 11, strategy::InputValue(strategy::NodeReference("bool_a")),
-          strategy::InputValue(strategy::NodeReference("bool_b")),
+          "or", "11", strategy::InputValue(strategy::NodeReference("bool_a", "bool_a")),
+          strategy::InputValue(strategy::NodeReference("bool_b", "bool_b")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -179,8 +179,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Logical AND (logical_and)") {
       TransformConfiguration config = logical_op(
-          "and", 12, strategy::InputValue(strategy::NodeReference("bool_a")),
-          strategy::InputValue(strategy::NodeReference("bool_b")),
+          "and", "12", strategy::InputValue(strategy::NodeReference("bool_a", "bool_a")),
+          strategy::InputValue(strategy::NodeReference("bool_b", "bool_b")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -197,7 +197,7 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Logical NOT (logical_not)") {
       TransformConfiguration config = single_operand_op(
-          "logical", "not", 13, strategy::InputValue(strategy::NodeReference("bool_a")),
+          "logical", "not", "13", strategy::InputValue(strategy::NodeReference("bool_a", "bool_a")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -214,8 +214,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Logical XOR (logical_xor)") {
       TransformConfiguration config = logical_op(
-          "xor", 14, strategy::InputValue(strategy::NodeReference("bool_a")),
-          strategy::InputValue(strategy::NodeReference("bool_b")),
+          "xor", "14", strategy::InputValue(strategy::NodeReference("bool_a", "bool_a")),
+          strategy::InputValue(strategy::NodeReference("bool_b", "bool_b")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -232,8 +232,8 @@ TEST_CASE("Comparative Transforms") {
 
     SECTION("Logical AND NOT (logical_and_not)") {
       TransformConfiguration config = logical_op(
-          "and_not", 15, strategy::InputValue(strategy::NodeReference("bool_a")),
-          strategy::InputValue(strategy::NodeReference("bool_b")),
+          "and_not", "15", strategy::InputValue(strategy::NodeReference("bool_a", "bool_a")),
+          strategy::InputValue(strategy::NodeReference("bool_b", "bool_b")),
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -299,7 +299,9 @@ timeframe: {}
 
     SECTION("Select2 Transform") {
       TransformConfiguration config = select_n(
-          21, 2, "selector", {"option_0", "option_1"},
+          21, 2, strategy::InputValue(strategy::NodeReference("selector", "selector")),
+          {strategy::InputValue(strategy::NodeReference("option_0", "option_0")),
+           strategy::InputValue(strategy::NodeReference("option_1", "option_1"))},
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -341,7 +343,10 @@ timeframe: {}
            arrow::field("option_2", arrow::float64())});
 
       TransformConfiguration config = select_n(
-          22, 3, "selector", {"option_0", "option_1", "option_2"},
+          22, 3, strategy::InputValue(strategy::NodeReference("selector", "selector")),
+          {strategy::InputValue(strategy::NodeReference("option_0", "option_0")),
+           strategy::InputValue(strategy::NodeReference("option_1", "option_1")),
+           strategy::InputValue(strategy::NodeReference("option_2", "option_2"))},
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -382,7 +387,11 @@ timeframe: {}
            arrow::field("option_3", arrow::float64())});
 
       TransformConfiguration config = select_n(
-          23, 4, "selector", {"option_0", "option_1", "option_2", "option_3"},
+          23, 4, strategy::InputValue(strategy::NodeReference("selector", "selector")),
+          {strategy::InputValue(strategy::NodeReference("option_0", "option_0")),
+           strategy::InputValue(strategy::NodeReference("option_1", "option_1")),
+           strategy::InputValue(strategy::NodeReference("option_2", "option_2")),
+           strategy::InputValue(strategy::NodeReference("option_3", "option_3"))},
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -434,8 +443,12 @@ timeframe: {}
            arrow::field("option_4", arrow::float64())});
 
       TransformConfiguration config = select_n(
-          24, 5, "selector",
-          {"option_0", "option_1", "option_2", "option_3", "option_4"},
+          24, 5, strategy::InputValue(strategy::NodeReference("selector", "selector")),
+          {strategy::InputValue(strategy::NodeReference("option_0", "option_0")),
+           strategy::InputValue(strategy::NodeReference("option_1", "option_1")),
+           strategy::InputValue(strategy::NodeReference("option_2", "option_2")),
+           strategy::InputValue(strategy::NodeReference("option_3", "option_3")),
+           strategy::InputValue(strategy::NodeReference("option_4", "option_4"))},
           epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -461,8 +474,8 @@ TEST_CASE("Additional Comparative Transforms") {
     epoch_frame::DataFrame input = MakeNumericDataFrame();
 
     TransformConfiguration config = vector_op(
-        "gt", 25, strategy::InputValue(strategy::NodeReference("current")),
-        strategy::InputValue(strategy::NodeReference("previous")),
+        "gt", "25", strategy::InputValue(strategy::NodeReference("current", "current")),
+        strategy::InputValue(strategy::NodeReference("previous", "previous")),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -481,8 +494,8 @@ TEST_CASE("Additional Comparative Transforms") {
     epoch_frame::DataFrame input = MakeNumericDataFrame();
 
     TransformConfiguration config = vector_op(
-        "gte", 26, strategy::InputValue(strategy::NodeReference("current")),
-        strategy::InputValue(strategy::NodeReference("previous")),
+        "gte", "26", strategy::InputValue(strategy::NodeReference("current", "current")),
+        strategy::InputValue(strategy::NodeReference("previous", "previous")),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -576,7 +589,7 @@ timeframe: {}
 
     // Use the helper function instead of direct YAML
     TransformConfiguration config = boolean_branch(
-        "31", strategy::InputValue(strategy::NodeReference("condition")),
+        "31", strategy::InputValue(strategy::NodeReference("condition", "condition")),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
     auto transformBase = MAKE_TRANSFORM(config);
@@ -611,7 +624,7 @@ timeframe: {}
 
     // Use the helper function instead of direct YAML
     TransformConfiguration config = ratio_branch(
-        "32", strategy::InputValue(strategy::NodeReference("ratio")), 1.5, 0.8,
+        "32", strategy::InputValue(strategy::NodeReference("ratio", "ratio")), 1.5, 0.8,
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
 
     auto transformBase = MAKE_TRANSFORM(config);
@@ -675,28 +688,24 @@ TEST_CASE("Value Comparison Operators", "[value_compare]") {
     // Simple tests for Previous comparisons - these work correctly
     struct TestCase {
       std::string name;
-      std::function<TransformConfiguration(std::string, std::string, int,
+      std::function<TransformConfiguration(std::string const &, InputVal const &, int64_t,
                                            const epoch_script::TimeFrame &)>
           configFn;
       std::vector<std::optional<bool>> expectedResults;
     };
 
-    const std::vector<TestCase> testCases = {
-        {"GreaterThan", previous_gt, {std::nullopt, true, false, true, false}},
-        {"GreaterThanOrEqual",
-         previous_gte,
-         {std::nullopt, true, false, true, false}},
-        {"LessThan", previous_lt, {std::nullopt, false, true, false, true}},
-        {"LessThanOrEqual",
-         previous_lte,
-         {std::nullopt, false, true, false, true}},
-        {"Equals", previous_eq, {std::nullopt, false, false, false, false}},
-        {"NotEquals", previous_neq, {std::nullopt, true, true, true, true}}};
+    std::vector<TestCase> testCases;
+    testCases.push_back(TestCase{"GreaterThan", previous_gt, {std::nullopt, true, false, true, false}});
+    testCases.push_back(TestCase{"GreaterThanOrEqual", previous_gte, {std::nullopt, true, false, true, false}});
+    testCases.push_back(TestCase{"LessThan", previous_lt, {std::nullopt, false, true, false, true}});
+    testCases.push_back(TestCase{"LessThanOrEqual", previous_lte, {std::nullopt, false, true, false, true}});
+    testCases.push_back(TestCase{"Equals", previous_eq, {std::nullopt, false, false, false, false}});
+    testCases.push_back(TestCase{"NotEquals", previous_neq, {std::nullopt, true, true, true, true}});
 
     for (const auto &test : testCases) {
       SECTION(test.name) {
         TransformConfiguration config =
-            test.configFn("test_id", "price", 1,
+            test.configFn("test_id", strategy::InputValue(strategy::NodeReference("price", "price")), 1,
                           epoch_script::EpochStratifyXConstants::instance()
                               .DAILY_FREQUENCY);
 
@@ -742,37 +751,25 @@ TEST_CASE("Value Comparison Operators", "[value_compare]") {
 
     struct TestCase {
       std::string name;
-      std::function<TransformConfiguration(std::string, std::string, int,
+      std::function<TransformConfiguration(std::string const &, InputVal const &, int64_t,
                                            const epoch_script::TimeFrame &)>
           configFn;
       std::vector<std::optional<bool>> expectedResults;
     };
 
     // Adjusted expected values based on the above calculation
-    const std::vector<TestCase> highestTestCases = {
-        {"GreaterThan",
-         highest_gt,
-         {std::nullopt, std::nullopt, false, false, false, false}},
-        {"GreaterThanOrEqual",
-         highest_gte,
-         {std::nullopt, std::nullopt, false, true, false, true}},
-        {"LessThan",
-         highest_lt,
-         {std::nullopt, std::nullopt, true, false, true, false}},
-        {"LessThanOrEqual",
-         highest_lte,
-         {std::nullopt, std::nullopt, true, true, true, true}},
-        {"Equals",
-         highest_eq,
-         {std::nullopt, std::nullopt, false, true, false, true}},
-        {"NotEquals",
-         highest_neq,
-         {std::nullopt, std::nullopt, true, false, true, false}}};
+    std::vector<TestCase> highestTestCases;
+    highestTestCases.push_back(TestCase{"GreaterThan", highest_gt, {std::nullopt, std::nullopt, false, false, false, false}});
+    highestTestCases.push_back(TestCase{"GreaterThanOrEqual", highest_gte, {std::nullopt, std::nullopt, false, true, false, true}});
+    highestTestCases.push_back(TestCase{"LessThan", highest_lt, {std::nullopt, std::nullopt, true, false, true, false}});
+    highestTestCases.push_back(TestCase{"LessThanOrEqual", highest_lte, {std::nullopt, std::nullopt, true, true, true, true}});
+    highestTestCases.push_back(TestCase{"Equals", highest_eq, {std::nullopt, std::nullopt, false, true, false, true}});
+    highestTestCases.push_back(TestCase{"NotEquals", highest_neq, {std::nullopt, std::nullopt, true, false, true, false}});
 
     for (const auto &test : highestTestCases) {
       SECTION(test.name) {
         TransformConfiguration config =
-            test.configFn("test_id", "price", lookback,
+            test.configFn("test_id", strategy::InputValue(strategy::NodeReference("price", "price")), lookback,
                           epoch_script::EpochStratifyXConstants::instance()
                               .DAILY_FREQUENCY);
 
@@ -818,37 +815,25 @@ TEST_CASE("Value Comparison Operators", "[value_compare]") {
 
     struct TestCase {
       std::string name;
-      std::function<TransformConfiguration(std::string, std::string, int,
+      std::function<TransformConfiguration(std::string const &, InputVal const &, int64_t,
                                            const epoch_script::TimeFrame &)>
           configFn;
       std::vector<std::optional<bool>> expectedResults;
     };
 
     // Adjusted expected values based on the above calculation
-    const std::vector<TestCase> lowestTestCases = {
-        {"GreaterThan",
-         lowest_gt,
-         {std::nullopt, std::nullopt, false, true, true, true}},
-        {"GreaterThanOrEqual",
-         lowest_gte,
-         {std::nullopt, std::nullopt, true, true, true, true}},
-        {"LessThan",
-         lowest_lt,
-         {std::nullopt, std::nullopt, false, false, false, false}},
-        {"LessThanOrEqual",
-         lowest_lte,
-         {std::nullopt, std::nullopt, true, false, false, false}},
-        {"Equals",
-         lowest_eq,
-         {std::nullopt, std::nullopt, true, false, false, false}},
-        {"NotEquals",
-         lowest_neq,
-         {std::nullopt, std::nullopt, false, true, true, true}}};
+    std::vector<TestCase> lowestTestCases;
+    lowestTestCases.push_back(TestCase{"GreaterThan", lowest_gt, {std::nullopt, std::nullopt, false, true, true, true}});
+    lowestTestCases.push_back(TestCase{"GreaterThanOrEqual", lowest_gte, {std::nullopt, std::nullopt, true, true, true, true}});
+    lowestTestCases.push_back(TestCase{"LessThan", lowest_lt, {std::nullopt, std::nullopt, false, false, false, false}});
+    lowestTestCases.push_back(TestCase{"LessThanOrEqual", lowest_lte, {std::nullopt, std::nullopt, true, false, false, false}});
+    lowestTestCases.push_back(TestCase{"Equals", lowest_eq, {std::nullopt, std::nullopt, true, false, false, false}});
+    lowestTestCases.push_back(TestCase{"NotEquals", lowest_neq, {std::nullopt, std::nullopt, false, true, true, true}});
 
     for (const auto &test : lowestTestCases) {
       SECTION(test.name) {
         TransformConfiguration config =
-            test.configFn("test_id", "price", lookback,
+            test.configFn("test_id", strategy::InputValue(strategy::NodeReference("price", "price")), lookback,
                           epoch_script::EpochStratifyXConstants::instance()
                               .DAILY_FREQUENCY);
 
@@ -900,7 +885,8 @@ TEST_CASE("Type Casting in Equality Operators", "[equality][type_cast]") {
          arrow::field("double_column", arrow::float64())});
 
     TransformConfiguration config = vector_op(
-        "neq", 100, "bool_column", "double_column",
+        "neq", "100", strategy::InputValue(strategy::NodeReference("bool_column", "bool_column")),
+        strategy::InputValue(strategy::NodeReference("double_column", "double_column")),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -933,7 +919,8 @@ TEST_CASE("Type Casting in Equality Operators", "[equality][type_cast]") {
          arrow::field("double_column", arrow::float64())});
 
     TransformConfiguration config = vector_op(
-        "eq", 101, "bool_column", "double_column",
+        "eq", "101", strategy::InputValue(strategy::NodeReference("bool_column", "bool_column")),
+        strategy::InputValue(strategy::NodeReference("double_column", "double_column")),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -966,7 +953,8 @@ TEST_CASE("Type Casting in Equality Operators", "[equality][type_cast]") {
          arrow::field("bool_column", arrow::boolean())});
 
     TransformConfiguration config = vector_op(
-        "neq", 102, "double_column", "bool_column",
+        "neq", "102", strategy::InputValue(strategy::NodeReference("double_column", "double_column")),
+        strategy::InputValue(strategy::NodeReference("bool_column", "bool_column")),
         epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -1006,7 +994,9 @@ TEST_CASE("FirstNonNull Transform (Coalesce)") {
     // Use typed first_non_null_number helper
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
     TransformConfiguration config = typed_first_non_null("first_non_null_number", 200,
-                                                         {"SLOT0", "SLOT1", "SLOT2"},
+                                                         {strategy::InputValue(strategy::NodeReference("SLOT0", "SLOT0")),
+                                                          strategy::InputValue(strategy::NodeReference("SLOT1", "SLOT1")),
+                                                          strategy::InputValue(strategy::NodeReference("SLOT2", "SLOT2"))},
                                                          timeframe);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -1036,7 +1026,9 @@ TEST_CASE("FirstNonNull Transform (Coalesce)") {
     // Use typed first_non_null_number helper
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
     TransformConfiguration config = typed_first_non_null("first_non_null_number", 201,
-                                                         {"SLOT0", "SLOT1", "SLOT2"},
+                                                         {strategy::InputValue(strategy::NodeReference("SLOT0", "SLOT0")),
+                                                          strategy::InputValue(strategy::NodeReference("SLOT1", "SLOT1")),
+                                                          strategy::InputValue(strategy::NodeReference("SLOT2", "SLOT2"))},
                                                          timeframe);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -1061,7 +1053,9 @@ TEST_CASE("FirstNonNull Transform (Coalesce)") {
     // Use typed first_non_null_number helper
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
     TransformConfiguration config = typed_first_non_null("first_non_null_number", 202,
-                                                         {"SLOT0", "SLOT1", "SLOT2"},
+                                                         {strategy::InputValue(strategy::NodeReference("SLOT0", "SLOT0")),
+                                                          strategy::InputValue(strategy::NodeReference("SLOT1", "SLOT1")),
+                                                          strategy::InputValue(strategy::NodeReference("SLOT2", "SLOT2"))},
                                                          timeframe);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -1102,7 +1096,10 @@ TEST_CASE("ConditionalSelect Transform (Case When)") {
     // Use typed conditional_select_number - values are numeric (float64)
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
     TransformConfiguration config = typed_conditional_select("conditional_select_number", 300,
-                                                             {"SLOT0", "SLOT1", "SLOT2", "SLOT3"},
+                                                             {strategy::InputValue(strategy::NodeReference("SLOT0", "SLOT0")),
+                                                              strategy::InputValue(strategy::NodeReference("SLOT1", "SLOT1")),
+                                                              strategy::InputValue(strategy::NodeReference("SLOT2", "SLOT2")),
+                                                              strategy::InputValue(strategy::NodeReference("SLOT3", "SLOT3"))},
                                                              timeframe);
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -1136,7 +1133,10 @@ TEST_CASE("ConditionalSelect Transform (Case When)") {
     // Use typed conditional_select_number helper
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
     TransformConfiguration config = typed_conditional_select("conditional_select_number", 301,
-                                                             {"SLOT0", "SLOT1", "SLOT2", "SLOT3"},
+                                                             {strategy::InputValue(strategy::NodeReference("SLOT0", "SLOT0")),
+                                                              strategy::InputValue(strategy::NodeReference("SLOT1", "SLOT1")),
+                                                              strategy::InputValue(strategy::NodeReference("SLOT2", "SLOT2")),
+                                                              strategy::InputValue(strategy::NodeReference("SLOT3", "SLOT3"))},
                                                              timeframe);
 
     auto transformBase = MAKE_TRANSFORM(config);
@@ -1175,7 +1175,11 @@ TEST_CASE("ConditionalSelect Transform (Case When)") {
     // Use typed conditional_select_number helper with default value (odd number of inputs)
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
     TransformConfiguration config = typed_conditional_select("conditional_select_number", 302,
-                                                             {"SLOT0", "SLOT1", "SLOT2", "SLOT3", "SLOT4"},
+                                                             {strategy::InputValue(strategy::NodeReference("SLOT0", "SLOT0")),
+                                                              strategy::InputValue(strategy::NodeReference("SLOT1", "SLOT1")),
+                                                              strategy::InputValue(strategy::NodeReference("SLOT2", "SLOT2")),
+                                                              strategy::InputValue(strategy::NodeReference("SLOT3", "SLOT3")),
+                                                              strategy::InputValue(strategy::NodeReference("SLOT4", "SLOT4"))},
                                                              timeframe);
 
     auto transformBase = MAKE_TRANSFORM(config);

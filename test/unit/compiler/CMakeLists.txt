@@ -9,4 +9,5 @@ target_sources(epoch_script_test PRIVATE
     any_type_resolution_test.cpp
     boolean_select_validation_test.cpp
     ternary_operator_test.cpp
+    python_boolean_operators_test.cpp
 )
