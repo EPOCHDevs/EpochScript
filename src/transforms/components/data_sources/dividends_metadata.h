@@ -22,7 +22,6 @@ MakeDividendsDataSource() {
   // Build outputs and requiredDataSources from SDK metadata
   auto outputs = BuildOutputsFromSDKMetadata(sdkMetadata);
   auto requiredDataSources = BuildRequiredDataSourcesFromSDKMetadata(sdkMetadata);
-
   // Dividends data source
   metadataList.emplace_back(
       epoch_script::transforms::TransformsMetaData{
@@ -30,7 +29,21 @@ MakeDividendsDataSource() {
           .category = epoch_core::TransformCategory::DataSource,
           .plotKind = epoch_core::TransformPlotKind::flag,
           .name = "Dividends",
-          .options = {},
+          .options = {
+              MetaDataOption{
+                  .id = "dividend_type",
+                  .name = "Dividend Type",
+                  .type = epoch_core::MetaDataOptionType::Select,
+                  .defaultValue = MetaDataOptionDefinition(std::string("")),  // Empty = all types
+                  .selectOption = {
+                      {"All Types", ""},
+                      {"Cash Dividend (CD)", "CD"},
+                      {"Stock/Special Cash (SC)", "SC"},
+                      {"Long-Term Capital Gain (LT)", "LT"},
+                      {"Short-Term Capital Gain (ST)", "ST"},
+                  },
+                  .desc = "Filter by dividend type. Leave empty for all types."},
+          },
           .isCrossSectional = false,
           .desc = sdkMetadata.description,
           .inputs = {},

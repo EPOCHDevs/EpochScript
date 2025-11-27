@@ -18,7 +18,7 @@ MakeSageMakerSentimentTransforms() {
           .name = "FinBERT Sentiment Analysis",
           .options = {},
           .isCrossSectional = false,
-          .desc = "Analyze financial sentiment of text using AWS SageMaker FinBERT model. "
+          .desc = "Analyze financial sentiment of text using FinBERT model. "
                   "Returns boolean flags for positive, neutral, and negative sentiment with confidence scores[0-1]. ",
           .inputs =
               {
@@ -32,7 +32,7 @@ MakeSageMakerSentimentTransforms() {
                   {epoch_core::IODataType::Decimal, "confidence", "Confidence Score[0-1]"},
               },
           .atLeastOneInputRequired = true,
-          .tags = {"ml", "nlp", "sentiment", "finbert", "aws", "sagemaker", "financial-text"},
+          .tags = {"ml", "nlp", "sentiment", "finbert", "financial-text"},
           .requiresTimeFrame = false,
           .requiredDataSources = {},
           .allowNullInputs = false,
@@ -49,7 +49,7 @@ MakeSageMakerSentimentTransforms() {
               "high_conf_positive = sent.positive and sent.confidence > 0.8",
           .limitations =
               "Empty or null text returns neutral=true with confidence 0.0. "
-              "Network latency and AWS costs apply per inference request.",
+              "Network latency applies per inference request.",
       });
 
   return metadataList;

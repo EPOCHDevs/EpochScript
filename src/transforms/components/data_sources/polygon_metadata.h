@@ -27,7 +27,19 @@ MakePolygonDataSources() {
           .category = epoch_core::TransformCategory::DataSource,
           .plotKind = epoch_core::TransformPlotKind::flag,
           .name = "Balance Sheet",
-          .options = {},
+          .options = {
+              MetaDataOption{
+                  .id = "period",  // NOT "timeframe" - reserved for orchestrator resampling
+                  .name = "Reporting Period",
+                  .type = epoch_core::MetaDataOptionType::Select,
+                  .defaultValue = std::nullopt,  // Required - no default
+                  .isRequired = true,
+                  .selectOption = {
+                      {"Quarterly (10-Q)", "quarterly"},
+                      {"Annual (10-K)", "annual"},
+                  },
+                  .desc = "Select financial statement reporting period"},
+          },
           .isCrossSectional = false,
           .desc = "Load balance sheet fundamental data. "
                   "Provides assets, liabilities, equity, and other balance "
@@ -68,7 +80,20 @@ MakePolygonDataSources() {
           .category = epoch_core::TransformCategory::DataSource,
           .plotKind = epoch_core::TransformPlotKind::flag,
           .name = "Income Statement",
-          .options = {},
+          .options = {
+              MetaDataOption{
+                  .id = "period",  // NOT "timeframe" - reserved for orchestrator resampling
+                  .name = "Reporting Period",
+                  .type = epoch_core::MetaDataOptionType::Select,
+                  .defaultValue = std::nullopt,  // Required - no default
+                  .isRequired = true,
+                  .selectOption = {
+                      {"Quarterly (10-Q)", "quarterly"},
+                      {"Annual (10-K)", "annual"},
+                      {"Trailing Twelve Months (TTM)", "trailing_twelve_months"},
+                  },
+                  .desc = "Select financial statement reporting period"},
+          },
           .isCrossSectional = false,
           .desc = "Load income statement fundamental data . "
                   "Provides revenue, expenses, earnings, and profitability "
@@ -112,7 +137,20 @@ MakePolygonDataSources() {
           .category = epoch_core::TransformCategory::DataSource,
           .plotKind = epoch_core::TransformPlotKind::flag,
           .name = "Cash Flow",
-          .options = {},
+          .options = {
+              MetaDataOption{
+                  .id = "period",  // NOT "timeframe" - reserved for orchestrator resampling
+                  .name = "Reporting Period",
+                  .type = epoch_core::MetaDataOptionType::Select,
+                  .defaultValue = std::nullopt,  // Required - no default
+                  .isRequired = true,
+                  .selectOption = {
+                      {"Quarterly (10-Q)", "quarterly"},
+                      {"Annual (10-K)", "annual"},
+                      {"Trailing Twelve Months (TTM)", "trailing_twelve_months"},
+                  },
+                  .desc = "Select financial statement reporting period"},
+          },
           .isCrossSectional = false,
           .desc = "Load cash flow statement fundamental data . "
                   "Provides operating, investing, and financing cash flows to "

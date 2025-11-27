@@ -14,6 +14,7 @@
 #include <epoch_data_sdk/dataloader/dataloader.hpp>
 #include <epoch_data_sdk/dataloader/factory.hpp>
 #include <epoch_data_sdk/dataloader/options.hpp>
+#include <epoch_data_sdk/dataloader/fetch_kwargs.hpp>
 
 #include "epoch_script/core/constants.h"
 #include "epoch_script/strategy/introspection.h"
@@ -113,7 +114,7 @@ IResamplerPtr CreateResampler(DataModuleOption const& option) {
     }
 
     return std::make_unique<Resampler>(option.barResampleTimeFrames,
-                                       option.loader.GetDataCategory() ==
+                                       option.loader.GetPrimaryCategory() ==
                                            DataCategory::MinuteBars);
 }
 
@@ -231,12 +232,35 @@ std::optional<FuturesContinuationInput> MakeContinuations(
 // have been removed as the new data_sdk no longer uses typed configurations.
 // All categories now use std::monostate in AuxiliaryCategoryConfig.
 
-std::vector<DataCategory>
+// Helper to get AssetClass from ReferenceAgg transform type
+epoch_core::AssetClass GetAssetClassForReferenceAggTransform(std::string const& transformType) {
+  using namespace epoch_script::polygon;
+  if (transformType == COMMON_REFERENCE_STOCKS || transformType == REFERENCE_STOCKS) {
+    return epoch_core::AssetClass::Stocks;
+  }
+  if (transformType == COMMON_FX_PAIRS || transformType == FX_PAIRS) {
+    return epoch_core::AssetClass::FX;
+  }
+  if (transformType == COMMON_CRYPTO_PAIRS || transformType == CRYPTO_PAIRS) {
+    return epoch_core::AssetClass::Crypto;
+  }
+  if (transformType == COMMON_INDICES || transformType == INDICES) {
+    return epoch_core::AssetClass::Indices;
+  }
+  throw std::runtime_error(std::format("Unknown ReferenceAgg transform type: {}", transformType));
+}
+
+std::vector<data_sdk::dataloader::DataRequest>
 ExtractAuxiliaryCategoriesFromTransforms(
     epoch_script::transform::TransformConfigurationPtrList const &configs) {
 
-  // Use a set to deduplicate categories
-  std::set<DataCategory> categorySet;
+  using namespace data_sdk::dataloader;
+
+  // Use a map to deduplicate by category (latest kwargs wins if same category appears twice)
+  // For ReferenceAgg, we need to track by ticker+asset_class since each has unique data
+  std::map<DataCategory, DataRequest> requestMap;
+  // ReferenceAgg requests keyed by "ticker:asset_class" to allow multiple
+  std::map<std::string, DataRequest> referenceAggMap;
 
   for (auto const &config : configs) {
     auto const &metadata = config->GetTransformDefinition().GetMetadata();
@@ -253,13 +277,98 @@ ExtractAuxiliaryCategoriesFromTransforms(
     if (category.has_value()) {
       // Skip if it's a time-series category (those are primary, not auxiliary)
       if (!IsTimeSeriesCategory(*category)) {
-        categorySet.insert(*category);
+        FetchKwargs kwargs = NoKwargs{};
+
+        // Build kwargs based on category and config options
+        if (*category == DataCategory::Dividends) {
+          DividendsKwargs dk;
+          auto typeStr = config->GetOptionValue("dividend_type").GetSelectOption();
+          if (!typeStr.empty()) {
+            dk.dividend_type = data_sdk::DividendTypeWrapper::FromString(typeStr);
+          }
+          kwargs = dk;
+          requestMap[*category] = DataRequest{*category, kwargs};
+        }
+        else if (*category == DataCategory::BalanceSheets) {
+          BalanceSheetsKwargs bk;
+          auto period = config->GetOptionValue("period").GetSelectOption();
+          bk.timeframe = data_sdk::BalanceSheetTimeframeWrapper::FromString(period);
+          kwargs = bk;
+          requestMap[*category] = DataRequest{*category, kwargs};
+        }
+        else if (*category == DataCategory::IncomeStatements ||
+                 *category == DataCategory::CashFlowStatements) {
+          FinancialsKwargs fk;
+          auto period = config->GetOptionValue("period").GetSelectOption();
+          fk.timeframe = data_sdk::FinancialsTimeframeWrapper::FromString(period);
+          kwargs = fk;
+          requestMap[*category] = DataRequest{*category, kwargs};
+        }
+        else if (*category == DataCategory::ReferenceAgg) {
+          // ReferenceAgg transforms need ticker and asset_class
+          ReferenceAggKwargs rk;
+
+          // Get ticker from config options
+          // common_* transforms use SelectOption, others use String
+          SPDLOG_INFO("Processing ReferenceAgg transform: type={}", transformType);
+          if (transformType == epoch_script::polygon::COMMON_INDICES ||
+              transformType == epoch_script::polygon::COMMON_REFERENCE_STOCKS ||
+              transformType == epoch_script::polygon::COMMON_FX_PAIRS ||
+              transformType == epoch_script::polygon::COMMON_CRYPTO_PAIRS) {
+            rk.ticker = config->GetOptionValue("ticker").GetSelectOption();
+            SPDLOG_INFO("  -> SelectOption ticker: {}", rk.ticker);
+          } else {
+            rk.ticker = config->GetOptionValue("ticker").GetString();
+            SPDLOG_INFO("  -> String ticker: {}", rk.ticker);
+          }
+
+          rk.asset_class = GetAssetClassForReferenceAggTransform(transformType);
+          SPDLOG_INFO("  -> Asset class: {}", epoch_core::AssetClassWrapper::ToLongFormString(rk.asset_class));
+          // is_eod will be set by dataloader from primary category
+
+          // Validate: Check if asset exists in AssetDatabase
+          // Use ToLongFormString for full asset class name (e.g., "Stocks" not "STK")
+          // Asset ID format: "TICKER-AssetClass" for Stocks, "^TICKER-AssetClass" for FX/Crypto/Indices
+          std::string assetClassName = epoch_core::AssetClassWrapper::ToLongFormString(rk.asset_class);
+          std::string assetId;
+          if (rk.asset_class == epoch_core::AssetClass::Stocks) {
+            assetId = std::format("{}-{}", rk.ticker, assetClassName);
+          } else {
+            // FX, Crypto, Indices use ^ prefix
+            assetId = std::format("^{}-{}", rk.ticker, assetClassName);
+          }
+
+          const auto& specs = asset::AssetSpecificationDatabase::GetInstance().GetAssetSpecifications();
+          if (!specs.contains(assetId)) {
+            throw std::runtime_error(std::format(
+                "ReferenceAgg ticker '{}' validation failed: asset '{}' not found in AssetDatabase",
+                rk.ticker, assetId));
+          }
+
+          // Key by ticker:asset_class to allow multiple reference aggs
+          std::string key = assetId;  // Use validated assetId as key
+          referenceAggMap[key] = DataRequest{*category, rk};
+          SPDLOG_DEBUG("Extracted ReferenceAgg request: ticker={}, asset_class={} (validated)",
+              rk.ticker, assetClassName);
+        }
+        else {
+          // Other auxiliary categories with NoKwargs
+          requestMap[*category] = DataRequest{*category, kwargs};
+        }
       }
     }
   }
 
-  // Convert set to vector
-  return std::vector<DataCategory>(categorySet.begin(), categorySet.end());
+  // Convert maps to vector
+  std::vector<DataRequest> result;
+  result.reserve(requestMap.size() + referenceAggMap.size());
+  for (auto& [_, request] : requestMap) {
+    result.push_back(std::move(request));
+  }
+  for (auto& [_, request] : referenceAggMap) {
+    result.push_back(std::move(request));
+  }
+  return result;
 }
 
 std::vector<CrossSectionalDataCategory>
@@ -358,8 +467,11 @@ void ProcessConfigurations(
     }
   }
 
-  auto detectedCategories = ExtractAuxiliaryCategoriesFromTransforms(configurations);
-  dataModuleOption.loader.categories.insert(detectedCategories.begin(), detectedCategories.end());
+  // Extract all auxiliary categories including ReferenceAgg (Indices, Stocks, FX, Crypto)
+  auto detectedRequests = ExtractAuxiliaryCategoriesFromTransforms(configurations);
+  for (auto const& request : detectedRequests) {
+    dataModuleOption.loader.AddRequest(request);
+  }
 
   // Extract cross-sectional categories (FRED economic indicators)
   auto crossSectionalCategories = ExtractCrossSectionalCategoriesFromTransforms(configurations);
@@ -367,11 +479,9 @@ void ProcessConfigurations(
     dataModuleOption.loader.AddCrossSectionalCategory(cat);
   }
 
-  // Extract and validate index tickers
-  auto indexTickers = ExtractIndicesTickersFromTransforms(configurations);
-  for (auto const& ticker : indexTickers) {
-    dataModuleOption.loader.AddIndexTicker(ticker);
-  }
+  // NOTE: ExtractIndicesTickersFromTransforms is no longer called here because
+  // indices are now extracted by ExtractAuxiliaryCategoriesFromTransforms as ReferenceAgg.
+  // Index validation (checking if asset exists in AssetDatabase) is not performed.
 }
 
 DataModuleOption
@@ -387,17 +497,10 @@ MakeDataModuleOption(CountryCurrency baseCurrency,
       MakeAssets(baseCurrency, resolvedAssetIds,
                  config.futures_continuation.has_value());
 
-  // Build flat categories set: {primaryCategory} ∪ auxiliaryCategories
-  std::set<DataCategory> categories;
-  categories.insert(primaryCategory);
-  categories.insert(auxiliaryCategories.begin(), auxiliaryCategories.end());
-
   DataModuleOption dataModuleConfig{
       .loader = {.startDate = period.from,
                  .endDate = period.to,
-                 .categories = categories,
-                 .crossSectionalCategories = {},  // Empty by default, filled by factory methods
-                 .indicesTickers = {},  // Empty by default, filled by factory methods
+                 .requests = {},  // Will be filled below
                  .dataloaderAssets = dataloaderAssets,
                  .strategyAssets = strategyAssets,
                  .continuationAssets = continuationAssets,
@@ -412,6 +515,12 @@ MakeDataModuleOption(CountryCurrency baseCurrency,
           MakeContinuations(continuationAssets, config.futures_continuation),
       .barResampleTimeFrames = {},
       .liveUpdates = false};
+
+  // Add primary category and auxiliary categories using new API
+  dataModuleConfig.loader.AddRequest(primaryCategory);
+  for (auto const& cat : auxiliaryCategories) {
+    dataModuleConfig.loader.AddRequest(cat);
+  }
 
   return dataModuleConfig;
 }
@@ -446,10 +555,12 @@ DataModuleOption MakeDataModuleOptionFromStrategy(
             }
         }
 
-        auto detectedCategories = ExtractAuxiliaryCategoriesFromTransforms(
+        // Extract all auxiliary categories including ReferenceAgg (Indices, Stocks, FX, Crypto)
+        auto detectedRequests = ExtractAuxiliaryCategoriesFromTransforms(
             *dataModuleOption.transformManager->GetTransforms());
-        dataModuleOption.loader.categories.insert(detectedCategories.begin(),
-                                                  detectedCategories.end());
+        for (auto const& request : detectedRequests) {
+            dataModuleOption.loader.AddRequest(request);
+        }
 
         // Extract cross-sectional categories (FRED economic indicators)
         auto crossSectionalCategories = ExtractCrossSectionalCategoriesFromTransforms(
@@ -458,12 +569,7 @@ DataModuleOption MakeDataModuleOptionFromStrategy(
             dataModuleOption.loader.AddCrossSectionalCategory(cat);
         }
 
-        // Extract and validate index tickers
-        auto indexTickers = ExtractIndicesTickersFromTransforms(
-            *dataModuleOption.transformManager->GetTransforms());
-        for (auto const& ticker : indexTickers) {
-            dataModuleOption.loader.AddIndexTicker(ticker);
-        }
+        // NOTE: Index validation removed - indices are now extracted as ReferenceAgg
     }
 
     return dataModuleOption;

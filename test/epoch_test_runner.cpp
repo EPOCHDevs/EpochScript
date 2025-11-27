@@ -35,19 +35,57 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// Asset configurations for multi-asset testing
-struct AssetConfiguration {
-  std::string name;
-  std::vector<std::string> assets;
+// Date range configuration for a profile
+struct DateRangeConfig {
+  std::optional<std::string> start_date;  // Format: "YYYY-MM-DD"
+  std::optional<std::string> end_date;    // Format: "YYYY-MM-DD"
 };
 
-static std::vector<AssetConfiguration> GetAssetConfigurations() {
-  return {
-      {"single_stock", {"AAPL-Stocks"}},
-{"small_index", {"DJIA30"}},
-{"large_index", {"SP500"}}
+// Profile configuration for test execution
+struct Profile {
+  std::string name;
+  std::vector<std::string> assets;
+  std::optional<DateRangeConfig> intraday_dates;  // Optional date range for intraday
+  std::optional<DateRangeConfig> eod_dates;       // Optional date range for EOD (daily)
+};
 
+// Default date ranges
+static constexpr const char* DEFAULT_INTRADAY_START = "2024-01-01";
+static constexpr const char* DEFAULT_EOD_START = "2015-01-01";
+static constexpr const char* DEFAULT_END_DATE = "2025-01-01";
+
+static std::vector<Profile> GetProfiles() {
+  return {
+      {"single_stock", {"AAPL-Stocks"}, std::nullopt, std::nullopt},
+      {"small_index", {"DJIA30"}, std::nullopt, std::nullopt},
+      {"large_index", {"SP500"}, std::nullopt, std::nullopt},
+      {"moat_analysis", {"AAPL-Stocks", "MSFT-Stocks", "GOOGL-Stocks", "NVDA-Stocks", "META-Stocks"},
+          DateRangeConfig{"2022-11-28", "2025-11-25"},  // intraday
+          DateRangeConfig{"2022-11-28", "2025-11-25"}}  // eod
   };
+}
+
+// Helper to get start date from profile based on intraday flag
+epoch_frame::Date GetStartDate(const Profile& profile, bool is_intraday) {
+  const auto& date_config = is_intraday ? profile.intraday_dates : profile.eod_dates;
+  const char* default_start = is_intraday ? DEFAULT_INTRADAY_START : DEFAULT_EOD_START;
+
+  std::string start_str = (date_config && date_config->start_date)
+      ? *date_config->start_date
+      : default_start;
+
+  return epoch_frame::DateTime::from_str(start_str, "UTC", "%Y-%m-%d").date();
+}
+
+// Helper to get end date from profile based on intraday flag
+epoch_frame::Date GetEndDate(const Profile& profile, bool is_intraday) {
+  const auto& date_config = is_intraday ? profile.intraday_dates : profile.eod_dates;
+
+  std::string end_str = (date_config && date_config->end_date)
+      ? *date_config->end_date
+      : DEFAULT_END_DATE;
+
+  return epoch_frame::DateTime::from_str(end_str, "UTC", "%Y-%m-%d").date();
 }
 
 // Metadata JSON structure for test case (code stored separately in code.epochscript)
@@ -275,7 +313,7 @@ void SaveEventMarkersAsJson(
 }
 
 // Run test on EpochScript source with output directory
-void RunTest(const std::string& source, const std::string& output_dir, const std::string& selected_asset_config) {
+void RunTest(const std::string& source, const std::string& output_dir, const std::string& selected_profile_name) {
   // Compile EpochScript source
   auto compiler = std::make_unique<epoch_script::strategy::PythonSource>(source, false);
 
@@ -288,34 +326,31 @@ void RunTest(const std::string& source, const std::string& output_dir, const std
   // Save graph.json to output directory
   SaveGraph(normalized, output_dir);
 
-  // Runtime execution with selected asset configuration
-  auto all_asset_configs = GetAssetConfigurations();
+  // Runtime execution with selected profile
+  auto all_profiles = GetProfiles();
 
-  // Find the selected asset config
-  auto it = std::ranges::find_if(all_asset_configs, [&](const auto& config) {
-    return config.name == selected_asset_config;
+  // Find the selected profile
+  auto it = std::ranges::find_if(all_profiles, [&](const auto& profile) {
+    return profile.name == selected_profile_name;
   });
 
-  if (it == all_asset_configs.end()) {
-    throw std::runtime_error("Invalid asset_config: " + selected_asset_config +
-                             ". Must be one of: single_stock, small_index, large_index");
+  if (it == all_profiles.end()) {
+    throw std::runtime_error("Invalid profile: " + selected_profile_name +
+                             ". Must be one of: single_stock, small_index, large_index, moat_analysis");
   }
 
-  const auto& asset_config = *it;
+  const auto& profile = *it;
 
   // 1. Create StrategyConfig from test input
   epoch_script::strategy::StrategyConfig strategyConfig;
   strategyConfig.trade_signal.source = *compiler;
-  strategyConfig.data.assets = epoch_script::strategy::AssetIDContainer(asset_config.assets);
+  strategyConfig.data.assets = epoch_script::strategy::AssetIDContainer(profile.assets);
 
-  // Determine date range based on timeframe (10 years for daily, 1 year for intraday)
+  // Determine date range based on timeframe and profile configuration
   bool is_intraday = epoch_script::strategy::IsIntradayCampaign(strategyConfig);
 
-  auto start_date = is_intraday
-      ? epoch_frame::DateTime::from_str("2024-01-01", "UTC", "%Y-%m-%d").date()
-      : epoch_frame::DateTime::from_str("2015-01-01", "UTC", "%Y-%m-%d").date();
-
-  auto end_date = epoch_frame::DateTime::from_str("2025-01-01", "UTC", "%Y-%m-%d").date();
+  auto start_date = GetStartDate(profile, is_intraday);
+  auto end_date = GetEndDate(profile, is_intraday);
 
   // 2. Create database using strategy-aware factory
   auto dataModuleOption = epoch_script::data::factory::MakeDataModuleOptionFromStrategy(
@@ -339,13 +374,13 @@ void RunTest(const std::string& source, const std::string& output_dir, const std
   bool has_output = !db_output_data.empty() || !reports.empty() || !event_markers.empty();
 
   if (!has_output) {
-    throw std::runtime_error("Runtime execution produced no outputs for asset config: " + asset_config.name);
+    throw std::runtime_error("Runtime execution produced no outputs for profile: " + profile.name);
   }
 
   // 6. Save all outputs
-  SaveTransformedDataAsParquet(output_dir, asset_config.name, db_output_data);
-  SaveReportsAsJson(output_dir, asset_config.name, reports);
-  SaveEventMarkersAsJson(output_dir, asset_config.name, event_markers);
+  SaveTransformedDataAsParquet(output_dir, profile.name, db_output_data);
+  SaveReportsAsJson(output_dir, profile.name, reports);
+  SaveEventMarkersAsJson(output_dir, profile.name, event_markers);
 }
 
 // Read code from code.epochscript file

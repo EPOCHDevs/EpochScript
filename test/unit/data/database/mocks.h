@@ -35,46 +35,48 @@ public:
   std::expected<epoch_frame::DataFrame, std::string>
   LoadAssetBars(const data_sdk::asset::Asset&,
                 data_sdk::DataCategory,
-                const std::unordered_map<std::string, std::string>& = {}) const override {
+                const data_sdk::dataloader::FetchKwargs& = data_sdk::dataloader::NoKwargs{}) const override {
     return std::unexpected("Not implemented in mock");
   }
 
   drogon::Task<std::expected<epoch_frame::DataFrame, std::string>>
   LoadAssetBarsAsync(const data_sdk::asset::Asset&,
                      data_sdk::DataCategory,
-                     std::unordered_map<std::string, std::string> = {}) const override {
+                     data_sdk::dataloader::FetchKwargs = data_sdk::dataloader::NoKwargs{}) const override {
     co_return std::unexpected("Not implemented in mock");
   }
 
-  // LoadCrossSectionalData and LoadCrossSectionalDataAsync stub implementations
+  // LoadEconomicIndicator and LoadEconomicIndicatorAsync stub implementations
   std::expected<epoch_frame::DataFrame, std::string>
-  LoadCrossSectionalData(data_sdk::CrossSectionalDataCategory,
-                         const epoch_frame::Date&,
-                         const epoch_frame::Date&) const override {
+  LoadEconomicIndicator(data_sdk::CrossSectionalDataCategory,
+                        const epoch_frame::Date&,
+                        const epoch_frame::Date&,
+                        bool = true) const override {
     return std::unexpected("Not implemented in mock");
   }
 
   drogon::Task<std::expected<epoch_frame::DataFrame, std::string>>
-  LoadCrossSectionalDataAsync(data_sdk::CrossSectionalDataCategory,
-                              const epoch_frame::Date&,
-                              const epoch_frame::Date&) const override {
+  LoadEconomicIndicatorAsync(data_sdk::CrossSectionalDataCategory,
+                             const epoch_frame::Date&,
+                             const epoch_frame::Date&,
+                             bool = true) const override {
     co_return std::unexpected("Not implemented in mock");
   }
 
-  // LoadIndicesData and LoadIndicesDataAsync stub implementations
+  // LoadIndexData and LoadIndexDataAsync stub implementations
   std::expected<epoch_frame::DataFrame, std::string>
-  LoadIndicesData(const std::string&,
-                  const epoch_frame::Date&,
-                  const epoch_frame::Date&,
-                  bool = false) const override {
+  LoadIndexData(const std::string&,
+                const epoch_frame::Date&,
+                const epoch_frame::Date&,
+                bool = true) const override {
     return std::unexpected("Not implemented in mock");
   }
 
   drogon::Task<std::expected<epoch_frame::DataFrame, std::string>>
-  LoadIndicesDataAsync(const std::string&,
-                       const epoch_frame::Date&,
-                       const epoch_frame::Date&,
-                       bool = false) const override {
+  LoadIndexDataAsync(const std::string&,
+                     const epoch_frame::Date&,
+                     const epoch_frame::Date&,
+                     bool = true) const override {
     co_return std::unexpected("Not implemented in mock");
   }
 };

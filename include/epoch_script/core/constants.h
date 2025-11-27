@@ -246,6 +246,19 @@ constexpr auto TRADES = "trades";
 constexpr auto AGGREGATES = "aggregates";
 constexpr auto COMMON_INDICES = "common_indices";
 constexpr auto INDICES = "indices";
+
+// Reference Stocks
+constexpr auto COMMON_REFERENCE_STOCKS = "common_reference_stocks";
+constexpr auto REFERENCE_STOCKS = "reference_stocks";
+
+// FX Pairs
+constexpr auto COMMON_FX_PAIRS = "common_fx_pairs";
+constexpr auto FX_PAIRS = "fx_pairs";
+
+// Crypto Pairs
+constexpr auto COMMON_CRYPTO_PAIRS = "common_crypto_pairs";
+constexpr auto CRYPTO_PAIRS = "crypto_pairs";
+
 constexpr auto NEWS = "news";
 constexpr auto DIVIDENDS = "dividends";
 constexpr auto SPLITS = "splits";
@@ -264,6 +277,12 @@ inline const std::unordered_set<std::string> ALL_POLYGON_TRANSFORMS = {
     AGGREGATES,
     COMMON_INDICES,
     INDICES,
+    COMMON_REFERENCE_STOCKS,
+    REFERENCE_STOCKS,
+    COMMON_FX_PAIRS,
+    FX_PAIRS,
+    COMMON_CRYPTO_PAIRS,
+    CRYPTO_PAIRS,
     NEWS,
     DIVIDENDS,
     SPLITS,

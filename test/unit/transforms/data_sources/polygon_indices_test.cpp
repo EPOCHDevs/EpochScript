@@ -1,19 +1,19 @@
 #include <catch2/catch_test_macros.hpp>
 #include <epoch_script/core/constants.h>
 #include <epoch_script/transforms/core/registry.h>
-#include "transforms/components/data_sources/polygon_indices_metadata.h"
+#include "transforms/components/data_sources/reference_indices_metadata.h"
 
 using namespace epoch_script::transforms;
 using namespace epoch_script::transform;
 
 TEST_CASE("Polygon Indices Metadata Registration", "[polygon_indices]") {
-  SECTION("MakePolygonIndicesDataSources returns two nodes") {
-    auto metadataList = MakePolygonIndicesDataSources();
+  SECTION("MakeReferenceIndicesDataSources returns two nodes") {
+    auto metadataList = MakeReferenceIndicesDataSources();
     REQUIRE(metadataList.size() == 2);
   }
 
   SECTION("Common Indices node has correct basic properties") {
-    auto metadataList = MakePolygonIndicesDataSources();
+    auto metadataList = MakeReferenceIndicesDataSources();
     auto& commonIndices = metadataList[0];
 
     REQUIRE(commonIndices.id == "common_indices");
@@ -24,7 +24,7 @@ TEST_CASE("Polygon Indices Metadata Registration", "[polygon_indices]") {
   }
 
   SECTION("Dynamic Indices node has correct basic properties") {
-    auto metadataList = MakePolygonIndicesDataSources();
+    auto metadataList = MakeReferenceIndicesDataSources();
     auto& indices = metadataList[1];
 
     REQUIRE(indices.id == "indices");
@@ -36,7 +36,7 @@ TEST_CASE("Polygon Indices Metadata Registration", "[polygon_indices]") {
 }
 
 TEST_CASE("Common Indices Configuration", "[polygon_indices][common_indices]") {
-  auto metadataList = MakePolygonIndicesDataSources();
+  auto metadataList = MakeReferenceIndicesDataSources();
   auto& commonIndices = metadataList[0];
 
   SECTION("Has index SelectOption parameter") {
@@ -116,7 +116,7 @@ TEST_CASE("Common Indices Configuration", "[polygon_indices][common_indices]") {
 }
 
 TEST_CASE("Dynamic Indices Configuration", "[polygon_indices][indices]") {
-  auto metadataList = MakePolygonIndicesDataSources();
+  auto metadataList = MakeReferenceIndicesDataSources();
   auto& indices = metadataList[1];
 
   SECTION("Has ticker String parameter") {

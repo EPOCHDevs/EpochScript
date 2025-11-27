@@ -281,7 +281,7 @@ TEST_CASE("Orchestrator - balance_sheet timeseries path", "[orchestrator][dataso
 
     SECTION("Operations on cash and debt") {
         auto code = R"(
-src = balance_sheet(timeframe="1D")()
+src = balance_sheet(period="quarterly", timeframe="1D")()
 cash = src.cash
 debt = src.lt_debt
 net_cash = sub()(cash, debt)
@@ -318,7 +318,7 @@ TEST_CASE("Orchestrator - income_statement timeseries path", "[orchestrator][dat
 
     SECTION("Calculate net margin from revenue and net_income") {
         auto code = R"(
-src = income_statement(timeframe="1D")()
+src = income_statement(period="quarterly", timeframe="1D")()
 revenue = src.revenue
 net_income = src.net_income
 margin = div()(net_income, revenue)
@@ -352,7 +352,7 @@ TEST_CASE("Orchestrator - cash_flow timeseries path", "[orchestrator][datasource
 
     SECTION("Calculate free cash flow (CFO + CapEx)") {
         auto code = R"(
-src = cash_flow(timeframe="1D")()
+src = cash_flow(period="quarterly", timeframe="1D")()
 cfo = src.cfo
 capex = src.capex
 fcf = add()(cfo, capex)

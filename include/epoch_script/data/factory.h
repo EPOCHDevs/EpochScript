@@ -5,6 +5,7 @@
 
 #include <epoch_data_sdk/dataloader/dataloader.hpp>
 #include <epoch_data_sdk/dataloader/options.hpp>
+#include <epoch_data_sdk/dataloader/fetch_kwargs.hpp>
 #include <epoch_data_sdk/model/asset/asset.hpp>
 
 #include <epoch_script/strategy/data_options.h>
@@ -68,9 +69,10 @@ using DataModuleFactoryPtr = std::unique_ptr<DataModuleFactory>;
 } // namespace factory
 
 namespace factory {
-// Extract auxiliary data categories from transform configurations
+// Extract auxiliary data categories (with kwargs) from transform configurations
 // Uses central GetDataCategoryForTransform() from data_category_mapper
-std::vector<DataCategory>
+// Builds appropriate FetchKwargs for categories that need them (Dividends, BalanceSheets, etc.)
+std::vector<data_sdk::dataloader::DataRequest>
 ExtractAuxiliaryCategoriesFromTransforms(
     epoch_script::transform::TransformConfigurationPtrList const &configs);
 

@@ -11,7 +11,9 @@
 #include "components/operators/alias_metadata.h"
 #include "components/operators/groupby_agg_metadata.h"
 #include "components/data_sources/polygon_metadata.h"
-#include "components/data_sources/polygon_indices_metadata.h"
+#include "components/data_sources/reference_indices_metadata.h"
+#include "components/data_sources/reference_fx_metadata.h"
+#include "components/data_sources/reference_crypto_metadata.h"
 #include "components/data_sources/fred_metadata.h"
 #include "components/data_sources/sec_metadata.h"
 #include "components/data_sources/reference_stocks_metadata.h"
@@ -23,6 +25,10 @@
 #include "components/data_sources/short_volume_metadata.h"
 #include "components/indicators/forward_returns.h"
 #include "components/indicators/intraday_returns.h"
+#include "components/indicators/ffill.h"
+#include "components/statistics/winsorize.h"
+#include "components/cross_sectional/cs_winsorize.h"
+#include "components/cross_sectional/rank.h"
 #include "components/datetime/datetime_metadata.h"
 #include "components/ml/sagemaker_sentiment_metadata.h"
 
@@ -45,6 +51,10 @@ void RegisterTransformMetadata(FileLoaderInterface const &loader) {
   metaDataList.emplace_back(MakeLagMetaData());
   metaDataList.emplace_back(epoch_script::transform::MakeForwardReturnsMetaData());
   metaDataList.emplace_back(epoch_script::transform::MakeIntradayReturnsMetaData());
+  metaDataList.emplace_back(epoch_script::transform::MakeFfillMetaData());
+  metaDataList.emplace_back(epoch_script::transform::MakeWinsorizeMetaData());
+  metaDataList.emplace_back(epoch_script::transform::MakeCSWinsorizeMetaData());
+  metaDataList.emplace_back(epoch_script::transform::MakeCSRankMetaData());
   metaDataList.emplace_back(MakeChartFormationMetaData());
   metaDataList.emplace_back(MakeCalendarEffectMetaData());
   metaDataList.emplace_back(MakeStringTransformMetaData());
@@ -57,7 +67,9 @@ void RegisterTransformMetadata(FileLoaderInterface const &loader) {
   metaDataList.emplace_back(epoch_script::transform::MakeGroupByBooleanAggMetaData());
   metaDataList.emplace_back(epoch_script::transform::MakeGroupByAnyAggMetaData());
   metaDataList.emplace_back(epoch_script::transform::MakePolygonDataSources());
-  metaDataList.emplace_back(epoch_script::transform::MakePolygonIndicesDataSources());
+  metaDataList.emplace_back(epoch_script::transform::MakeReferenceIndicesDataSources());
+  metaDataList.emplace_back(epoch_script::transform::MakeReferenceFXDataSources());
+  metaDataList.emplace_back(epoch_script::transform::MakeReferenceCryptoDataSources());
   metaDataList.emplace_back(epoch_script::transform::MakeFREDDataSource());
   // metaDataList.emplace_back(epoch_script::transform::MakeSECDataSources()); // DISABLED: SEC Form 13F and Insider Trading not exposed
   metaDataList.emplace_back(epoch_script::transform::MakeReferenceStocksDataSources());

@@ -55,9 +55,12 @@ void PrintUsage(const char* prog_name) {
               << "  --output-dir PATH       Output directory (default: current directory)\n"
               << "  --profile PROFILE       Data source profile (default: default)\n"
               << "                          Available profiles:\n"
-              << "                            daily    - 1D market data + all economic indicators + corporate actions\n"
-              << "                            intraday - 1Min market data + news\n"
+              << "                            daily    - 1D market data + indices + reference assets (MSFT/FX/Crypto)\n"
+              << "                                       + fundamentals (quarterly/annual/TTM) + all economic indicators\n"
+              << "                                       + dividends (all/CD/SC) + corporate actions + news\n"
+              << "                            intraday - 1Min market data + indices + reference assets\n"
               << "                            mixed    - Multi-timeframe (1Min/1D/1W/1ME/1QE) + all data sources\n"
+              << "                                       + fundamentals with all period variations\n"
               << "  --help                  Show this help\n";
 }
 
@@ -185,10 +188,26 @@ trades_daily = trade_count(timeframe="1D")
 spy_index = common_indices(ticker="SPX", timeframe="1D")
 vix_index = indices(ticker="VIX", timeframe="1D")
 
-# Fundamental data (quarterly/annual)
-balance_sheet_data = balance_sheet(timeframe="1D")
-income_stmt_data = income_statement(timeframe="1D")
-cash_flow_data = cash_flow(timeframe="1D")
+# Reference asset data - cross-asset comparisons
+ref_msft = reference_stocks(ticker="MSFT", timeframe="1D")
+ref_eurusd = common_fx_pairs(ticker="EURUSD", timeframe="1D")
+ref_btc = common_crypto_pairs(ticker="BTCUSD", timeframe="1D")
+
+# Fundamental data - quarterly period
+balance_sheet_q = balance_sheet(period="quarterly", timeframe="1D")
+income_stmt_q = income_statement(period="quarterly", timeframe="1D")
+cash_flow_q = cash_flow(period="quarterly", timeframe="1D")
+
+# Fundamental data - annual period
+balance_sheet_a = balance_sheet(period="annual", timeframe="1D")
+income_stmt_a = income_statement(period="annual", timeframe="1D")
+cash_flow_a = cash_flow(period="annual", timeframe="1D")
+
+# Fundamental data - TTM (income/cash flow only)
+income_stmt_ttm = income_statement(period="trailing_twelve_months", timeframe="1D")
+cash_flow_ttm = cash_flow(period="trailing_twelve_months", timeframe="1D")
+
+# Financial ratios (no period option)
 ratios_data = financial_ratios(timeframe="1D")
 
 # Economic indicators (all categories)
@@ -212,8 +231,12 @@ housing_starts = economic_indicator(category="HousingStarts", timeframe="1D")
 consumer_sentiment = economic_indicator(category="ConsumerSentiment", timeframe="1D")
 m2 = economic_indicator(category="M2", timeframe="1D")
 
-# Corporate actions and events (with timeframe to satisfy requirement)
-divs = dividends(timeframe="1D")
+# Corporate actions - dividends with various filters
+divs_all = dividends(timeframe="1D")
+divs_cash = dividends(dividend_type="CD", timeframe="1D")
+divs_special = dividends(dividend_type="SC", timeframe="1D")
+
+# Corporate actions - other events
 stock_splits = splits(timeframe="1D")
 ticker_changes = ticker_events(timeframe="1D")
 short_int = short_interest(timeframe="1D")
@@ -231,9 +254,14 @@ market_data = market_data_source(timeframe="1Min")
 vwap_intraday = vwap(timeframe="1Min")
 trades_intraday = trade_count(timeframe="1Min")
 
-# Index data
+# Index data at intraday resolution
 spy_index = common_indices(ticker="SPX", timeframe="1Min")
 vix_index = indices(ticker="VIX", timeframe="1Min")
+
+# Reference asset data at intraday resolution
+ref_msft = reference_stocks(ticker="MSFT", timeframe="1Min")
+ref_eurusd = common_fx_pairs(ticker="EURUSD", timeframe="1Min")
+ref_btc = common_crypto_pairs(ticker="BTCUSD", timeframe="1Min")
 )";
         } else if (config.profile == "mixed") {
             // Profile 3: Mixed timeframes - combination of intraday and lower-frequency data
@@ -261,7 +289,31 @@ trades_quarterly = trade_count(timeframe="1QE")
 
 # Index data at various timeframes
 spy_daily = common_indices(ticker="SPX", timeframe="1D")
+spy_1min = common_indices(ticker="SPX", timeframe="1Min")
 vix_daily = indices(ticker="VIX", timeframe="1D")
+
+# Reference asset data - cross-asset at multiple timeframes
+ref_msft_daily = reference_stocks(ticker="MSFT", timeframe="1D")
+ref_msft_1min = reference_stocks(ticker="MSFT", timeframe="1Min")
+ref_eurusd_daily = common_fx_pairs(ticker="EURUSD", timeframe="1D")
+ref_btc_daily = common_crypto_pairs(ticker="BTCUSD", timeframe="1D")
+
+# Fundamental data - quarterly period
+balance_sheet_q = balance_sheet(period="quarterly", timeframe="1D")
+income_stmt_q = income_statement(period="quarterly", timeframe="1D")
+cash_flow_q = cash_flow(period="quarterly", timeframe="1D")
+
+# Fundamental data - annual period
+balance_sheet_a = balance_sheet(period="annual", timeframe="1D")
+income_stmt_a = income_statement(period="annual", timeframe="1D")
+cash_flow_a = cash_flow(period="annual", timeframe="1D")
+
+# Fundamental data - TTM (income/cash flow only)
+income_stmt_ttm = income_statement(period="trailing_twelve_months", timeframe="1D")
+cash_flow_ttm = cash_flow(period="trailing_twelve_months", timeframe="1D")
+
+# Financial ratios
+ratios_data = financial_ratios(timeframe="1D")
 
 # Economic indicators at various frequencies
 fed_funds_daily = economic_indicator(category="FedFunds", timeframe="1D")
@@ -272,8 +324,11 @@ cpi_monthly = economic_indicator(category="CPI", timeframe="1ME")
 unemployment_monthly = economic_indicator(category="Unemployment", timeframe="1ME")
 gdp_quarterly = economic_indicator(category="GDP", timeframe="1QE")
 
-# Corporate actions and events (with timeframe to satisfy requirement)
-divs = dividends(timeframe="1D")
+# Corporate actions - dividends with various filters
+divs_all = dividends(timeframe="1D")
+divs_cash = dividends(dividend_type="CD", timeframe="1D")
+
+# Corporate actions - other events
 stock_splits = splits(timeframe="1D")
 ticker_changes = ticker_events(timeframe="1D")
 short_int = short_interest(timeframe="1D")

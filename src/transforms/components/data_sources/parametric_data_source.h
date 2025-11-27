@@ -131,4 +131,14 @@ using PolygonTickerEventsTransform = ParametricDataSourceTransform;
 using PolygonShortInterestTransform = ParametricDataSourceTransform;
 using PolygonShortVolumeTransform = ParametricDataSourceTransform;
 
+// Reference Aggregate type aliases
+using ReferenceStocksTransform = ParametricDataSourceTransform;
+using CommonReferenceStocksTransform = ParametricDataSourceTransform;
+using ReferenceFXTransform = ParametricDataSourceTransform;
+using CommonFXPairsTransform = ParametricDataSourceTransform;
+using ReferenceCryptoTransform = ParametricDataSourceTransform;
+using CommonCryptoPairsTransform = ParametricDataSourceTransform;
+using ReferenceIndicesTransform = ParametricDataSourceTransform;
+using CommonIndicesTransform = ParametricDataSourceTransform;
+
 } // namespace epoch_script::transform

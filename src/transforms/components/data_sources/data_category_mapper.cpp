@@ -64,6 +64,18 @@ std::optional<DataCategory> GetDataCategoryForTransform(
     return DataCategory::ShortVolume;
   }
 
+  // ReferenceAgg transforms (Indices, Stocks, FX, Crypto)
+  if (transformId == polygon::COMMON_INDICES ||
+      transformId == polygon::INDICES ||
+      transformId == polygon::COMMON_REFERENCE_STOCKS ||
+      transformId == polygon::REFERENCE_STOCKS ||
+      transformId == polygon::COMMON_FX_PAIRS ||
+      transformId == polygon::FX_PAIRS ||
+      transformId == polygon::COMMON_CRYPTO_PAIRS ||
+      transformId == polygon::CRYPTO_PAIRS) {
+    return DataCategory::ReferenceAgg;
+  }
+
   return std::nullopt;
 }
 

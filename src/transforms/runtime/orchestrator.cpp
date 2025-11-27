@@ -185,10 +185,10 @@ DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
 
 #ifndef NDEBUG
   // Log final output sizes for alignment debugging
-  SPDLOG_DEBUG("FLOW DEBUG - Transform pipeline completed with {} timeframes", result.size());
+  spdlog::debug("FLOW DEBUG - Transform pipeline completed with {} timeframes", result.size());
   for (const auto& [timeframe, assetMap] : result) {
     for (const auto& [asset_id, dataframe] : assetMap) {
-      SPDLOG_DEBUG("FLOW DEBUG - Output data: {} {} has {} rows",
+      spdlog::debug("FLOW DEBUG - Output data: {} {} has {} rows",
                    timeframe, asset_id, dataframe.num_rows());
     }
   }

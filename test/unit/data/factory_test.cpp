@@ -343,12 +343,13 @@ TEST_CASE("DataModuleFactory::CreateDatabase integrates all components", "[facto
       .loader = {
           .startDate = startDate,
           .endDate = endDate,
-          .categories = {DataCategory::DailyBars},
+          .requests = {},
           .dataloaderAssets = assets,
           .strategyAssets = assets
       },
       .transformManager = std::make_unique<epoch_script::runtime::TransformManager>()
   };
+  option.loader.AddRequest(DataCategory::DailyBars);
 
   factory::DataModuleFactory factory_obj(std::move(option));
   auto database = factory_obj.CreateDatabase();
@@ -399,9 +400,10 @@ TEST_CASE("ProcessConfigurations adds resampling timeframes", "[factory][process
       .loader = {
           .startDate = startDate,
           .endDate = endDate,
-          .categories = {DataCategory::MinuteBars}
+          .requests = {}
       }
   };
+  option.loader.AddRequest(DataCategory::MinuteBars);
 
   auto baseTimeframe = epoch_script::TimeFrame{"1min"};
 
@@ -425,9 +427,10 @@ TEST_CASE("ProcessConfigurations does not add base timeframe to resampling", "[f
       .loader = {
           .startDate = startDate,
           .endDate = endDate,
-          .categories = {DataCategory::DailyBars}
+          .requests = {}
       }
   };
+  option.loader.AddRequest(DataCategory::DailyBars);
 
   auto baseTimeframe = epoch_script::TimeFrame{"1d"};
 

@@ -40,7 +40,7 @@ epoch_frame::DataFrame MakeNumericDataFrame() {
           {5.0, 10.0, 15.0, 20.0},  // current
           {3.0, 10.0, 20.0, 15.0}   // previous
       },
-      {"price", "actual", "expected", "current", "previous"});
+      {"price#price", "actual#actual", "expected#expected", "current#current", "previous#previous"});
 }
 
 epoch_frame::DataFrame MakeBoolDataFrame() {
@@ -55,7 +55,7 @@ epoch_frame::DataFrame MakeBoolDataFrame() {
                                   {true, false, true, false}, // bool_a
                                   {false, false, true, true}  // bool_b
                               },
-                              {"bool_a", "bool_b"});
+                              {"bool_a#bool_a", "bool_b#bool_b"});
 }
 
 epoch_frame::DataFrame MakeSelectDataFrame2() {
@@ -72,9 +72,9 @@ epoch_frame::DataFrame MakeSelectDataFrame2() {
           {10.0_scalar, 20.0_scalar, 30.0_scalar, 40.0_scalar},    // option_0
           {100.0_scalar, 200.0_scalar, 300.0_scalar, 400.0_scalar} // option_1
       },
-      {arrow::field("selector", arrow::int64()),
-       arrow::field("option_0", arrow::float64()),
-       arrow::field("option_1", arrow::float64())});
+      {arrow::field("selector#selector", arrow::int64()),
+       arrow::field("option_0#option_0", arrow::float64()),
+       arrow::field("option_1#option_1", arrow::float64())});
 }
 
 TEST_CASE("Comparative Transforms") {
@@ -267,23 +267,21 @@ TEST_CASE("Comparative Transforms") {
                              {10.0_scalar, 20.0_scalar, 30.0_scalar,
                               40.0_scalar} // value_if_false
                          },
-                         {arrow::field("condition", arrow::boolean()),
-                          arrow::field("value_if_true", arrow::float64()),
-                          arrow::field("value_if_false", arrow::float64())});
+                         {arrow::field("#condition", arrow::boolean()),
+                          arrow::field("#value_if_true", arrow::float64()),
+                          arrow::field("#value_if_false", arrow::float64())});
 
       // Use typed variant directly - values are numeric (float64)
       const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
-      TransformConfiguration config{TransformDefinition{YAML::Load(std::format(
-          R"(
-type: boolean_select_number
-id: 20
-inputs:
-  "condition": "condition"
-  "true": "value_if_true"
-  "false": "value_if_false"
-timeframe: {}
-)",
-          timeframe.Serialize()))}};
+      TransformConfiguration config = run_op(
+          "boolean_select_number", "20",
+          make_inputs({
+              {"condition", input_ref("", "condition")},
+              {"true", input_ref("", "value_if_true")},
+              {"false", input_ref("", "value_if_false")}
+          }),
+          {},
+          timeframe);
       auto transformBase = MAKE_TRANSFORM(config);
       auto transform = dynamic_cast<ITransform *>(transformBase.get());
 
@@ -337,10 +335,10 @@ timeframe: {}
               {1000.0_scalar, 2000.0_scalar, 3000.0_scalar, 4000.0_scalar,
                5000.0_scalar} // option_2
           },
-          {arrow::field("selector", arrow::int64()),
-           arrow::field("option_0", arrow::float64()),
-           arrow::field("option_1", arrow::float64()),
-           arrow::field("option_2", arrow::float64())});
+          {arrow::field("selector#selector", arrow::int64()),
+           arrow::field("option_0#option_0", arrow::float64()),
+           arrow::field("option_1#option_1", arrow::float64()),
+           arrow::field("option_2#option_2", arrow::float64())});
 
       TransformConfiguration config = select_n(
           22, 3, strategy::InputValue(strategy::NodeReference("selector", "selector")),
@@ -380,11 +378,11 @@ timeframe: {}
                4000.0_scalar},                                     // option_2
               {-1.0_scalar, -2.0_scalar, -3.0_scalar, -4.0_scalar} // option_3
           },
-          {arrow::field("selector", arrow::int64()),
-           arrow::field("option_0", arrow::float64()),
-           arrow::field("option_1", arrow::float64()),
-           arrow::field("option_2", arrow::float64()),
-           arrow::field("option_3", arrow::float64())});
+          {arrow::field("selector#selector", arrow::int64()),
+           arrow::field("option_0#option_0", arrow::float64()),
+           arrow::field("option_1#option_1", arrow::float64()),
+           arrow::field("option_2#option_2", arrow::float64()),
+           arrow::field("option_3#option_3", arrow::float64())});
 
       TransformConfiguration config = select_n(
           23, 4, strategy::InputValue(strategy::NodeReference("selector", "selector")),
@@ -435,12 +433,12 @@ timeframe: {}
               {999.0_scalar, 888.0_scalar, 777.0_scalar, 666.0_scalar}
               // option_4
           },
-          {arrow::field("selector", arrow::int64()),
-           arrow::field("option_0", arrow::float64()),
-           arrow::field("option_1", arrow::float64()),
-           arrow::field("option_2", arrow::float64()),
-           arrow::field("option_3", arrow::float64()),
-           arrow::field("option_4", arrow::float64())});
+          {arrow::field("selector#selector", arrow::int64()),
+           arrow::field("option_0#option_0", arrow::float64()),
+           arrow::field("option_1#option_1", arrow::float64()),
+           arrow::field("option_2#option_2", arrow::float64()),
+           arrow::field("option_3#option_3", arrow::float64()),
+           arrow::field("option_4#option_4", arrow::float64())});
 
       TransformConfiguration config = select_n(
           24, 5, strategy::InputValue(strategy::NodeReference("selector", "selector")),
@@ -529,27 +527,24 @@ TEST_CASE("Additional Comparative Transforms") {
                            {1.0_scalar, 1.5_scalar, 0.8_scalar, 2.0_scalar,
                             1.2_scalar, 2.5_scalar} // low
                        },
-                       {arrow::field("value", arrow::float64()),
-                        arrow::field("high", arrow::float64()),
-                        arrow::field("low", arrow::float64())});
+                       {arrow::field("#value", arrow::float64()),
+                        arrow::field("#high", arrow::float64()),
+                        arrow::field("#low", arrow::float64())});
 
     // Use typed variant directly
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
-    TransformConfiguration config{TransformDefinition{YAML::Load(std::format(
-        R"(
-type: percentile_select_number
-id: 30
-inputs:
-  "value": value
-  "high": high
-  "low": low
-options:
-  lookback: 3
-  percentile: 50
-timeframe: {}
-)",
-        timeframe.Serialize()))}};
-
+    TransformConfiguration config = run_op(
+        "percentile_select_number", "30",
+        make_inputs({
+            {"value", input_ref("", "value")},
+            {"high", input_ref("", "high")},
+            {"low", input_ref("", "low")}
+        }),
+        make_options({
+            {"lookback", MetaDataOptionDefinition{3.0}},
+            {"percentile", MetaDataOptionDefinition{50.0}}
+        }),
+        timeframe);
 
     auto transformBase = MAKE_TRANSFORM(config);
     auto transform = dynamic_cast<ITransform *>(transformBase.get());
@@ -585,7 +580,7 @@ timeframe: {}
          epoch_frame::DateTime{2020y, std::chrono::January, 4d}});
 
     epoch_frame::DataFrame input = make_dataframe<bool>(
-        index, {{true, false, true, false}}, {"condition"});
+        index, {{true, false, true, false}}, {"condition#condition"});
 
     // Use the helper function instead of direct YAML
     TransformConfiguration config = boolean_branch(
@@ -620,7 +615,7 @@ timeframe: {}
          epoch_frame::DateTime{2020y, std::chrono::January, 5d}});
 
     epoch_frame::DataFrame input =
-        make_dataframe<double>(index, {{0.5, 1.2, 1.5, 0.8, 2.0}}, {"ratio"});
+        make_dataframe<double>(index, {{0.5, 1.2, 1.5, 0.8, 2.0}}, {"ratio#ratio"});
 
     // Use the helper function instead of direct YAML
     TransformConfiguration config = ratio_branch(
@@ -676,13 +671,13 @@ TEST_CASE("Value Comparison Operators", "[value_compare]") {
        epoch_frame::DateTime{2020y, std::chrono::January, 5d}});
 
   auto previousData = make_dataframe<double>(
-      previousIndex, {{10.0, 15.0, 12.0, 20.0, 18.0}}, {"price"});
+      previousIndex, {{10.0, 15.0, 12.0, 20.0, 18.0}}, {"price#price"});
 
   auto highestData = make_dataframe<double>(
-      timeIndex, {{10.0, 15.0, 12.0, 20.0, 18.0, 25.0}}, {"price"});
+      timeIndex, {{10.0, 15.0, 12.0, 20.0, 18.0, 25.0}}, {"price#price"});
 
   auto lowestData = make_dataframe<double>(
-      timeIndex, {{10.0, 15.0, 8.0, 20.0, 12.0, 25.0}}, {"price"});
+      timeIndex, {{10.0, 15.0, 8.0, 20.0, 12.0, 25.0}}, {"price#price"});
 
   SECTION("Previous Value Comparisons") {
     // Simple tests for Previous comparisons - these work correctly
@@ -881,8 +876,8 @@ TEST_CASE("Type Casting in Equality Operators", "[equality][type_cast]") {
              Scalar{false}},                                      // bool_column
             {1.0_scalar, 0.0_scalar, 1.0_scalar, 1.0_scalar}      // double_column
         },
-        {arrow::field("bool_column", arrow::boolean()),
-         arrow::field("double_column", arrow::float64())});
+        {arrow::field("bool_column#bool_column", arrow::boolean()),
+         arrow::field("double_column#double_column", arrow::float64())});
 
     TransformConfiguration config = vector_op(
         "neq", "100", strategy::InputValue(strategy::NodeReference("bool_column", "bool_column")),
@@ -915,8 +910,8 @@ TEST_CASE("Type Casting in Equality Operators", "[equality][type_cast]") {
              Scalar{false}},                                      // bool_column
             {1.0_scalar, 0.0_scalar, 0.0_scalar, 0.0_scalar}      // double_column
         },
-        {arrow::field("bool_column", arrow::boolean()),
-         arrow::field("double_column", arrow::float64())});
+        {arrow::field("bool_column#bool_column", arrow::boolean()),
+         arrow::field("double_column#double_column", arrow::float64())});
 
     TransformConfiguration config = vector_op(
         "eq", "101", strategy::InputValue(strategy::NodeReference("bool_column", "bool_column")),
@@ -949,8 +944,8 @@ TEST_CASE("Type Casting in Equality Operators", "[equality][type_cast]") {
             {Scalar{true}, Scalar{false}, Scalar{true},
              Scalar{false}}                                       // bool_column
         },
-        {arrow::field("double_column", arrow::float64()),
-         arrow::field("bool_column", arrow::boolean())});
+        {arrow::field("double_column#double_column", arrow::float64()),
+         arrow::field("bool_column#bool_column", arrow::boolean())});
 
     TransformConfiguration config = vector_op(
         "neq", "102", strategy::InputValue(strategy::NodeReference("double_column", "double_column")),
@@ -989,7 +984,7 @@ TEST_CASE("FirstNonNull Transform (Coalesce)") {
         {std::nan(""), std::nan(""), 10.0, 15.0},  // SLOT1
         {20.0, 25.0, 30.0, 35.0}   // SLOT2
     };
-    epoch_frame::DataFrame input = make_dataframe<double>(index, data, {"SLOT0", "SLOT1", "SLOT2"});
+    epoch_frame::DataFrame input = make_dataframe<double>(index, data, {"SLOT0#SLOT0", "SLOT1#SLOT1", "SLOT2#SLOT2"});
 
     // Use typed first_non_null_number helper
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
@@ -1021,7 +1016,7 @@ TEST_CASE("FirstNonNull Transform (Coalesce)") {
         {std::nan(""), std::nan(""), std::nan(""), std::nan("")},  // SLOT1
         {std::nan(""), std::nan(""), std::nan(""), std::nan("")}   // SLOT2
     };
-    epoch_frame::DataFrame input = make_dataframe<double>(index, data, {"SLOT0", "SLOT1", "SLOT2"});
+    epoch_frame::DataFrame input = make_dataframe<double>(index, data, {"SLOT0#SLOT0", "SLOT1#SLOT1", "SLOT2#SLOT2"});
 
     // Use typed first_non_null_number helper
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
@@ -1048,7 +1043,7 @@ TEST_CASE("FirstNonNull Transform (Coalesce)") {
             {10.0, 20.0, 30.0, 40.0},  // SLOT1
             {100.0, 200.0, 300.0, 400.0}  // SLOT2
         },
-        {"SLOT0", "SLOT1", "SLOT2"});
+        {"SLOT0#SLOT0", "SLOT1#SLOT1", "SLOT2#SLOT2"});
 
     // Use typed first_non_null_number helper
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
@@ -1088,10 +1083,10 @@ TEST_CASE("ConditionalSelect Transform (Case When)") {
             {Scalar(false), Scalar(false), Scalar(false), Scalar(false)},  // SLOT2 - condition2
             {100.0_scalar, 200.0_scalar, 300.0_scalar, 400.0_scalar}  // SLOT3 - value2
         },
-        {arrow::field("SLOT0", arrow::boolean()),
-         arrow::field("SLOT1", arrow::float64()),
-         arrow::field("SLOT2", arrow::boolean()),
-         arrow::field("SLOT3", arrow::float64())});
+        {arrow::field("SLOT0#SLOT0", arrow::boolean()),
+         arrow::field("SLOT1#SLOT1", arrow::float64()),
+         arrow::field("SLOT2#SLOT2", arrow::boolean()),
+         arrow::field("SLOT3#SLOT3", arrow::float64())});
 
     // Use typed conditional_select_number - values are numeric (float64)
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
@@ -1125,10 +1120,10 @@ TEST_CASE("ConditionalSelect Transform (Case When)") {
             {Scalar(false), Scalar(true), Scalar(false), Scalar(true)},   // SLOT2 - condition2
             {100.0_scalar, 200.0_scalar, 300.0_scalar, 400.0_scalar}  // SLOT3 - value2
         },
-        {arrow::field("SLOT0", arrow::boolean()),
-         arrow::field("SLOT1", arrow::float64()),
-         arrow::field("SLOT2", arrow::boolean()),
-         arrow::field("SLOT3", arrow::float64())});
+        {arrow::field("SLOT0#SLOT0", arrow::boolean()),
+         arrow::field("SLOT1#SLOT1", arrow::float64()),
+         arrow::field("SLOT2#SLOT2", arrow::boolean()),
+         arrow::field("SLOT3#SLOT3", arrow::float64())});
 
     // Use typed conditional_select_number helper
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
@@ -1166,11 +1161,11 @@ TEST_CASE("ConditionalSelect Transform (Case When)") {
             {100.0_scalar, 200.0_scalar, 300.0_scalar, 400.0_scalar},  // SLOT3 - value2
             {999.0_scalar, 999.0_scalar, 999.0_scalar, 999.0_scalar}   // SLOT4 - default
         },
-        {arrow::field("SLOT0", arrow::boolean()),
-         arrow::field("SLOT1", arrow::float64()),
-         arrow::field("SLOT2", arrow::boolean()),
-         arrow::field("SLOT3", arrow::float64()),
-         arrow::field("SLOT4", arrow::float64())});
+        {arrow::field("SLOT0#SLOT0", arrow::boolean()),
+         arrow::field("SLOT1#SLOT1", arrow::float64()),
+         arrow::field("SLOT2#SLOT2", arrow::boolean()),
+         arrow::field("SLOT3#SLOT3", arrow::float64()),
+         arrow::field("SLOT4#SLOT4", arrow::float64())});
 
     // Use typed conditional_select_number helper with default value (odd number of inputs)
     const auto &timeframe = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;

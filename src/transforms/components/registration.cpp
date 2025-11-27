@@ -57,7 +57,9 @@
 // Data Source includes
 #include "data_sources/parametric_data_source.h"  // Unified transform for all data sources
 #include "data_sources/polygon_metadata.h"
-#include "data_sources/polygon_indices_metadata.h"
+#include "data_sources/reference_indices_metadata.h"
+#include "data_sources/reference_fx_metadata.h"
+#include "data_sources/reference_crypto_metadata.h"
 #include "data_sources/fred_metadata.h"
 #include "data_sources/sec_data_source.h"
 #include "data_sources/sec_metadata.h"
@@ -98,12 +100,14 @@
 #include "cross_sectional/rank.h"
 #include "cross_sectional/returns.h"
 #include "cross_sectional/cs_zscore.h"
+#include "cross_sectional/cs_winsorize.h"
 #include "cummulative/cum_op.h"
 
 #include "hosseinmoein/hosseinmoein.h"
 
 #include "indicators/bband_variant.h"
 #include "indicators/forward_returns.h"
+#include "indicators/ffill.h"
 #include "indicators/intraday_returns.h"
 #include "indicators/session_gap.h"
 #include "indicators/bar_gap.h"
@@ -111,6 +115,8 @@
 #include "indicators/moving_average.h"
 #include "indicators/vwap.h"
 #include "indicators/trade_count.h"
+
+#include "statistics/winsorize.h"
 #include "operators/equality.h"
 #include "operators/logical.h"
 #include "operators/validation.h"
@@ -290,6 +296,9 @@ void InitializeTransforms(
 
   // Cross-Sectional Statistical Transforms
   REGISTER_TRANSFORM(cs_zscore, CSZScore);
+  REGISTER_TRANSFORM(cs_winsorize, CSWinsorize);
+  REGISTER_TRANSFORM(cs_rank, CSRank);
+  REGISTER_TRANSFORM(cs_rank_quantile, CSRankQuantile);
 
   REGISTER_TRANSFORM(bband_percent, BollingerBandsPercent);
   REGISTER_TRANSFORM(bband_width, BollingerBandsWidth);
@@ -300,6 +309,15 @@ void InitializeTransforms(
 
   REGISTER_TRANSFORM(forward_returns, ForwardReturns);
   REGISTER_TRANSFORM(intraday_returns, IntradayReturns);
+
+  // Forward fill (ffill) - typed variants
+  REGISTER_TRANSFORM(ffill_string, FfillString);
+  REGISTER_TRANSFORM(ffill_number, FfillNumber);
+  REGISTER_TRANSFORM(ffill_boolean, FfillBoolean);
+
+  // Time-series winsorize
+  REGISTER_TRANSFORM(winsorize, Winsorize);
+
   // Typed lag variants (no untyped lag)
   REGISTER_TRANSFORM(lag_string, LagString);
   REGISTER_TRANSFORM(lag_number, LagNumber);
@@ -431,8 +449,21 @@ void InitializeTransforms(
   // NOTE: quotes and trades are not yet fully implemented - backend data loading disabled
   // REGISTER_TRANSFORM(quotes, PolygonQuotesTransform);
   // REGISTER_TRANSFORM(trades, PolygonTradesTransform);
-  REGISTER_TRANSFORM(common_indices, PolygonCommonIndicesTransform);
-  REGISTER_TRANSFORM(indices, PolygonIndicesTransform);
+  // Reference Indices
+  REGISTER_TRANSFORM(common_indices, ParametricDataSourceTransform);
+  REGISTER_TRANSFORM(indices, ParametricDataSourceTransform);
+
+  // Reference Stocks
+  REGISTER_TRANSFORM(common_reference_stocks, ParametricDataSourceTransform);
+  REGISTER_TRANSFORM(reference_stocks, ParametricDataSourceTransform);
+
+  // FX Pairs
+  REGISTER_TRANSFORM(common_fx_pairs, ParametricDataSourceTransform);
+  REGISTER_TRANSFORM(fx_pairs, ParametricDataSourceTransform);
+
+  // Crypto Pairs
+  REGISTER_TRANSFORM(common_crypto_pairs, ParametricDataSourceTransform);
+  REGISTER_TRANSFORM(crypto_pairs, ParametricDataSourceTransform);
 
   // Corporate Actions & Event Data Sources (using MetadataRegistry)
   REGISTER_TRANSFORM(news, PolygonNewsTransform);
@@ -449,8 +480,8 @@ void InitializeTransforms(
   // REGISTER_TRANSFORM(form13f_holdings, Form13FHoldingsTransform);
   // REGISTER_TRANSFORM(insider_trading, InsiderTradingTransform);
 
-  // Reference Stock Data Source Transforms
-  REGISTER_TRANSFORM(us_reference_stocks, DataSourceTransform);
+  // Reference Stock Data Source Transforms (deprecated: us_reference_stocks)
+  // Now using common_reference_stocks and reference_stocks registered above
 
   // Register EventMarkers
   REGISTER_TRANSFORM(event_marker, EventMarker);

@@ -12,16 +12,63 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeReferenceSt
   using namespace epoch_script::data_sources;
   std::vector<epoch_script::transforms::TransformsMetaData> metadataList;
 
-  // Get metadata from MetadataRegistry for market bars (reference stocks use same schema)
-  // Note: Reference stocks can be either DailyBars or MinuteBars depending on timeframe
-  auto dailyBarsMeta = data_sdk::dataloader::MetadataRegistry::GetMetadataForCategory(DataCategory::DailyBars);
+  // Get metadata from MetadataRegistry (same OHLC schema as indices)
+  auto stocksMetadata = data_sdk::dataloader::MetadataRegistry::GetIndicesMetadata(true);
 
-  // Note: Uses DailyBars metadata by default, but actual category is determined at runtime based on timeframe
+  // Build outputs with simple IDs (e.g., "c", "o", "h", "l") for AST compiler validation
+  auto outputs = BuildOutputsFromSDKMetadata(stocksMetadata);
+
+  // Common Reference Stocks with SelectOption dropdown
   metadataList.emplace_back(epoch_script::transforms::TransformsMetaData{
-      .id = "us_reference_stocks",
+      .id = "common_reference_stocks",
       .category = epoch_core::TransformCategory::DataSource,
       .plotKind = epoch_core::TransformPlotKind::close_line,
-      .name = "US Reference Stocks",
+      .name = "Common Reference Stocks",
+      .options =
+          {
+              MetaDataOption{
+                  .id = "ticker",
+                  .name = "Reference Stock",
+                  .type = epoch_core::MetaDataOptionType::Select,
+                  .defaultValue = MetaDataOptionDefinition(std::string("SPY")),
+                  .selectOption =
+                      {
+                          // Major ETFs
+                          {"SPY - S&P 500 ETF", "SPY"},
+                          {"QQQ - NASDAQ 100 ETF", "QQQ"},
+                          {"DIA - Dow Jones ETF", "DIA"},
+                          {"IWM - Russell 2000 ETF", "IWM"},
+                          {"AGG - Aggregate Bond ETF", "AGG"},
+                          {"VTI - Total Stock Market ETF", "VTI"},
+                          {"GLD - Gold ETF", "GLD"},
+                          {"TLT - 20+ Year Treasury ETF", "TLT"},
+                      },
+                  .desc = "Select the reference stock"},
+          },
+      .desc = stocksMetadata.description,
+      .inputs = {},
+      .outputs = outputs,
+      .requiresTimeFrame = true,
+      .requiredDataSources = {"STK:{ticker}:c", "STK:{ticker}:o", "STK:{ticker}:h", "STK:{ticker}:l"},
+      .intradayOnly = false,
+      .allowNullInputs = true,
+      .strategyTypes = {"pairs-trading", "relative-strength", "beta-hedging", "correlation"},
+      .assetRequirements = {"single-asset", "multi-asset"},
+      .usageContext =
+          "Use this node to load reference stock data for comparison against your main asset. "
+          "Common use cases: comparing stock performance to SPY, pairs trading, calculating beta, "
+          "or building market-neutral strategies.",
+      .limitations =
+          "Data availability depends on Polygon.io subscription level. "
+          "External loader must handle API authentication and rate limiting.",
+  });
+
+  // Dynamic Reference Stocks with ticker parameter
+  metadataList.emplace_back(epoch_script::transforms::TransformsMetaData{
+      .id = "reference_stocks",
+      .category = epoch_core::TransformCategory::DataSource,
+      .plotKind = epoch_core::TransformPlotKind::close_line,
+      .name = "Reference Stocks",
       .options =
           {
               MetaDataOption{
@@ -29,30 +76,23 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeReferenceSt
                   .name = "Reference Ticker",
                   .type = epoch_core::MetaDataOptionType::String,
                   .defaultValue = MetaDataOptionDefinition(std::string("SPY")),
-                  .desc = "Reference stock ticker symbol (e.g., SPY, QQQ, DIA, IWM)"},
+                  .desc = "Reference stock ticker symbol (e.g., SPY, QQQ, DIA, IWM, AAPL)"},
           },
-      .isCrossSectional = false,
-      .desc = dailyBarsMeta.description,
+      .desc = stocksMetadata.description,
       .inputs = {},
-      .outputs = BuildOutputsFromSDKMetadata(dailyBarsMeta),
-      .atLeastOneInputRequired = false,
-      .tags = {"reference", "comparison", "benchmark", "data", "source", "etf"},
+      .outputs = outputs,
       .requiresTimeFrame = true,
-      .requiredDataSources = BuildRequiredDataSourcesFromSDKMetadata(dailyBarsMeta),
+      .requiredDataSources = {"STK:{ticker}:c", "STK:{ticker}:o", "STK:{ticker}:h", "STK:{ticker}:l"},
       .intradayOnly = false,
-      .allowNullInputs = true,  // Data sources should preserve null rows
+      .allowNullInputs = true,
       .strategyTypes = {"pairs-trading", "relative-strength", "beta-hedging", "correlation"},
-      .assetRequirements = {"multi-asset"},
+      .assetRequirements = {"single-asset", "multi-asset"},
       .usageContext =
-          "Use this node to load reference stock data for comparison against your main asset. "
-          "Date range automatically aligns with the strategy's main market_data_source. "
-          "Common use cases: comparing stock performance to SPY, pairs trading, calculating beta, "
-          "or building market-neutral strategies. The is_eod parameter is automatically determined "
-          "from the timeframe (intraday vs daily/higher).",
+          "Use this node to load reference stock data for any ticker. "
+          "Useful for individual stocks or ETFs not in the common list.",
       .limitations =
           "Data availability depends on Polygon.io subscription level. "
-          "Date range is determined by the main market_data_source node in the strategy. "
-          "External loader must handle API authentication, rate limiting, and date alignment.",
+          "External loader must handle API authentication and rate limiting.",
   });
 
   return metadataList;

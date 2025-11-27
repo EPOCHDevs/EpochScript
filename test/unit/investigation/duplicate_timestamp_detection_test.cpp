@@ -155,7 +155,7 @@ div = dividends(timeframe="1D")()
         .loader = {
             .startDate = DateTime::from_date_str("2022-01-01").date(),
             .endDate = DateTime::from_date_str("2025-01-31").date(),
-            .categories = {DataCategory::Dividends},
+            .requests = {},
             .dataloaderAssets = dataloaderAssets,
             .strategyAssets = strategyAssets,
             .continuationAssets = continuationAssets,
@@ -163,6 +163,7 @@ div = dividends(timeframe="1D")()
             .cacheDir = test_cache.string()
         }
     };
+    dataConfig.loader.AddRequest(DataCategory::Dividends);
 
     dataConfig.transformManager = std::move(transform_manager);
 
