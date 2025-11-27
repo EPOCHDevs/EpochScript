@@ -31,10 +31,9 @@ When you pass arguments to a reporter, they're indexed starting from 0:
 event_marker(
     schema=EventMarkerSchema(
         select_key="SLOT0",  # References first argument
-        schemas=[{
-            "column_id": "SLOT1",  # References second argument
-            ...
-        }]
+        schemas=[
+            CardColumnSchema(column_id="SLOT1", slot=Hero, render_type=Decimal)
+        ]
     )
 )(signal, price, volume)
 #  ^^^^^^  ^^^^^  ^^^^^^
@@ -141,9 +140,9 @@ table_report(
         title="Extreme Return Days",
         select_key="SLOT0",  # Filter by extreme_signal
         columns=[
-            {"column_id": "SLOT0", "title": "Is Extreme"},     # extreme_signal
-            {"column_id": "SLOT1", "title": "Return %"},       # returns_val
-            {"column_id": "SLOT2", "title": "Volume"}          # volume_val
+            TableColumnSchema(column_id="SLOT0", title="Is Extreme"),
+            TableColumnSchema(column_id="SLOT1", title="Return %"),
+            TableColumnSchema(column_id="SLOT2", title="Volume")
         ]
     )
 )(extreme_signal, returns_val, volume_val)
@@ -205,14 +204,12 @@ signal = crossover()(fast_ma, slow_ma)
 # Create event marker - use SLOT0 to reference the first input
 event_marker(
     schema=EventMarkerSchema(
-        icon="Signal",
+        icon=Zap,
         title="MA Crossover Events",
-        select_key="SLOT0",  # References signal (first argument)
-        schemas=[{
-            "column_id": "SLOT0",  # References signal
-            "slot": "PrimaryBadge",
-            "render_type": "Badge"
-        }]
+        select_key="SLOT0",
+        schemas=[
+            CardColumnSchema(column_id="SLOT0", slot=PrimaryBadge, render_type=Badge)
+        ]
     )
 )(signal)
 ```
@@ -244,13 +241,13 @@ price = src.c
 
 event_marker(
     schema=EventMarkerSchema(
-        icon="Trade",
+        icon=TrendingUp,
         title="RSI Signals",
-        select_key="SLOT0",  # Filter by long_signal
+        select_key="SLOT0",
         schemas=[
-            {"column_id": "SLOT0", "slot": "PrimaryBadge", "render_type": "Badge"},    # long_signal
-            {"column_id": "SLOT1", "slot": "SecondaryBadge", "render_type": "Badge"},  # short_signal
-            {"column_id": "SLOT2", "slot": "Hero", "render_type": "Decimal"}           # price
+            CardColumnSchema(column_id="SLOT0", slot=PrimaryBadge, render_type=Badge),
+            CardColumnSchema(column_id="SLOT1", slot=SecondaryBadge, render_type=Badge),
+            CardColumnSchema(column_id="SLOT2", slot=Hero, render_type=Decimal)
         ]
     )
 )(long_signal, short_signal, price)
@@ -266,19 +263,17 @@ Map badge colors based on column values:
 ```python
 event_marker(
     schema=EventMarkerSchema(
-        icon="Signal",
+        icon=Bell,
         title="Trade Signals",
         select_key="SLOT0",
-        schemas=[{
-            "column_id": "SLOT1",  # Signal type column
-            "slot": "PrimaryBadge",
-            "render_type": "Badge",
-            "color_map": {
-                "Success": [1, "BUY"],    # Green for buy signals
-                "Error": [-1, "SELL"],    # Red for sell signals
-                "Warning": [0, "NEUTRAL"] # Yellow for neutral
-            }
-        }]
+        schemas=[
+            CardColumnSchema(
+                column_id="SLOT1",
+                slot=PrimaryBadge,
+                render_type=Badge,
+                color_map={Success: ["BUY"], Error: ["SELL"], Warning: ["NEUTRAL"]}
+            )
+        ]
     )
 )(any_signal, signal_type)
 ```

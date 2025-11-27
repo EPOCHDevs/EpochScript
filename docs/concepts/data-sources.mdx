@@ -105,6 +105,39 @@ Match data frequency to strategy timeframe:
 
 Be aware that different data types have varying publication delays.
 
+### Forward Fill for Sparse Data
+
+Fundamental and economic data publish infrequently (quarterly, monthly) while price data updates every bar. Use `ffill` transforms to forward-fill sparse data, propagating the last valid observation to fill gaps.
+
+**Variants:**
+- `ffill_number` - Forward fill numeric values (ratios, metrics)
+- `ffill_string` - Forward fill string values (sector, category labels)
+- `ffill_boolean` - Forward fill boolean flags
+
+**Example: Daily market cap to equity ratio from quarterly filings**
+
+```python
+src = market_data_source(timeframe="1D")()
+bs = balance_sheet(timeframe="1D", period="quarterly")()
+
+# Total equity only updates quarterly - sparse with nulls between filings
+equity_raw = bs.total_equity
+
+# Forward fill to carry latest equity to every trading day
+equity = ffill_number()(equity_raw)
+
+# Daily price-to-equity using current price and most recent filing
+price_to_equity = src.c / equity
+```
+
+**When to use ffill:**
+- Quarterly fundamentals compared against daily/intraday prices
+- Economic indicators with irregular publication dates
+- Any sparse data source before cross-sectional ranking or calculations
+- Filling gaps before technical indicators that require continuous data
+
+**Note:** Leading nulls (before first valid value) remain null after ffill.
+
 ## See Also
 
 - [Timeframes](/docs/concepts/timeframes) - Multi-timeframe strategies
