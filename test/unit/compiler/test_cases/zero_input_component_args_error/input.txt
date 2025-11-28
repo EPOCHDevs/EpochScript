@@ -1,0 +1,5 @@
+# Test: Passing arguments to a transform that doesn't accept inputs
+# garman_klass has requiredDataSources (fetches data internally) but no inputs
+src = market_data_source(timeframe="1D")()
+vol = garman_klass(period=20)(src.o, src.h, src.l, src.c)
+numeric_cards_report(category="Test", title="Vol")(vol)
