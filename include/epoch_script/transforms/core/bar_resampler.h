@@ -53,8 +53,13 @@ namespace epoch_script::transform
           aggregated_value = group_df[col_name].sum().value(); // sum
         }
         else {
-          // Default: take last value
-          aggregated_value = group_df[col_name].iloc(-1).value();
+          // Default: take last non-null value (handles sparse data like economic indicators)
+          auto non_null_series = group_df[col_name].drop_null();
+          if (non_null_series.size() > 0) {
+            aggregated_value = non_null_series.iloc(-1).value();
+          } else {
+            aggregated_value = group_df[col_name].iloc(-1).value();
+          }
         }
 
         array_list.emplace_back(

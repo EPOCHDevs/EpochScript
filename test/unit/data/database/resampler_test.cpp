@@ -542,3 +542,167 @@ TEST_CASE("Generic Resampler handles different column types correctly", "[Resamp
     }
   }
 }
+
+TEST_CASE("Generic Resampler takes last non-null value for sparse data", "[Resampler][sparse]") {
+  // This test verifies the fix for economic indicators where sparse monthly data
+  // (e.g., CPI published mid-month) was being lost when resampling to month-end
+  // because the default "last" aggregation would pick up null values.
+
+  std::vector<DateTime> dates;
+  // Create 10 minutes of data
+  for (int i = 0; i < 10; i++) {
+    dates.push_back(
+        DateTime::from_str(std::format("2022-01-01 10:{:02d}:00", i))
+            .replace_tz("UTC"));
+  }
+
+  // Create OHLCV data (required columns)
+  std::vector<double> open, high, low, close, volume;
+  for (size_t i = 0; i < dates.size(); i++) {
+    double base = static_cast<double>(i);
+    open.push_back(100.0 + base);
+    high.push_back(105.0 + base);
+    low.push_back(95.0 + base);
+    close.push_back(102.0 + base);
+    volume.push_back(1000.0 + base * 100);
+  }
+
+  // Create a sparse column simulating economic indicator data
+  // Only has values at indices 1 and 6 (like CPI published mid-month)
+  std::vector<std::optional<double>> sparse_econ(10, std::nullopt);
+  sparse_econ[1] = 234.5;  // First "publication"
+  sparse_econ[6] = 236.7;  // Second "publication"
+
+  // Create DataFrame with sparse column
+  auto index = factory::index::make_datetime_index(dates);
+
+  arrow::FieldVector fields = {
+      arrow::field("o", arrow::float64()),
+      arrow::field("h", arrow::float64()),
+      arrow::field("l", arrow::float64()),
+      arrow::field("c", arrow::float64()),
+      arrow::field("v", arrow::float64()),
+      arrow::field("ECON:CPI:value", arrow::float64())  // Sparse economic data
+  };
+
+  // Build sparse array with nulls
+  arrow::DoubleBuilder sparse_builder;
+  for (const auto& val : sparse_econ) {
+    if (val.has_value()) {
+      REQUIRE(sparse_builder.Append(val.value()).ok());
+    } else {
+      REQUIRE(sparse_builder.AppendNull().ok());
+    }
+  }
+  std::shared_ptr<arrow::Array> sparse_array;
+  REQUIRE(sparse_builder.Finish(&sparse_array).ok());
+
+  arrow::ArrayVector arrays;
+  arrays.push_back(factory::array::make_array(open)->chunk(0));
+  arrays.push_back(factory::array::make_array(high)->chunk(0));
+  arrays.push_back(factory::array::make_array(low)->chunk(0));
+  arrays.push_back(factory::array::make_array(close)->chunk(0));
+  arrays.push_back(factory::array::make_array(volume)->chunk(0));
+  arrays.push_back(sparse_array);
+
+  auto table = arrow::Table::Make(arrow::schema(fields), arrays);
+  auto df = DataFrame(index, table);
+
+  SECTION("Resample sparse data to 5-minute intervals - last non-null is preserved") {
+    Asset asset = EpochScriptAssetConstants::instance().AAPL;
+    AssetDataFrameMap assetData;
+    assetData[asset] = df;
+
+    std::vector<epoch_script::TimeFrame> timeframes = {
+        epoch_script::TimeFrame(factory::offset::minutes(5))};
+
+    Resampler resampler(timeframes, true);
+    auto result = resampler.Build(assetData);
+
+    REQUIRE(result.size() == 1);
+    auto [timeframe, resultAsset, resultDf] = result[0];
+
+    INFO(resultDf);
+
+    // Should have 3 rows: 10:00, 10:05, 10:10
+    // With closed=Right, label=Right:
+    //   - Bar 0 (10:00): Contains only minute 0
+    //   - Bar 1 (10:05): Contains minutes 1-5
+    //   - Bar 2 (10:10): Contains minutes 6-9
+    REQUIRE(resultDf.num_rows() == 3);
+
+    // First bar (minute 0 only): sparse_econ[0] is null, no other values in range
+    // With last_non_null and no non-null values, should be null
+    auto first_bar_value = resultDf["ECON:CPI:value"].iloc(0);
+    INFO("First bar (minute 0 only): Expected null (no values in range)");
+    REQUIRE(first_bar_value.is_null());
+
+    // Second bar (minutes 1-5): sparse_econ[1] has value 234.5
+    // indices 2,3,4,5 are null, index 1 has value
+    // With last_non_null, this should be 234.5 (not null)
+    auto second_bar_value = resultDf["ECON:CPI:value"].iloc(1);
+    INFO("Second bar (minutes 1-5): Expected 234.5 from index 1");
+    REQUIRE_FALSE(second_bar_value.is_null());
+    REQUIRE(second_bar_value.as_double() == Catch::Approx(234.5));
+
+    // Third bar (minutes 6-9): sparse_econ[6] has value 236.7
+    // indices 7,8,9 are null, index 6 has value
+    // With last_non_null, this should be 236.7 (not null)
+    auto third_bar_value = resultDf["ECON:CPI:value"].iloc(2);
+    INFO("Third bar (minutes 6-9): Expected 236.7 from index 6");
+    REQUIRE_FALSE(third_bar_value.is_null());
+    REQUIRE(third_bar_value.as_double() == Catch::Approx(236.7));
+  }
+
+  SECTION("All-null sparse column remains null after resample") {
+    // Create a column that's entirely null
+    std::vector<std::optional<double>> all_null_data(10, std::nullopt);
+
+    arrow::DoubleBuilder all_null_builder;
+    for (const auto& val : all_null_data) {
+      REQUIRE(all_null_builder.AppendNull().ok());
+    }
+    std::shared_ptr<arrow::Array> all_null_array;
+    REQUIRE(all_null_builder.Finish(&all_null_array).ok());
+
+    arrow::FieldVector fields2 = {
+        arrow::field("o", arrow::float64()),
+        arrow::field("h", arrow::float64()),
+        arrow::field("l", arrow::float64()),
+        arrow::field("c", arrow::float64()),
+        arrow::field("v", arrow::float64()),
+        arrow::field("all_null_col", arrow::float64())
+    };
+
+    arrow::ArrayVector arrays2;
+    arrays2.push_back(factory::array::make_array(open)->chunk(0));
+    arrays2.push_back(factory::array::make_array(high)->chunk(0));
+    arrays2.push_back(factory::array::make_array(low)->chunk(0));
+    arrays2.push_back(factory::array::make_array(close)->chunk(0));
+    arrays2.push_back(factory::array::make_array(volume)->chunk(0));
+    arrays2.push_back(all_null_array);
+
+    auto table2 = arrow::Table::Make(arrow::schema(fields2), arrays2);
+    auto df2 = DataFrame(index, table2);
+
+    Asset asset = EpochScriptAssetConstants::instance().AAPL;
+    AssetDataFrameMap assetData;
+    assetData[asset] = df2;
+
+    std::vector<epoch_script::TimeFrame> timeframes = {
+        epoch_script::TimeFrame(factory::offset::minutes(5))};
+
+    Resampler resampler(timeframes, true);
+    auto result = resampler.Build(assetData);
+
+    REQUIRE(result.size() == 1);
+    auto [timeframe, resultAsset, resultDf] = result[0];
+
+    // All values should still be null
+    for (int64_t i = 0; i < resultDf.num_rows(); i++) {
+      auto val = resultDf["all_null_col"].iloc(i);
+      INFO("Row " << i << " should be null");
+      REQUIRE(val.is_null());
+    }
+  }
+}
