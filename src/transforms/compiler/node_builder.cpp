@@ -412,8 +412,12 @@ namespace epoch_script
         {
             if (input_ids.empty())
             {
-                // Component with 0 inputs - ignore positional args (special case)
-                return;
+                // Component with 0 inputs but user passed args - this is a compile error
+                ThrowError("Component '" + component_name + "' does not accept any inputs, but " +
+                          std::to_string(args.size()) + " argument(s) were provided. " +
+                          "This transform fetches its own data internally based on 'requiredDataSources'. " +
+                          "Remove the arguments and specify a timeframe instead, e.g.: " +
+                          component_name + "(timeframe=\"1D\")()");
             }
 
             // Validate positional args count (allow multiple args if last input is variadic)

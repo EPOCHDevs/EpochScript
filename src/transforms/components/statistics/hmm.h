@@ -193,6 +193,39 @@ private:
     return X;
   }
 
+  // Add small regularization to input data to improve numerical stability
+  arma::mat RegularizeInput(const arma::mat &X) const {
+    arma::mat X_reg = X;
+
+    // Check covariance matrix condition
+    arma::mat cov = arma::cov(X);
+    arma::vec eigval;
+    arma::mat eigvec;
+
+    if (!arma::eig_sym(eigval, eigvec, cov)) {
+      // If eigendecomposition fails, add small noise
+      for (size_t i = 0; i < X.n_cols; ++i) {
+        X_reg.col(i) += arma::randn(X.n_rows) * 1e-6;
+      }
+      return X_reg;
+    }
+
+    double min_eig = arma::min(eigval);
+    double max_eig = arma::max(eigval);
+    double condition_number = (min_eig > 1e-15) ? max_eig / min_eig : 1e15;
+
+    // If condition number is too high, add regularization
+    if (condition_number > 1e10 || min_eig < 1e-10) {
+      // Add small noise proportional to the issue severity
+      double noise_scale = std::max(1e-6, std::abs(min_eig) + 1e-8);
+      for (size_t i = 0; i < X.n_cols; ++i) {
+        X_reg.col(i) += arma::randn(X.n_rows) * noise_scale;
+      }
+    }
+
+    return X_reg;
+  }
+
   HMMGaussian TrainHMM(const arma::mat &X) const {
     // Number of dimensions (features)
     const size_t dimensionality = X.n_cols;
@@ -213,6 +246,9 @@ private:
       }
     }
 
+    // Apply input regularization to improve numerical stability
+    arma::mat X_reg = RegularizeInput(X);
+
     // Initialize Gaussian HMM with N_STATES and given dimensionality
     HMMGaussian hmm(N_STATES, GaussianDistribution<>(dimensionality),
                     m_tolerance);
@@ -220,29 +256,64 @@ private:
     // Prepare sequences (each matrix is dimensionality x T, observations in
     // columns)
     std::vector<arma::mat> sequences;
-    sequences.emplace_back(X.t());
+    sequences.emplace_back(X_reg.t());
 
-    // Unsupervised training (Baum-Welch) with error handling
-    try {
-      hmm.Train(sequences);
-    } catch (const std::exception &e) {
-      // Provide helpful error message for Cholesky decomposition failures
-      std::string error_msg = std::string(e.what());
-      if (error_msg.find("Cholesky") != std::string::npos) {
-        throw std::runtime_error(
-            "HMM training failed: Cholesky decomposition error during Baum-Welch training. "
-            "This typically indicates: (1) Highly correlated input features, "
-            "(2) Insufficient data variance, or (3) Numerical instability. "
-            "Solutions: (a) Remove correlated features (e.g., don't use both returns and abs(returns)), "
-            "(b) Increase min_training_samples, (c) Reduce number of HMM states, "
-            "(d) Check for constant or near-constant input features. "
-            "Original error: " + error_msg);
+    // Unsupervised training (Baum-Welch) with error handling and retry logic
+    constexpr int MAX_RETRIES = 3;
+    std::string last_error;
+
+    for (int retry = 0; retry < MAX_RETRIES; ++retry) {
+      try {
+        hmm.Train(sequences);
+        return hmm; // Success!
+      } catch (const std::exception &e) {
+        last_error = std::string(e.what());
+
+        // On failure, try adding more regularization
+        if (retry < MAX_RETRIES - 1) {
+          // Increase regularization for next attempt
+          double noise_scale = 1e-5 * std::pow(10, retry);
+          for (size_t i = 0; i < X_reg.n_cols; ++i) {
+            X_reg.col(i) += arma::randn(X_reg.n_rows) * noise_scale;
+          }
+          sequences.clear();
+          sequences.emplace_back(X_reg.t());
+
+          // Re-initialize HMM for fresh training
+          hmm = HMMGaussian(N_STATES, GaussianDistribution<>(dimensionality),
+                            m_tolerance);
+        }
+      } catch (...) {
+        last_error = "Unknown error during HMM training";
+        if (retry < MAX_RETRIES - 1) {
+          double noise_scale = 1e-5 * std::pow(10, retry);
+          for (size_t i = 0; i < X_reg.n_cols; ++i) {
+            X_reg.col(i) += arma::randn(X_reg.n_rows) * noise_scale;
+          }
+          sequences.clear();
+          sequences.emplace_back(X_reg.t());
+          hmm = HMMGaussian(N_STATES, GaussianDistribution<>(dimensionality),
+                            m_tolerance);
+        }
       }
-      // Re-throw other exceptions with context
-      throw std::runtime_error("HMM training failed: " + error_msg);
     }
 
-    return hmm;
+    // All retries failed - provide helpful error message
+    if (last_error.find("Cholesky") != std::string::npos ||
+        last_error.find("fatal") != std::string::npos) {
+      throw std::runtime_error(
+          "HMM training failed after " + std::to_string(MAX_RETRIES) + " attempts: "
+          "Cholesky decomposition error during Baum-Welch training. "
+          "This typically indicates: (1) Highly correlated input features, "
+          "(2) Insufficient data variance, or (3) Numerical instability. "
+          "Solutions: (a) Remove correlated features (e.g., don't use both returns and abs(returns)), "
+          "(b) Increase min_training_samples, (c) Reduce number of HMM states, "
+          "(d) Check for constant or near-constant input features. "
+          "Original error: " + last_error);
+    }
+
+    throw std::runtime_error("HMM training failed after " +
+                             std::to_string(MAX_RETRIES) + " attempts: " + last_error);
   }
 
   epoch_frame::DataFrame GenerateOutputs(const epoch_frame::IndexPtr &index,

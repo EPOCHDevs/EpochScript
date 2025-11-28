@@ -246,6 +246,11 @@ epoch_frame::DataFrame IntermediateResultStorage::GatherInputs(
     }
 
     auto column = assetData[dataSource];
+    // DEBUG: Log timestamp column types
+    if (dataSource.find("period_end") != std::string::npos) {
+      SPDLOG_INFO("BASE DATA {} for asset {} - type: {}",
+                  dataSource, asset_id, column.array()->type()->ToString());
+    }
     arrayList.emplace_back(column.array());
     columns.emplace_back(dataSource);
   }
@@ -422,6 +427,13 @@ void IntermediateResultStorage::InitializeBaseData(
       }
       SPDLOG_DEBUG("Initializing base data for asset: {}, timeframe {}",
                    asset_id, timeframe);
+      // DEBUG: Log timestamp types for period_end columns at initialization
+      for (const auto& col : dataFrame.column_names()) {
+        if (col.find("period_end") != std::string::npos) {
+          SPDLOG_INFO("INIT BASE {} for asset {} tf {} - type: {}",
+                      col, asset_id, timeframe, dataFrame[col].array()->type()->ToString());
+        }
+      }
 
       // Debug: Check for duplicates in base data index
       if (asset_id == "AAPL-Stocks" && timeframe == "1D") {
@@ -716,7 +728,13 @@ void IntermediateResultStorage::StoreTransformOutput(
     if (data.contains(outputId)) {
       SPDLOG_DEBUG("Storing output {} for asset: {}, timeframe {}", outputId,
                    asset_id, timeframe);
-      m_cache[timeframe][asset_id][outputId] = data[outputId].reindex(targetIndex);
+      auto series = data[outputId].reindex(targetIndex);
+      // DEBUG: Log timestamp column types when storing
+      if (outputId.find("period_end") != std::string::npos) {
+        SPDLOG_INFO("STORE OUTPUT {} for asset {} - type: {}",
+                    outputId, asset_id, series.array()->type()->ToString());
+      }
+      m_cache[timeframe][asset_id][outputId] = series;
       continue;
     }
     SPDLOG_DEBUG("Storing NULL   output {} for asset: {}, timeframe {}",

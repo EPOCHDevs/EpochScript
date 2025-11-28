@@ -78,6 +78,8 @@ namespace epoch_script
                             return DataType::Number;
                         else if (type_str == "String")
                             return DataType::String;
+                        else if (type_str == "Timestamp")
+                            return DataType::Timestamp;
                         else
                             return DataType::Any;
                     }

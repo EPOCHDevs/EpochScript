@@ -314,6 +314,7 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(ffill_string, FfillString);
   REGISTER_TRANSFORM(ffill_number, FfillNumber);
   REGISTER_TRANSFORM(ffill_boolean, FfillBoolean);
+  REGISTER_TRANSFORM(ffill_timestamp, FfillTimestamp);
 
   // Time-series winsorize
   REGISTER_TRANSFORM(winsorize, Winsorize);

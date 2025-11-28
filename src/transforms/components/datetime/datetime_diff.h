@@ -41,6 +41,12 @@ private:
     auto timestamp1_array = bars[GetInputId(ARG0)].contiguous_array();
     auto timestamp2_array = bars[GetInputId(ARG1)].contiguous_array();
 
+    // DEBUG: Always log input types with column names
+    auto ts1_type_str = timestamp1_array.value()->type()->ToString();
+    auto ts2_type_str = timestamp2_array.value()->type()->ToString();
+    SPDLOG_INFO("datetime_diff - ts1: {} ({}) ts2: {} ({})",
+                ts1_type_str, GetInputId(ARG0), ts2_type_str, GetInputId(ARG1));
+
     TemporalOperation<true> temporal(timestamp1_array);
 
     // Calculate difference in selected unit

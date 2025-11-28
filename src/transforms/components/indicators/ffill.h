@@ -47,6 +47,7 @@ public:
 using FfillString = TypedFfill<StringType>;
 using FfillNumber = TypedFfill<NumberType>;
 using FfillBoolean = TypedFfill<BooleanType>;
+using FfillTimestamp = TypedFfill<TimestampType>;
 
 // Metadata for ffill transforms
 inline std::vector<epoch_script::transforms::TransformsMetaData>
@@ -96,6 +97,22 @@ MakeFfillMetaData() {
       .desc = "Fills null values by forward-propagating the last valid boolean observation.",
       .inputs = {IOMetaDataConstants::BOOLEAN_INPUT_METADATA},
       .outputs = {IOMetaDataConstants::BOOLEAN_OUTPUT_METADATA},
+      .tags = {"null-handling", "fill", "interpolation", "data-cleaning"},
+      .requiresTimeFrame = false,
+      .allowNullInputs = true,
+      .strategyTypes = {"data-preparation", "research"},
+      .assetRequirements = {"single-asset"}});
+
+  // Timestamp variant
+  metadataList.emplace_back(TransformsMetaData{
+      .id = "ffill_timestamp",
+      .category = epoch_core::TransformCategory::Trend,
+      .plotKind = epoch_core::TransformPlotKind::Null,
+      .name = "Forward Fill (Timestamp)",
+      .options = {},
+      .desc = "Fills null values by forward-propagating the last valid timestamp observation.",
+      .inputs = {IOMetaData{epoch_core::IODataType::Timestamp, "SLOT", "Timestamp Column", false, false}},
+      .outputs = {IOMetaData{epoch_core::IODataType::Timestamp, "result", ""}},
       .tags = {"null-handling", "fill", "interpolation", "data-cleaning"},
       .requiresTimeFrame = false,
       .allowNullInputs = true,
