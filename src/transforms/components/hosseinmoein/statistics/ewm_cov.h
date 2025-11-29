@@ -52,7 +52,7 @@ public:
     return make_dataframe(
         df.index(),
         {factory::array::make_array(cov_vec)},
-        {GetOutputId("covariance")}
+        {GetOutputId("result")}
     );
   }
 

@@ -5,6 +5,12 @@ logs
 # Local dev files
 ../.env
 .cache
+cache
+bin
+.claude
+
+tools/parquet_explorer/.venv
+tools/parquet_explorer/files
 # Generated files
 js/build
 js/node_modules

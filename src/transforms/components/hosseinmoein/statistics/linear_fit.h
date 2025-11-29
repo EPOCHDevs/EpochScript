@@ -35,7 +35,6 @@ public:
     const Series y = df[GetInputId("y")];
     std::vector<double> residuals, intercepts;
 
-    std::vector<DateTime> index;
     residuals.reserve(df.num_rows());
     intercepts.reserve(df.num_rows());
 
@@ -46,14 +45,13 @@ public:
           const SeriesSpan<> xs{xw};
           const SeriesSpan<> ys{yw};
           run_visit(xw, visitor, xs, ys);
-          index.push_back(xw.index()->at(-1).to_datetime());
           residuals.push_back(visitor.get_residual());
           intercepts.push_back(visitor.get_intercept());
           return Scalar{visitor.get_slope()};
         });
 
     auto residualInterceptDF = make_dataframe(
-        factory::index::make_datetime_index(index, "", "UTC"),
+        fitted.index(),
         {factory::array::make_array(residuals),
          factory::array::make_array(intercepts)},
         {GetOutputId("residual"), GetOutputId("intercept")});

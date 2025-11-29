@@ -13,10 +13,13 @@
 #include <epoch_script/core/time_frame.h>
 #include <epoch_script/core/constants.h>
 #include <epoch_script/transforms/core/sessions_utils.h>
+#include "events/orchestrator_events.h"
 #include <unordered_map>
 #include <vector>
 
 #include "epoch_frame/factory/index_factory.h"
+#include "events/transform_progress_emitter.h"
+#include "../components/utility/asset_ref_passthrough.h"
 
 // TODO: Watch out for throwing excePtion in these functions -> causes deadlock
 namespace epoch_script::runtime {
@@ -96,6 +99,27 @@ void ApplyDefaultTransform(
     ExecutionContext &msg) {
   auto timeframe = transformer.GetTimeframe().ToString();
   auto name = transformer.GetName() + " " + transformer.GetId();
+  const auto nodeId = transformer.GetId();
+  const auto transformName = transformer.GetName();
+  const auto& asset_ids_ref = msg.cache->GetAssetIDs();
+
+  // Record start time
+  auto startTime = events::Now();
+
+  if (msg.onNodeStarted) {
+    msg.onNodeStarted(nodeId);
+  }
+
+  // Emit node started event
+  msg.EmitEvent(events::NodeStartedEvent{
+      .timestamp = startTime,
+      .node_id = nodeId,
+      .transform_name = transformName,
+      .is_cross_sectional = false,
+      .node_index = 0,  // TODO: Could track this
+      .total_nodes = msg.totalNodes,
+      .asset_count = asset_ids_ref.size()
+  });
 
   // Enforce intradayOnly if metadata requests it
   try {
@@ -105,7 +129,20 @@ void ApplyDefaultTransform(
       SPDLOG_WARN("Transform {} marked intradayOnly but timeframe {} is not "
                   "intraday. Skipping.",
                   name, timeframe);
-      for (auto const &asset_id : msg.cache->GetAssetIDs()) {
+
+      // Emit skipped event
+      msg.EmitEvent(events::NodeSkippedEvent{
+          .timestamp = events::Now(),
+          .node_id = nodeId,
+          .transform_name = transformName,
+          .reason = "intradayOnly but timeframe is not intraday"
+      });
+
+      if (msg.nodesSkipped) {
+        msg.nodesSkipped->fetch_add(1);
+      }
+
+      for (auto const &asset_id : asset_ids_ref) {
         try {
           msg.cache->StoreTransformOutput(asset_id, transformer,
                                           CreateEmptyOutputDataFrame(transformer));
@@ -115,15 +152,26 @@ void ApplyDefaultTransform(
               transformer.GetConfiguration().GetId(), exp.what()));
         }
       }
+      if (msg.onNodeCompleted) {
+        msg.onNodeCompleted(nodeId);
+      }
       return;
     }
   } catch (...) {
     // If metadata structure doesn't contain the flag yet, ignore
   }
 
+  // Track assets processed and failed
+  std::atomic<size_t> assetsProcessed{0};
+  std::atomic<size_t> assetsFailed{0};
+
   // Lambda for processing a single asset
   auto processAsset = [&](auto const &asset_id) {
-    try {
+    auto emitter = transformer.GetProgressEmitter();
+    auto runBody = [&]() {
+      // Check cancellation
+      msg.ThrowIfCancelled();
+
       // Validate inputs before gathering - if any input is missing, return empty DataFrame
       if (!msg.cache->ValidateInputsAvailable(asset_id, transformer)) {
         SPDLOG_WARN(
@@ -131,6 +179,7 @@ void ApplyDefaultTransform(
             asset_id, name);
         auto empty_result = CreateEmptyOutputDataFrame(transformer);
         msg.cache->StoreTransformOutput(asset_id, transformer, empty_result);
+        assetsProcessed++;
         return;
       }
 
@@ -214,17 +263,69 @@ void ApplyDefaultTransform(
       }
 
       msg.cache->StoreTransformOutput(asset_id, transformer, result);
+      assetsProcessed++;
+    };
+
+    try {
+      if (emitter) {
+        events::AssetContextGuard guard(*emitter, asset_id);
+        runBody();
+      } else {
+        runBody();
+      }
+    } catch (const events::OperationCancelledException&) {
+      // Re-throw cancellation to stop processing
+      throw;
     } catch (std::exception const &exp) {
       const auto error =
           std::format("Asset: {}, Transform: {}, Error: {}.", asset_id,
                       transformer.GetConfiguration().GetId(), exp.what());
       msg.logger->log(error);
+      assetsFailed++;
     }
   };
 
   // Parallel per-asset processing using TBB
   const auto& asset_ids = msg.cache->GetAssetIDs();
-  tbb::parallel_for_each(asset_ids.begin(), asset_ids.end(), processAsset);
+  try {
+    tbb::parallel_for_each(asset_ids.begin(), asset_ids.end(), processAsset);
+  } catch (const events::OperationCancelledException&) {
+    // Cancellation requested - emit failed event and re-throw
+    auto elapsed = events::ToMillis(events::Now() - startTime);
+    if (msg.onNodeCompleted) {
+      msg.onNodeCompleted(nodeId);
+    }
+    msg.EmitEvent(events::NodeFailedEvent{
+        .timestamp = events::Now(),
+        .node_id = nodeId,
+        .transform_name = transformName,
+        .error_message = "Cancelled",
+        .asset_id = std::nullopt
+    });
+    if (msg.nodesFailed) {
+      msg.nodesFailed->fetch_add(1);
+    }
+    throw;
+  }
+
+  // Emit node completed event
+  auto duration = events::ToMillis(events::Now() - startTime);
+  if (msg.onNodeCompleted) {
+    msg.onNodeCompleted(nodeId);
+  }
+  msg.EmitEvent(events::NodeCompletedEvent{
+      .timestamp = events::Now(),
+      .node_id = nodeId,
+      .transform_name = transformName,
+      .duration = duration,
+      .assets_processed = assetsProcessed.load(),
+      .assets_failed = assetsFailed.load()
+  });
+
+  // Update progress counter
+  if (msg.nodesCompleted) {
+    msg.nodesCompleted->fetch_add(1);
+  }
 }
 
 // Distribute cross-sectional results to individual assets
@@ -280,6 +381,26 @@ void ApplyCrossSectionTransform(
   auto timeframe = transformer.GetTimeframe().ToString();
   auto inputId = transformer.GetInputId();
   const auto &asset_ids = msg.cache->GetAssetIDs();
+  const auto nodeId = transformer.GetId();
+  const auto transformName = transformer.GetName();
+
+  // Record start time
+  auto startTime = events::Now();
+
+  if (msg.onNodeStarted) {
+    msg.onNodeStarted(nodeId);
+  }
+
+  // Emit node started event
+  msg.EmitEvent(events::NodeStartedEvent{
+      .timestamp = startTime,
+      .node_id = nodeId,
+      .transform_name = transformName,
+      .is_cross_sectional = true,
+      .node_index = 0,  // TODO: Could track this
+      .total_nodes = msg.totalNodes,
+      .asset_count = asset_ids.size()
+  });
 
   // Enforce intradayOnly if metadata requests it
   try {
@@ -289,6 +410,19 @@ void ApplyCrossSectionTransform(
       SPDLOG_WARN("Cross-sectional transform {} marked intradayOnly but "
                   "timeframe {} is not intraday. Skipping.",
                   transformer.GetConfiguration().GetId(), timeframe);
+
+      // Emit skipped event
+      msg.EmitEvent(events::NodeSkippedEvent{
+          .timestamp = events::Now(),
+          .node_id = nodeId,
+          .transform_name = transformName,
+          .reason = "intradayOnly but timeframe is not intraday"
+      });
+
+      if (msg.nodesSkipped) {
+        msg.nodesSkipped->fetch_add(1);
+      }
+
       for (auto const &asset_id : asset_ids) {
         try {
           msg.cache->StoreTransformOutput(asset_id, transformer,
@@ -298,6 +432,9 @@ void ApplyCrossSectionTransform(
               "Asset: {}, Transform: {}, Error: {}.", asset_id,
               transformer.GetConfiguration().GetId(), exp.what()));
         }
+      }
+      if (msg.onNodeCompleted) {
+        msg.onNodeCompleted(nodeId);
       }
       return;
     }
@@ -388,17 +525,85 @@ void ApplyCrossSectionTransform(
 
       SPDLOG_DEBUG("Cross-sectional reporter {} - skipping output distribution",
                    transformer.GetConfiguration().GetId());
+
+      if (msg.onNodeCompleted) {
+        msg.onNodeCompleted(nodeId);
+      }
+      auto duration = events::ToMillis(events::Now() - startTime);
+      msg.EmitEvent(events::NodeCompletedEvent{
+          .timestamp = events::Now(),
+          .node_id = nodeId,
+          .transform_name = transformName,
+          .duration = duration,
+          .assets_processed = asset_ids.size(),
+          .assets_failed = 0
+      });
+      if (msg.nodesCompleted) {
+        msg.nodesCompleted->fetch_add(1);
+      }
       return;
     }
 
     // For non-reporter transforms, distribute outputs to individual assets
     DistributeCrossSectionalOutputs(transformer, crossResult, asset_ids, msg);
 
+    // Emit node completed event
+    auto duration = events::ToMillis(events::Now() - startTime);
+    if (msg.onNodeCompleted) {
+      msg.onNodeCompleted(nodeId);
+    }
+    msg.EmitEvent(events::NodeCompletedEvent{
+        .timestamp = events::Now(),
+        .node_id = nodeId,
+        .transform_name = transformName,
+        .duration = duration,
+        .assets_processed = asset_ids.size(),
+        .assets_failed = 0
+    });
+
+    // Update progress counter
+    if (msg.nodesCompleted) {
+      msg.nodesCompleted->fetch_add(1);
+    }
+
+  } catch (const events::OperationCancelledException&) {
+    // Cancellation requested - emit failed event and re-throw
+    if (msg.onNodeCompleted) {
+      msg.onNodeCompleted(nodeId);
+    }
+    msg.EmitEvent(events::NodeFailedEvent{
+        .timestamp = events::Now(),
+        .node_id = nodeId,
+        .transform_name = transformName,
+        .error_message = "Cancelled",
+        .asset_id = std::nullopt
+    });
+    if (msg.nodesFailed) {
+      msg.nodesFailed->fetch_add(1);
+    }
+    throw;
   } catch (std::exception const &exp) {
     auto error =
         std::format("Transform : {}", transformer.GetConfiguration().GetId());
     const auto exception = std::format("{}\n{}", exp.what(), error);
     msg.logger->log(exception);
+    if (msg.onNodeCompleted) {
+      msg.onNodeCompleted(nodeId);
+    }
+
+    // Emit node failed event
+    msg.EmitEvent(events::NodeFailedEvent{
+        .timestamp = events::Now(),
+        .node_id = nodeId,
+        .transform_name = transformName,
+        .error_message = exp.what(),
+        .asset_id = std::nullopt
+    });
+
+    // Update failed counter
+    if (msg.nodesFailed) {
+      msg.nodesFailed->fetch_add(1);
+    }
   }
 }
 } // namespace epoch_script::runtime

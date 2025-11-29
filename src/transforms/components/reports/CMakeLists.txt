@@ -13,4 +13,21 @@ target_sources(epoch_script PRIVATE
         cs_numeric_card_report.cpp
         pie_chart_report.cpp
         nested_pie_chart_report.cpp
-        histogram_chart_report.cpp)
+        histogram_chart_report.cpp
+        # Line chart reports
+        line_chart_report.cpp
+        cs_line_chart_report.cpp
+        # Area chart reports
+        area_chart_report.cpp
+        cs_area_chart_report.cpp
+        # Heatmap reports
+        heatmap_report.cpp
+        cs_heatmap_report.cpp
+        # Boxplot reports
+        boxplot_report.cpp
+        cs_boxplot_report.cpp
+        # Numeric line chart reports
+        numeric_line_chart_report.cpp
+        # XRange chart reports
+        xrange_chart_report.cpp
+        cs_xrange_chart_report.cpp)

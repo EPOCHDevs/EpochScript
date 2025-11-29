@@ -7,6 +7,9 @@ target_sources(epoch_script PRIVATE
     execution/execution_node.cpp
     execution/intermediate_storage.cpp
     transform_manager/transform_manager.cpp
+    # Event system for progress tracking and callbacks
+    events/event_dispatcher.cpp
+    events/transform_progress_emitter.cpp
 )
 
 # Runtime needs access to execution headers

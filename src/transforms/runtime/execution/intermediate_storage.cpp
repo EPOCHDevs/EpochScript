@@ -179,6 +179,21 @@ epoch_frame::DataFrame IntermediateResultStorage::GatherInputs(
         continue;
       }
 
+      // Check if this input is an asset-scalar (per-asset constant like asset_ref)
+      auto assetScalarIt = m_assetScalarCache.find(inputId);
+      if (assetScalarIt != m_assetScalarCache.end()) {
+        auto assetValueIt = assetScalarIt->second.find(asset_id);
+        if (assetValueIt != assetScalarIt->second.end()) {
+          const auto& scalarValue = assetValueIt->second;
+          arrayList.emplace_back(BroadcastScalar(scalarValue, targetIndex->size()));
+          columns.emplace_back(inputId);
+          columIdSet.emplace(inputId);
+          SPDLOG_DEBUG("Broadcasting asset-scalar {} to {} rows for asset: {}, timeframe {}",
+                       inputId, targetIndex->size(), asset_id, targetTimeframe);
+          continue;
+        }
+      }
+
       // Regular (non-scalar) path: Retrieve from timeframe-specific cache
       auto transform = m_ioIdToTransform.find(inputId);
       if (transform == m_ioIdToTransform.end()) {
@@ -339,6 +354,18 @@ bool IntermediateResultStorage::ValidateInputsAvailable(
         auto scalarIt = m_scalarCache.find(inputId);
         if (scalarIt == m_scalarCache.end()) {
           SPDLOG_DEBUG("Validation failed: scalar cache missing '{}' for asset '{}'",
+                       inputId, asset_id);
+          return false;
+        }
+        continue;
+      }
+
+      // Check if this is an asset-scalar (per-asset constant like asset_ref)
+      auto assetScalarIt = m_assetScalarCache.find(inputId);
+      if (assetScalarIt != m_assetScalarCache.end()) {
+        auto assetValueIt = assetScalarIt->second.find(asset_id);
+        if (assetValueIt == assetScalarIt->second.end()) {
+          SPDLOG_DEBUG("Validation failed: asset-scalar cache missing '{}' for asset '{}'",
                        inputId, asset_id);
           return false;
         }
@@ -749,6 +776,19 @@ void IntermediateResultStorage::StoreTransformOutput(
         std::optional<std::string>(outputId));
   }
 }
+
+// ===== AssetScalar Caching Implementation =====
+
+void IntermediateResultStorage::StoreAssetScalar(
+    const AssetID &asset_id,
+    const std::string &outputId,
+    const epoch_frame::Scalar &value) {
+  std::unique_lock lock(m_scalarCacheMutex);
+
+  m_assetScalarCache[outputId][asset_id] = value;
+  SPDLOG_DEBUG("Stored AssetScalar: outputId={}, assetId={}", outputId, asset_id);
+}
+
 // ===== Report Caching Implementation =====
 
 void IntermediateResultStorage::StoreReport(

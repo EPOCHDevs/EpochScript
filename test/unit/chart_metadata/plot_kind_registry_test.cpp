@@ -486,6 +486,54 @@ TEST_CASE("PlotKindBuilderRegistry - Comprehensive Coverage", "[chart_metadata][
     REQUIRE(builder.RequiresOwnAxis() == true);  // Panel indicator
   }
 
+  SECTION("Panel Line - Statistical transforms with standard result output") {
+    // These transforms use panel_line plotKind and must output "result"
+    // This test ensures rolling_corr, rolling_cov, beta, ewm_corr, ewm_cov
+    // all work correctly with the line builder expecting "result" output
+
+    const auto& builder = registry.GetBuilder(TransformPlotKind::panel_line);
+
+    // Test rolling_corr
+    auto rolling_corr_cfg = transform::run_op("rolling_corr", "1",
+        {{"x", {transform::input_ref("x")}},
+         {"y", {transform::input_ref("y")}}},
+        {{"window", MetaDataOptionDefinition{60.0}}},
+        tf);
+    REQUIRE_NOTHROW(builder.Build(rolling_corr_cfg));
+
+    // Test rolling_cov
+    auto rolling_cov_cfg = transform::run_op("rolling_cov", "1",
+        {{"x", {transform::input_ref("x")}},
+         {"y", {transform::input_ref("y")}}},
+        {{"window", MetaDataOptionDefinition{60.0}}},
+        tf);
+    REQUIRE_NOTHROW(builder.Build(rolling_cov_cfg));
+
+    // Test beta
+    auto beta_cfg = transform::run_op("beta", "1",
+        {{"asset_returns", {transform::input_ref("asset")}},
+         {"market_returns", {transform::input_ref("market")}}},
+        {{"window", MetaDataOptionDefinition{60.0}}},
+        tf);
+    REQUIRE_NOTHROW(builder.Build(beta_cfg));
+
+    // Test ewm_corr
+    auto ewm_corr_cfg = transform::run_op("ewm_corr", "1",
+        {{"x", {transform::input_ref("x")}},
+         {"y", {transform::input_ref("y")}}},
+        {{"span", MetaDataOptionDefinition{20.0}}},
+        tf);
+    REQUIRE_NOTHROW(builder.Build(ewm_corr_cfg));
+
+    // Test ewm_cov
+    auto ewm_cov_cfg = transform::run_op("ewm_cov", "1",
+        {{"x", {transform::input_ref("x")}},
+         {"y", {transform::input_ref("y")}}},
+        {{"span", MetaDataOptionDefinition{20.0}}},
+        tf);
+    REQUIRE_NOTHROW(builder.Build(ewm_cov_cfg));
+  }
+
   SECTION("Single-value indicators - Panel Line Percent") {
     // panel_line_percent is a PlotKind but doesn't have a dedicated transform
     // It's used for percentage-based panel indicators

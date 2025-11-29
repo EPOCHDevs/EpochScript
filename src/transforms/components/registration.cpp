@@ -28,6 +28,54 @@
 #include "hosseinmoein/statistics/ewm_corr.h"
 #include "hosseinmoein/statistics/ewm_cov.h"
 
+// Fractional Differentiation
+#include "hosseinmoein/statistics/frac_diff.h"
+#include "hosseinmoein/statistics/frac_diff_metadata.h"
+
+// Cointegration Transforms
+#include "hosseinmoein/statistics/half_life_ar1.h"
+#include "hosseinmoein/statistics/rolling_adf.h"
+#include "hosseinmoein/statistics/engle_granger.h"
+#include "hosseinmoein/statistics/johansen.h"
+#include "hosseinmoein/statistics/cointegration_metadata.h"
+
+// GMM Transforms
+#include "statistics/gmm.h"
+#include "statistics/gmm_metadata.h"
+#include "statistics/clustering_metadata.h"
+
+// ML Metadata
+#include "ml/ml_preprocess_metadata.h"
+#include "ml/lightgbm_metadata.h"
+#include "ml/liblinear_metadata.h"
+#include "ml/rolling_transforms_metadata.h"
+
+// Clustering & Dimensionality Reduction Transforms (mlpack-based)
+#include "statistics/kmeans.h"
+#include "statistics/dbscan.h"
+#include "statistics/pca.h"
+#include "statistics/ica.h"
+
+// LIBLINEAR Transforms
+#include "ml/linear_model.h"
+
+// LightGBM Transforms
+#include "ml/lightgbm.h"
+
+// ML Preprocessing Transforms
+#include "ml/ml_preprocess.h"
+
+// Rolling ML Transforms
+#include "ml/rolling_kmeans.h"
+#include "ml/rolling_dbscan.h"
+#include "ml/rolling_gmm.h"
+#include "ml/rolling_hmm.h"
+#include "ml/rolling_pca.h"
+#include "ml/rolling_ica.h"
+#include "ml/rolling_lightgbm.h"
+#include "ml/rolling_linear_model.h"
+#include "ml/rolling_ml_preprocess.h"
+
 // Chart Formation Pattern Transforms
 #include "price_actions/infrastructure/flexible_pivot_detector.h"
 #include "price_actions/chart_formations/head_and_shoulders.h"
@@ -47,6 +95,10 @@
 #include "datetime/index_datetime_extract.h"
 #include "datetime/timestamp_scalar.h"
 #include "datetime/datetime_diff.h"
+
+// Utility Transforms
+#include "utility/asset_ref.h"
+#include "utility/asset_ref_metadata.h"
 
 // String Operations
 #include "string/string_operations.h"
@@ -96,6 +148,29 @@
 #include "reports/nested_pie_chart_report.h"
 #include "reports/histogram_chart_report.h"
 // #include "reports/card_selector_report.h"  // Commented out - missing epoch_proto types
+
+// Line Chart Reports
+#include "reports/line_chart_report.h"
+#include "reports/cs_line_chart_report.h"
+
+// Area Chart Reports
+#include "reports/area_chart_report.h"
+#include "reports/cs_area_chart_report.h"
+
+// Heatmap Reports
+#include "reports/heatmap_report.h"
+#include "reports/cs_heatmap_report.h"
+
+// Boxplot Reports
+#include "reports/boxplot_report.h"
+#include "reports/cs_boxplot_report.h"
+
+// Numeric Line Chart Reports
+#include "reports/numeric_line_chart_report.h"
+
+// XRange Chart Reports
+#include "reports/xrange_chart_report.h"
+#include "reports/cs_xrange_chart_report.h"
 
 #include "cross_sectional/rank.h"
 #include "cross_sectional/returns.h"
@@ -416,6 +491,7 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(beta, Beta);
   REGISTER_TRANSFORM(ewm_corr, EWMCorr);
   REGISTER_TRANSFORM(ewm_cov, EWMCov);
+  REGISTER_TRANSFORM(frac_diff, FracDiff);
 
   REGISTER_TRANSFORM(trade_executor_adapter, TradeExecutorAdapter);
   REGISTER_TRANSFORM(trade_signal_executor, TradeExecutorTransform);
@@ -426,6 +502,139 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(hmm_3, HMM3Transform);
   REGISTER_TRANSFORM(hmm_4, HMM4Transform);
   REGISTER_TRANSFORM(hmm_5, HMM5Transform);
+
+  // Statistics Transforms - GMM specializations for 2-5 components
+  REGISTER_TRANSFORM(gmm_2, GMM2Transform);
+  REGISTER_TRANSFORM(gmm_3, GMM3Transform);
+  REGISTER_TRANSFORM(gmm_4, GMM4Transform);
+  REGISTER_TRANSFORM(gmm_5, GMM5Transform);
+
+  // Statistics Transforms - K-Means specializations for 2-5 clusters
+  REGISTER_TRANSFORM(kmeans_2, KMeans2Transform);
+  REGISTER_TRANSFORM(kmeans_3, KMeans3Transform);
+  REGISTER_TRANSFORM(kmeans_4, KMeans4Transform);
+  REGISTER_TRANSFORM(kmeans_5, KMeans5Transform);
+
+  // Statistics Transforms - DBSCAN clustering
+  REGISTER_TRANSFORM(dbscan, DBSCANTransform);
+
+  // Statistics Transforms - PCA dimensionality reduction
+  REGISTER_TRANSFORM(pca, PCATransform);
+
+  // Statistics Transforms - ICA (Independent Component Analysis)
+  REGISTER_TRANSFORM(ica, ICATransform);
+
+  // LIBLINEAR Transforms - Linear Models for Classification and Regression
+  REGISTER_TRANSFORM(logistic_l1, LogisticL1Transform);
+  REGISTER_TRANSFORM(logistic_l2, LogisticL2Transform);
+  REGISTER_TRANSFORM(svr_l1, SVRL1Transform);
+  REGISTER_TRANSFORM(svr_l2, SVRL2Transform);
+
+  // LightGBM Transforms - Gradient Boosting
+  REGISTER_TRANSFORM(lightgbm_classifier, LightGBMClassifier);
+  REGISTER_TRANSFORM(lightgbm_regressor, LightGBMRegressor);
+
+  // Rolling ML Transforms - Clustering
+  REGISTER_TRANSFORM(rolling_kmeans_2, RollingKMeans2Transform);
+  REGISTER_TRANSFORM(rolling_kmeans_3, RollingKMeans3Transform);
+  REGISTER_TRANSFORM(rolling_kmeans_4, RollingKMeans4Transform);
+  REGISTER_TRANSFORM(rolling_kmeans_5, RollingKMeans5Transform);
+  REGISTER_TRANSFORM(rolling_dbscan, RollingDBSCANTransform);
+
+  // Rolling ML Transforms - Probabilistic Models
+  REGISTER_TRANSFORM(rolling_gmm_2, RollingGMM2Transform);
+  REGISTER_TRANSFORM(rolling_gmm_3, RollingGMM3Transform);
+  REGISTER_TRANSFORM(rolling_gmm_4, RollingGMM4Transform);
+  REGISTER_TRANSFORM(rolling_gmm_5, RollingGMM5Transform);
+  REGISTER_TRANSFORM(rolling_hmm_2, RollingHMM2Transform);
+  REGISTER_TRANSFORM(rolling_hmm_3, RollingHMM3Transform);
+  REGISTER_TRANSFORM(rolling_hmm_4, RollingHMM4Transform);
+  REGISTER_TRANSFORM(rolling_hmm_5, RollingHMM5Transform);
+
+  // Rolling ML Transforms - Decomposition
+  REGISTER_TRANSFORM(rolling_pca, RollingPCATransform);
+  REGISTER_TRANSFORM(rolling_ica, RollingICATransform);
+
+  // Rolling ML Transforms - Supervised Learning
+  REGISTER_TRANSFORM(rolling_lightgbm_classifier, RollingLightGBMClassifier);
+  REGISTER_TRANSFORM(rolling_lightgbm_regressor, RollingLightGBMRegressor);
+  REGISTER_TRANSFORM(rolling_logistic_l1, RollingLogisticL1Transform);
+  REGISTER_TRANSFORM(rolling_logistic_l2, RollingLogisticL2Transform);
+  REGISTER_TRANSFORM(rolling_svr_l1, RollingSVRL1Transform);
+  REGISTER_TRANSFORM(rolling_svr_l2, RollingSVRL2Transform);
+
+  // Rolling ML Transforms - Preprocessing
+  REGISTER_TRANSFORM(rolling_ml_zscore, RollingMLZScore);
+  REGISTER_TRANSFORM(rolling_ml_minmax, RollingMLMinMax);
+  REGISTER_TRANSFORM(rolling_ml_robust, RollingMLRobust);
+
+  // ML Preprocessing Transforms
+  REGISTER_TRANSFORM(ml_zscore, MLZScore);
+  REGISTER_TRANSFORM(ml_minmax, MLMinMax);
+  REGISTER_TRANSFORM(ml_robust, MLRobust);
+
+  // Cointegration Transforms
+  REGISTER_TRANSFORM(half_life_ar1, HalfLifeAR1);
+  REGISTER_TRANSFORM(rolling_adf, RollingADF);
+  REGISTER_TRANSFORM(engle_granger, EngleGranger);
+  REGISTER_TRANSFORM(johansen_2, Johansen2Transform);
+  REGISTER_TRANSFORM(johansen_3, Johansen3Transform);
+  REGISTER_TRANSFORM(johansen_4, Johansen4Transform);
+  REGISTER_TRANSFORM(johansen_5, Johansen5Transform);
+
+  // Register cointegration metadata
+  for (const auto& metadata : MakeCointegrationMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+
+  // Register fractional differentiation metadata
+  for (const auto& metadata : MakeFracDiffMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+
+  // Register ML preprocessing metadata
+  for (const auto& metadata : MakeMLPreprocessMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+
+  // Register LightGBM metadata
+  for (const auto& metadata : MakeLightGBMMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+
+  // Register LIBLINEAR metadata
+  for (const auto& metadata : MakeLiblinearMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+
+  // Register GMM metadata
+  for (const auto& metadata : MakeGMMMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+
+  // Register clustering metadata (KMeans, DBSCAN, PCA, ICA)
+  for (const auto& metadata : MakeKMeansMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+  for (const auto& metadata : MakeDBSCANMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+  for (const auto& metadata : MakePCAMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+  for (const auto& metadata : MakeICAMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+
+  // Register ALL rolling ML metadata (lightgbm, liblinear, preprocess, clustering, decomposition, probabilistic)
+  for (const auto& metadata : MakeAllRollingMLMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+
+  // Utility Transforms
+  REGISTER_TRANSFORM(asset_ref, AssetRef);
+  transforms::ITransformRegistry::GetInstance().Register(
+    AssetRefMetadata::Get());
 
   // Calendar Effects Transforms
   REGISTER_TRANSFORM(turn_of_month, TurnOfMonthEffect);
@@ -517,6 +726,29 @@ void InitializeTransforms(
   // Register Specialized Reports
   reports::RegisterReport<reports::GapReport>();
   // reports::RegisterReport<reports::EventMarkerReport>();  // Commented out - missing epoch_proto types
+
+  // Register Line Chart Reports
+  reports::RegisterReport<reports::LineChartReport>();
+  reports::RegisterReport<reports::CSLineChartReport>();
+
+  // Register Area Chart Reports
+  reports::RegisterReport<reports::AreaChartReport>();
+  reports::RegisterReport<reports::CSAreaChartReport>();
+
+  // Register Heatmap Reports
+  reports::RegisterReport<reports::HeatmapReport>();
+  reports::RegisterReport<reports::CSHeatmapReport>();
+
+  // Register Boxplot Reports
+  reports::RegisterReport<reports::BoxplotReport>();
+  reports::RegisterReport<reports::CSBoxplotReport>();
+
+  // Register Numeric Line Chart Reports
+  reports::RegisterReport<reports::NumericLineChartReport>();
+
+  // Register XRange Chart Reports
+  reports::RegisterReport<reports::XRangeChartReport>();
+  reports::RegisterReport<reports::CSXRangeChartReport>();
 
 };
 } // namespace epoch_script::transform

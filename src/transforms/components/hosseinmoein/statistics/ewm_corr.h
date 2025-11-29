@@ -52,7 +52,7 @@ public:
     return make_dataframe(
         df.index(),
         {factory::array::make_array(corr_vec)},
-        {GetOutputId("correlation")}
+        {GetOutputId("result")}
     );
   }
 

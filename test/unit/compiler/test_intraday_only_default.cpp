@@ -13,8 +13,7 @@ TEST_CASE("IntradayOnly Default Timeframe", "[compiler][validation][timeframe][i
     SECTION("session_time_window without timeframe should default to 1Min")
     {
         std::string source = R"(
-mds = market_data_source(timeframe="1D")()
-window = session_time_window(session="NewYork")(mds.c)
+window = session_time_window(session="NewYork")()
 numeric_cards_report(agg="mean", category="Test", title="Window")(window.value)
 )";
 
@@ -28,7 +27,7 @@ numeric_cards_report(agg="mean", category="Test", title="Window")(window.value)
 
             REQUIRE(window_it != result.end());
             REQUIRE(window_it->timeframe.has_value());
-            // Should default to 1Min, not inherit 1D from input
+            // intradayOnly transforms default to 1Min when no timeframe specified
             REQUIRE(window_it->timeframe->ToString() == "1Min");
         }());
     }
@@ -36,8 +35,7 @@ numeric_cards_report(agg="mean", category="Test", title="Window")(window.value)
     SECTION("session_time_window with explicit timeframe should use that timeframe")
     {
         std::string source = R"(
-mds = market_data_source(timeframe="1D")()
-window = session_time_window(session="NewYork", timeframe="5Min")(mds.c)
+window = session_time_window(session="NewYork", timeframe="5Min")()
 numeric_cards_report(agg="mean", category="Test", title="Window")(window.value)
 )";
 

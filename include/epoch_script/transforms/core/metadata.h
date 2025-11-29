@@ -76,6 +76,13 @@ CREATE_ENUM(
     triangle_patterns,
     consolidation_box,
     hmm,                // Hidden Markov Models
+    gmm,                // Gaussian Mixture Models
+    kmeans,             // K-Means Clustering
+    dbscan,             // DBSCAN Clustering
+    pca,                // Principal Component Analysis
+    ica,                // Independent Component Analysis
+    lightgbm,           // LightGBM gradient boosting
+    linear_model,       // LIBLINEAR models (logistic, SVR)
     sentiment);         // Sentiment Analysis (ML/NLP)
 
 CREATE_ENUM(IODataType, Decimal, Integer, Number, Boolean, String, Timestamp, Any);
@@ -89,6 +96,7 @@ CREATE_ENUM(IODataType, Decimal, Integer, Number, Boolean, String, Timestamp, An
 namespace epoch_script::transforms {
 constexpr auto MARKET_DATA_SOURCE_ID = "market_data_source";
 constexpr auto TRADE_SIGNAL_EXECUTOR_ID = "trade_signal_executor";
+constexpr auto ASSET_REF_ID = "asset_ref";
 struct IOMetaData {
   epoch_core::IODataType type{epoch_core::IODataType::Decimal};
   std::string id{};

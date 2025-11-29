@@ -2,9 +2,14 @@
 //
 // Hidden Markov Model Transform for Financial Time Series Analysis
 //
+// NOTE: Preprocessing (z-score, min-max, etc.) should be done via separate
+// ml_preprocess transforms in the pipeline. This keeps concerns separated
+// and allows users to compose their own preprocessing pipelines.
+//
 #include "dataframe_armadillo_utils.h"
 #include "epoch_frame/aliases.h"
 #include <epoch_script/transforms/core/itransform.h>
+#include "../ml/ml_split_utils.h"
 #include <arrow/array.h>
 #include <arrow/array/builder_base.h>
 #include <arrow/builder.h>
@@ -66,12 +71,6 @@ public:
                            epoch_script::MetaDataOptionDefinition{1e-5})
             .GetDecimal();
 
-    // Data preprocessing options
-    m_compute_zscore =
-        cfg.GetOptionValue("compute_zscore",
-                           epoch_script::MetaDataOptionDefinition{true})
-            .GetBoolean();
-
     // Training options
     m_min_training_samples = static_cast<size_t>(
         cfg.GetOptionValue("min_training_samples",
@@ -99,22 +98,18 @@ public:
       throw std::runtime_error("Insufficient training samples for HMM");
     }
 
-    // Split into training and prediction sets
+    // Split into training and prediction sets using ml_split_utils
     arma::mat training_data;
     arma::mat prediction_data;
     epoch_frame::IndexPtr prediction_index;
 
     if (m_lookback_window > 0 && X.n_rows > m_lookback_window) {
-      // Train on first m_lookback_window bars
+      // Use split helper for consistent splitting
+      auto split = ml_utils::split_by_count(bars, m_lookback_window);
+
       training_data = X.rows(0, m_lookback_window - 1);
-
-      // Predict on remaining bars (bars after training window)
       prediction_data = X.rows(m_lookback_window, X.n_rows - 1);
-
-      // Index for prediction window
-      prediction_index = bars.index()->iloc(
-          {static_cast<int64_t>(m_lookback_window),
-           static_cast<int64_t>(X.n_rows)});
+      prediction_index = split.test.index();
     } else {
       // If no lookback specified, use all data for both training and prediction
       // (Research mode - acceptable look-ahead for exploratory analysis)
@@ -123,19 +118,10 @@ public:
       prediction_index = bars.index();
     }
 
-    // Compute preprocessing parameters from training data
-    auto preprocess_params = ComputePreprocessParams(training_data);
-
-    // Apply preprocessing to training data
-    training_data = ApplyPreprocessParams(training_data, preprocess_params);
-
-    // Train HMM model on preprocessed training data
+    // Train HMM model
     auto hmm = TrainHMM(training_data);
 
-    // Apply SAME preprocessing parameters to prediction data
-    prediction_data = ApplyPreprocessParams(prediction_data, preprocess_params);
-
-    // Generate predictions on prediction data (not training data)
+    // Generate predictions on prediction data
     return GenerateOutputs(prediction_index, hmm, prediction_data);
   }
 
@@ -146,52 +132,9 @@ private:
   size_t m_max_iterations{1000};
   double m_tolerance{1e-5};
 
-  // Data preprocessing
-  bool m_compute_zscore{true};
-
   // Training parameters
   size_t m_min_training_samples{100};
   size_t m_lookback_window{0}; // 0 = use all available data
-
-  // Preprocessing parameters structure
-  struct PreprocessParams {
-    std::vector<double> means;
-    std::vector<double> stds;
-  };
-
-  // Compute preprocessing parameters from training data
-  PreprocessParams ComputePreprocessParams(const arma::mat &X) const {
-    PreprocessParams params;
-    if (!m_compute_zscore) {
-      return params; // Return empty params if not using zscore
-    }
-
-    params.means.resize(X.n_cols);
-    params.stds.resize(X.n_cols);
-
-    for (size_t i = 0; i < X.n_cols; ++i) {
-      params.means[i] = arma::mean(X.col(i));
-      params.stds[i] = arma::stddev(X.col(i));
-    }
-
-    return params;
-  }
-
-  // Apply preprocessing parameters to data
-  arma::mat ApplyPreprocessParams(arma::mat X,
-                                  const PreprocessParams &params) const {
-    if (!m_compute_zscore) {
-      return X; // Return unchanged if not using zscore
-    }
-
-    for (size_t i = 0; i < X.n_cols; ++i) {
-      if (params.stds[i] > 1e-10) {
-        X.col(i) = (X.col(i) - params.means[i]) / params.stds[i];
-      }
-    }
-
-    return X;
-  }
 
   // Add small regularization to input data to improve numerical stability
   arma::mat RegularizeInput(const arma::mat &X) const {

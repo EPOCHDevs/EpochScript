@@ -6,6 +6,7 @@
 #include <boost/container_hash/hash.hpp>
 #include <epoch_script/transforms/core/registration.h>
 #include <epoch_script/core/constants.h>
+#include "../components/utility/asset_ref.h"
 #include <format>
 #include <spdlog/spdlog.h>
 
@@ -39,7 +40,9 @@ DataFlowRuntimeOrchestrator::DataFlowRuntimeOrchestrator(
     std::vector<std::string> asset_ids,
     ITransformManagerPtr transformManager,
     IIntermediateStoragePtr cacheManager, ILoggerPtr logger)
-    : m_asset_ids(std::move(asset_ids)) {
+    : m_asset_ids(std::move(asset_ids))
+    , m_eventDispatcher(events::MakeEventDispatcher())
+    , m_cancellationToken(events::MakeCancellationToken()) {
 
   if (cacheManager) {
     m_executionContext.cache = std::move(cacheManager);
@@ -52,6 +55,19 @@ DataFlowRuntimeOrchestrator::DataFlowRuntimeOrchestrator(
   } else {
     m_executionContext.logger = std::make_unique<Logger>();
   }
+
+  // Initialize event context
+  m_executionContext.eventDispatcher = m_eventDispatcher;
+  m_executionContext.cancellationToken = m_cancellationToken;
+  m_executionContext.nodesCompleted = &m_nodesCompleted;
+  m_executionContext.nodesFailed = &m_nodesFailed;
+  m_executionContext.nodesSkipped = &m_nodesSkipped;
+  m_executionContext.onNodeStarted = [this](const std::string& nodeId) {
+    MarkNodeStarted(nodeId);
+  };
+  m_executionContext.onNodeCompleted = [this](const std::string& nodeId) {
+    MarkNodeCompleted(nodeId);
+  };
 
   // Build transform instances from configurations (validates ordering)
   auto transforms = transformManager->BuildTransforms();
@@ -69,6 +85,40 @@ DataFlowRuntimeOrchestrator::DataFlowRuntimeOrchestrator(
           std::format("Duplicate transform id: {}", uniqueId));
     }
     usedIds.insert(uniqueId);
+
+    // Handle asset_ref (AssetScalar): pre-compute for all assets, store in cache
+    const auto& transformType = transform->GetConfiguration().GetTransformDefinition().GetType();
+    if (transformType == epoch_script::transforms::ASSET_REF_ID) {
+      SPDLOG_DEBUG("Processing AssetScalar transform: {}", uniqueId);
+
+      // Get the ticker filter option
+      std::string tickerFilter;
+      try {
+        tickerFilter = transform->GetOption("ticker").GetString();
+      } catch (...) {
+        tickerFilter = "";
+      }
+
+      // Get output ID for this transform
+      const auto outputId = transform->GetOutputId("match");
+
+      // Pre-compute for each asset and store in cache
+      for (const auto& asset_id : m_asset_ids) {
+        bool matches = epoch_script::transform::EvaluateAssetRefTicker(asset_id, tickerFilter);
+
+        // Store as boolean scalar in per-asset cache
+        // We need to create a DataFrame with a single boolean value
+        auto boolScalar = arrow::MakeScalar(matches);
+        m_executionContext.cache->StoreAssetScalar(asset_id, outputId,
+            epoch_frame::Scalar(boolScalar));
+
+        SPDLOG_DEBUG("AssetScalar {}: asset={}, ticker_filter={}, matches={}",
+                     uniqueId, asset_id, tickerFilter, matches);
+      }
+
+      // Don't register as execution node - already computed
+      continue;
+    }
 
     SPDLOG_DEBUG("Registering Transform {} ({}), Unique ID: {}",
                  transform->GetName(), transform->GetId(), uniqueId);
@@ -102,6 +152,16 @@ DataFlowRuntimeOrchestrator::ResolveInputDependencies(
 void DataFlowRuntimeOrchestrator::RegisterTransform(
     std::unique_ptr<epoch_script::transform::ITransformBase> transform) {
   auto& transformRef = *transform;
+
+  // Create progress emitter for this transform
+  auto progressEmitter = events::MakeProgressEmitter(
+      m_eventDispatcher,
+      m_cancellationToken,
+      transformRef.GetId(),
+      transformRef.GetName()
+  );
+  transformRef.SetProgressEmitter(progressEmitter);
+
   auto node = CreateTransformNode(transformRef);
 
   // Store the transform before creating node
@@ -124,29 +184,96 @@ void DataFlowRuntimeOrchestrator::RegisterTransform(
 
 TimeFrameAssetDataFrameMap
 DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
+  // Record start time
+  auto startTime = events::Now();
+
+  // Reset counters
+  m_nodesCompleted.store(0);
+  m_nodesFailed.store(0);
+  m_nodesSkipped.store(0);
+  m_cancellationToken->Reset();
+
+  // Update execution context with total nodes
+  m_executionContext.totalNodes = m_transforms.size();
+
   // Initialize cache with input data
   m_executionContext.cache->InitializeBaseData(std::move(data),
                                          {m_asset_ids.begin(), m_asset_ids.end()});
   // Set up shared data
   m_executionContext.logger->clear();
 
+  // Emit pipeline started event
+  m_eventDispatcher->Emit(events::PipelineStartedEvent{
+      .timestamp = startTime,
+      .total_nodes = m_transforms.size(),
+      .total_assets = m_asset_ids.size(),
+      .node_ids = GetAllNodeIds()
+  });
+
+  m_isExecuting.store(true);
+
+  // Start progress summary thread if enabled
+  if (m_summaryEnabled) {
+    StartProgressSummaryThread();
+  }
+
   // Use TBB flow graph for parallel execution
   SPDLOG_DEBUG("Executing transform graph ({} transforms)", m_transforms.size());
 
-  // Trigger independent nodes (nodes with no dependencies)
-  for (const auto& node : m_independentNodes) {
-    node->try_put(tbb::flow::continue_msg());
+  try {
+    // Trigger independent nodes (nodes with no dependencies)
+    for (const auto& node : m_independentNodes) {
+      node->try_put(tbb::flow::continue_msg());
+    }
+
+    // Wait for all nodes to complete
+    m_graph.wait_for_all();
+  } catch (const events::OperationCancelledException&) {
+    // Stop progress summary thread
+    StopProgressSummaryThread();
+    m_isExecuting.store(false);
+
+    // Emit cancelled event
+    auto elapsed = events::ToMillis(events::Now() - startTime);
+    m_eventDispatcher->Emit(events::PipelineCancelledEvent{
+        .timestamp = events::Now(),
+        .elapsed = elapsed,
+        .nodes_completed = m_nodesCompleted.load(),
+        .nodes_total = m_transforms.size()
+    });
+
+    throw;
   }
 
-  // Wait for all nodes to complete
-  m_graph.wait_for_all();
+  // Stop progress summary thread
+  StopProgressSummaryThread();
+  m_isExecuting.store(false);
 
   // Check for errors after execution
   const auto error = m_executionContext.logger->str();
   if (!error.empty()) {
     SPDLOG_ERROR("Transform pipeline failed with errors: {}", error);
+
+    // Emit failed event
+    auto elapsed = events::ToMillis(events::Now() - startTime);
+    m_eventDispatcher->Emit(events::PipelineFailedEvent{
+        .timestamp = events::Now(),
+        .elapsed = elapsed,
+        .error_message = error
+    });
+
     throw std::runtime_error(std::format("Transform pipeline failed: {}", error));
   }
+
+  // Emit completed event
+  auto duration = events::ToMillis(events::Now() - startTime);
+  m_eventDispatcher->Emit(events::PipelineCompletedEvent{
+      .timestamp = events::Now(),
+      .duration = duration,
+      .nodes_succeeded = m_nodesCompleted.load(),
+      .nodes_failed = m_nodesFailed.load(),
+      .nodes_skipped = m_nodesSkipped.load()
+  });
 
   // Transfer cached reports from storage to orchestrator's report cache
   // Reports are captured in execution nodes during TransformData() calls
@@ -455,6 +582,130 @@ void DataFlowRuntimeOrchestrator::CacheEventMarkerFromTransform(
 
 AssetEventMarkerMap DataFlowRuntimeOrchestrator::GetGeneratedEventMarkers() const {
   return m_eventMarkerCache;
+}
+
+// ============================================================================
+// Event Subscription API Implementation
+// ============================================================================
+
+boost::signals2::connection DataFlowRuntimeOrchestrator::OnEvent(
+    events::OrchestratorEventSlot handler,
+    events::EventFilter filter) {
+  return m_eventDispatcher->Subscribe(std::move(handler), std::move(filter));
+}
+
+events::IEventDispatcherPtr DataFlowRuntimeOrchestrator::GetEventDispatcher() const {
+  return m_eventDispatcher;
+}
+
+// ============================================================================
+// Cancellation API Implementation
+// ============================================================================
+
+void DataFlowRuntimeOrchestrator::Cancel() {
+  if (m_cancellationToken) {
+    m_cancellationToken->Cancel();
+  }
+}
+
+bool DataFlowRuntimeOrchestrator::IsCancellationRequested() const {
+  return m_cancellationToken && m_cancellationToken->IsCancelled();
+}
+
+void DataFlowRuntimeOrchestrator::ResetCancellation() {
+  if (m_cancellationToken) {
+    m_cancellationToken->Reset();
+  }
+}
+
+// ============================================================================
+// Progress Configuration Implementation
+// ============================================================================
+
+void DataFlowRuntimeOrchestrator::SetProgressSummaryInterval(std::chrono::milliseconds interval) {
+  m_summaryInterval = interval;
+}
+
+void DataFlowRuntimeOrchestrator::SetProgressSummaryEnabled(bool enabled) {
+  m_summaryEnabled = enabled;
+}
+
+// ============================================================================
+// Progress Summary Thread Implementation
+// ============================================================================
+
+void DataFlowRuntimeOrchestrator::StartProgressSummaryThread() {
+  m_summaryRunning.store(true);
+  m_summaryThread = std::thread([this]() {
+    while (m_summaryRunning.load()) {
+      {
+        std::unique_lock<std::mutex> lock(m_summaryMutex);
+        m_summaryCv.wait_for(lock, m_summaryInterval, [this]() {
+          return !m_summaryRunning.load();
+        });
+      }
+
+      if (!m_summaryRunning.load()) break;
+
+      EmitProgressSummary();
+    }
+  });
+}
+
+void DataFlowRuntimeOrchestrator::StopProgressSummaryThread() {
+  m_summaryRunning.store(false);
+  m_summaryCv.notify_all();
+
+  if (m_summaryThread.joinable()) {
+    m_summaryThread.join();
+  }
+}
+
+void DataFlowRuntimeOrchestrator::EmitProgressSummary() {
+  m_eventDispatcher->Emit(events::ProgressSummaryEvent{
+      .timestamp = events::Now(),
+      .overall_progress_percent = CalculateOverallProgress(),
+      .nodes_completed = m_nodesCompleted.load(),
+      .nodes_total = m_transforms.size(),
+      .currently_running = GetRunningNodeIds(),
+      .estimated_remaining = std::nullopt  // TODO: Could estimate based on average node time
+  });
+}
+
+double DataFlowRuntimeOrchestrator::CalculateOverallProgress() const {
+  size_t completed = m_nodesCompleted.load();
+  size_t failed = m_nodesFailed.load();
+  size_t skipped = m_nodesSkipped.load();
+  size_t total = m_transforms.size();
+
+  if (total == 0) return 100.0;
+
+  double progress = (static_cast<double>(completed + failed + skipped) / total) * 100.0;
+  return std::min(progress, 100.0);
+}
+
+std::vector<std::string> DataFlowRuntimeOrchestrator::GetRunningNodeIds() const {
+  std::lock_guard<std::mutex> lock(m_runningNodesMutex);
+  return {m_runningNodes.begin(), m_runningNodes.end()};
+}
+
+std::vector<std::string> DataFlowRuntimeOrchestrator::GetAllNodeIds() const {
+  std::vector<std::string> ids;
+  ids.reserve(m_transforms.size());
+  for (const auto& transform : m_transforms) {
+    ids.push_back(transform->GetId());
+  }
+  return ids;
+}
+
+void DataFlowRuntimeOrchestrator::MarkNodeStarted(const std::string& nodeId) {
+  std::lock_guard<std::mutex> lock(m_runningNodesMutex);
+  m_runningNodes.insert(nodeId);
+}
+
+void DataFlowRuntimeOrchestrator::MarkNodeCompleted(const std::string& nodeId) {
+  std::lock_guard<std::mutex> lock(m_runningNodesMutex);
+  m_runningNodes.erase(nodeId);
 }
 
 } // namespace epoch_script::runtime

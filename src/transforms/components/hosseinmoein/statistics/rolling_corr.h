@@ -53,7 +53,7 @@ public:
           return Scalar{visitor.get_result()};
         });
 
-    return correlation.to_frame(GetOutputId("correlation"));
+    return correlation.to_frame(GetOutputId("result"));
   }
 
 private:

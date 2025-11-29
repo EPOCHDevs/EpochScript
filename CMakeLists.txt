@@ -64,6 +64,7 @@ find_package(DataFrame CONFIG REQUIRED)
 find_package(Armadillo CONFIG REQUIRED)
 find_package(TBB CONFIG REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
+find_package(OpenMP REQUIRED)
 find_package(AWSSDK CONFIG COMPONENTS dynamodb  sagemaker-runtime REQUIRED)
 
 add_library(epoch_script "")
@@ -105,6 +106,12 @@ target_link_libraries(epoch_script PUBLIC
        libmpdec
        tulip_indicators
        TBB::tbb)
+
+# Link LIBLINEAR and LightGBM (no find_package configs available in vcpkg)
+# WARNING: OpenMP MUST come AFTER LightGBM - static library link order matters!
+find_library(LIBLINEAR_LIB NAMES liblinear PATHS ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib REQUIRED)
+find_library(LIGHTGBM_LIB NAMES _lightgbm PATHS ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib REQUIRED)
+target_link_libraries(epoch_script PUBLIC ${LIBLINEAR_LIB} ${LIGHTGBM_LIB} OpenMP::OpenMP_CXX)
 
 
 add_subdirectory(src)

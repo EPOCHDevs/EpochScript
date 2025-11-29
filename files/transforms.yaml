@@ -1097,8 +1097,7 @@ rolling_corr:
       max: 500
       desc: "Rolling window size for correlation calculation"
       tuningGuidance: "Minimum 10-20 bars for stable estimates. Use 20-50 for tactical correlation (daily regime changes), 60-120 for strategic allocation (monthly trends). Larger windows (200+) for long-term relationship analysis. Balance stability vs responsiveness to regime shifts."
-  outputs:
-    - { type: Decimal, id: "correlation", name: "Correlation" }
+  outputs: [DECIMAL_RESULT]
   tags: ["statistics", "correlation", "rolling", "cross-asset", "pairs-trading", "relationship"]
   category: Statistical
   plotKind: panel_line
@@ -1123,8 +1122,7 @@ rolling_cov:
       max: 500
       desc: "Rolling window size for covariance calculation"
       tuningGuidance: "Minimum 10-20 bars for stable estimates. Use 20-60 for tactical risk management, 120-252 for strategic portfolio allocation. Larger windows provide smoother estimates but lag regime changes."
-  outputs:
-    - { type: Decimal, id: "covariance", name: "Covariance" }
+  outputs: [DECIMAL_RESULT]
   tags: ["statistics", "covariance", "rolling", "cross-asset", "risk-management", "portfolio"]
   category: Statistical
   plotKind: panel_line
@@ -1149,8 +1147,7 @@ beta:
       max: 500
       desc: "Rolling window size for beta calculation"
       tuningGuidance: "Minimum 20-30 bars for stable beta estimates. Use 60-120 for standard equity beta (matches industry practice). Shorter windows (20-40) for tactical trading and rapid regime detection. Longer windows (200-252) for strategic allocation and long-term beta characteristics."
-  outputs:
-    - { type: Decimal, id: "beta", name: "Beta" }
+  outputs: [DECIMAL_RESULT]
   tags: ["statistics", "beta", "rolling", "risk", "capm", "sensitivity", "market-exposure"]
   category: Statistical
   plotKind: panel_line
@@ -1175,8 +1172,7 @@ ewm_corr:
       max: 500
       desc: "Span for exponential weighting (decay = 2/(1+span)). Higher values give more weight to history."
       tuningGuidance: "Use span=10-20 for fast adaptation to correlation shifts (tactical trading). Use span=30-60 for balanced responsiveness and stability. Use span=100+ for strategic allocation with smooth estimates. Roughly equivalent to rolling window of span/2 bars but smoother."
-  outputs:
-    - { type: Decimal, id: "correlation", name: "Correlation" }
+  outputs: [DECIMAL_RESULT]
   tags: ["statistics", "correlation", "exponential-weighted", "adaptive", "cross-asset", "dynamic"]
   category: Statistical
   plotKind: panel_line
@@ -1201,8 +1197,7 @@ ewm_cov:
       max: 500
       desc: "Span for exponential weighting (decay = 2/(1+span)). Higher values give more weight to history."
       tuningGuidance: "Use span=10-20 for fast-adapting risk models. Use span=30-60 for balanced adaptation. Use span=100+ for strategic risk analysis with smooth estimates. Roughly corresponds to rolling window of span/2 bars but with smoother transitions."
-  outputs:
-    - { type: Decimal, id: "covariance", name: "Covariance" }
+  outputs: [DECIMAL_RESULT]
   tags: ["statistics", "covariance", "exponential-weighted", "adaptive", "cross-asset", "risk-management"]
   category: Statistical
   plotKind: panel_line

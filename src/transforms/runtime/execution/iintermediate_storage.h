@@ -42,6 +42,12 @@ public:
       const epoch_script::transform::ITransformBase &transformer,
       const epoch_frame::DataFrame &data) = 0;
 
+  // Store a pre-computed asset scalar (computed at orchestrator init time)
+  // Used for asset_ref and similar per-asset constants
+  virtual void StoreAssetScalar(const AssetID &asset_id,
+                                const std::string &outputId,
+                                const epoch_frame::Scalar &value) = 0;
+
   virtual std::vector<AssetID> GetAssetIDs() const = 0;
 
   // ===== Report Caching (for reporter transforms) =====

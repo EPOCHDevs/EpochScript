@@ -28,4 +28,9 @@ using TimeFrameCache = tbb::concurrent_unordered_map<std::string, AssetCache>;
 // Scalars are timeframe-agnostic and asset-independent, so we store them once
 using ScalarCache = std::unordered_map<std::string, epoch_frame::Scalar>;
 
+// AssetScalar cache: stores per-asset scalar values (e.g., asset_ref filter results)
+// These are timeframe-agnostic but asset-dependent
+// Structure: outputId -> (assetId -> scalar)
+using AssetScalarCache = std::unordered_map<std::string, std::unordered_map<AssetID, epoch_frame::Scalar>>;
+
 } // namespace epoch_script::runtime

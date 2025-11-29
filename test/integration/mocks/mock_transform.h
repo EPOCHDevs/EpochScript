@@ -57,6 +57,9 @@ public:
     MAKE_CONST_MOCK1(GetEventMarkers, std::optional<epoch_script::transform::EventMarkerData>(const epoch_frame::DataFrame&), override);
     MAKE_CONST_MOCK1(TransformDataWithMetadata, epoch_script::runtime::TransformResult(const epoch_frame::DataFrame&), override);
 
+    MAKE_MOCK1(SetProgressEmitter, void(runtime::events::TransformProgressEmitterPtr), override);
+    MAKE_CONST_MOCK0(GetProgressEmitter, runtime::events::TransformProgressEmitterPtr(), override);
+
     // Note: GetConfiguration is stubbed below, not mocked, to avoid complexity
 
     // Use STUBS for simple data accessors - no Trompeloeil complexity, no lifetime issues
@@ -132,7 +135,8 @@ public:
                     .column_id = "c",
                     .slot = epoch_core::CardSlot::Hero,
                     .render_type = epoch_core::CardRenderType::Decimal,
-                    .color_map = {}
+                    .color_map = {},
+                    .label = ""
                 });
 
                 // Use actual inputs if provided, otherwise use SLOT
@@ -245,6 +249,35 @@ inline std::unique_ptr<MockTransform> CreateSimpleMockTransform(
         std::make_shared<decltype(NAMED_ALLOW_CALL(*mock, GetEventMarkers(trompeloeil::_)).RETURN(std::nullopt))>(
             NAMED_ALLOW_CALL(*mock, GetEventMarkers(trompeloeil::_))
                 .RETURN(std::nullopt)
+        )
+    );
+
+    // Set default expectations for progress emitter - orchestrator calls SetProgressEmitter on all transforms
+    mock->m_expectations.push_back(
+        std::make_shared<decltype(NAMED_ALLOW_CALL(*mock, SetProgressEmitter(trompeloeil::_)))>(
+            NAMED_ALLOW_CALL(*mock, SetProgressEmitter(trompeloeil::_))
+        )
+    );
+    mock->m_expectations.push_back(
+        std::make_shared<decltype(NAMED_ALLOW_CALL(*mock, GetProgressEmitter()).RETURN(nullptr))>(
+            NAMED_ALLOW_CALL(*mock, GetProgressEmitter())
+                .RETURN(nullptr)
+        )
+    );
+
+    // Set default expectation for TransformData - returns empty DataFrame
+    mock->m_expectations.push_back(
+        std::make_shared<decltype(NAMED_ALLOW_CALL(*mock, TransformData(trompeloeil::_)).RETURN(epoch_frame::DataFrame{}))>(
+            NAMED_ALLOW_CALL(*mock, TransformData(trompeloeil::_))
+                .RETURN(epoch_frame::DataFrame{})
+        )
+    );
+
+    // Set default expectation for TransformDataWithMetadata - returns empty result
+    mock->m_expectations.push_back(
+        std::make_shared<decltype(NAMED_ALLOW_CALL(*mock, TransformDataWithMetadata(trompeloeil::_)).RETURN(epoch_script::runtime::TransformResult{}))>(
+            NAMED_ALLOW_CALL(*mock, TransformDataWithMetadata(trompeloeil::_))
+                .RETURN(epoch_script::runtime::TransformResult{})
         )
     );
 
@@ -370,6 +403,35 @@ inline std::unique_ptr<MockTransform> CreateReporterMockTransform(
         std::make_shared<decltype(NAMED_ALLOW_CALL(*mock, GetEventMarkers(trompeloeil::_)).RETURN(std::nullopt))>(
             NAMED_ALLOW_CALL(*mock, GetEventMarkers(trompeloeil::_))
                 .RETURN(std::nullopt)
+        )
+    );
+
+    // Set default expectations for progress emitter - orchestrator calls SetProgressEmitter on all transforms
+    mock->m_expectations.push_back(
+        std::make_shared<decltype(NAMED_ALLOW_CALL(*mock, SetProgressEmitter(trompeloeil::_)))>(
+            NAMED_ALLOW_CALL(*mock, SetProgressEmitter(trompeloeil::_))
+        )
+    );
+    mock->m_expectations.push_back(
+        std::make_shared<decltype(NAMED_ALLOW_CALL(*mock, GetProgressEmitter()).RETURN(nullptr))>(
+            NAMED_ALLOW_CALL(*mock, GetProgressEmitter())
+                .RETURN(nullptr)
+        )
+    );
+
+    // Set default expectation for TransformData - returns empty DataFrame
+    mock->m_expectations.push_back(
+        std::make_shared<decltype(NAMED_ALLOW_CALL(*mock, TransformData(trompeloeil::_)).RETURN(epoch_frame::DataFrame{}))>(
+            NAMED_ALLOW_CALL(*mock, TransformData(trompeloeil::_))
+                .RETURN(epoch_frame::DataFrame{})
+        )
+    );
+
+    // Set default expectation for TransformDataWithMetadata - returns empty result
+    mock->m_expectations.push_back(
+        std::make_shared<decltype(NAMED_ALLOW_CALL(*mock, TransformDataWithMetadata(trompeloeil::_)).RETURN(epoch_script::runtime::TransformResult{}))>(
+            NAMED_ALLOW_CALL(*mock, TransformDataWithMetadata(trompeloeil::_))
+                .RETURN(epoch_script::runtime::TransformResult{})
         )
     );
 

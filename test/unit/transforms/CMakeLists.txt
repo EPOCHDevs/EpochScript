@@ -18,7 +18,8 @@ add_subdirectory(price_actions)
 add_subdirectory(string)
 add_subdirectory(tulip)
 add_subdirectory(volatility)
-add_subdirectory(statistics)    
+add_subdirectory(statistics)
+add_subdirectory(utility)
 
 
 target_compile_definitions(epoch_script_test PUBLIC -DMETADATA_FILES_DIR="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/files")

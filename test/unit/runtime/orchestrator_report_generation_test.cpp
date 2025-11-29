@@ -35,6 +35,7 @@
 #include "fake_data_sources.h"
 #include <epoch_core/catch_defs.h>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include <epoch_script/transforms/core/config_helper.h>
 #include <epoch_script/transforms/core/transform_registry.h>
 #include <epoch_script/transforms/core/transform_definition.h>
@@ -954,5 +955,685 @@ ma = sma(period=3)(c)
         auto reports = orch.GetGeneratedReports();
         // No reporter transforms, so no reports
         REQUIRE(reports.empty());
+    }
+}
+
+// ============================================================================
+// LINE CHART REPORT TESTS
+// ============================================================================
+
+TEST_CASE("Orchestrator Report Generation - line_chart_report", "[orchestrator][report][chart][line]") {
+    const auto dailyTF = TestTimeFrames::Daily();
+    const std::string aapl = TestAssetConstants::AAPL;
+
+    SECTION("Line chart with single series") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = line_chart_report(title="Price Trend", category="Analysis", x_axis_label="Date", y_axis_label="Price")(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        REQUIRE(reports.contains(aapl));
+
+        auto& tearsheet = reports[aapl];
+        REQUIRE(tearsheet.has_charts());
+        REQUIRE(tearsheet.charts().charts_size() == 1);
+
+        auto& chart = tearsheet.charts().charts(0);
+        REQUIRE(chart.has_lines_def());
+        auto& lines_def = chart.lines_def();
+
+        // Verify chart metadata
+        REQUIRE(lines_def.chart_def().title() == "Price Trend");
+        REQUIRE(lines_def.chart_def().category() == "Analysis");
+        REQUIRE(lines_def.chart_def().x_axis().label() == "Date");
+        REQUIRE(lines_def.chart_def().y_axis().label() == "Price");
+
+        // Verify axis types
+        REQUIRE(lines_def.chart_def().x_axis().type() == epoch_proto::AxisDateTime);
+        REQUIRE(lines_def.chart_def().y_axis().type() == epoch_proto::AxisLinear);
+
+        // Verify we have one line series
+        REQUIRE(lines_def.lines_size() == 1);
+
+        // Verify data points in the line series
+        auto& line = lines_def.lines(0);
+        REQUIRE(line.data_size() == 5);
+
+        // Verify each data point value using Approx
+        REQUIRE(line.data(0).y() == Catch::Approx(100.0));
+        REQUIRE(line.data(1).y() == Catch::Approx(105.0));
+        REQUIRE(line.data(2).y() == Catch::Approx(110.0));
+        REQUIRE(line.data(3).y() == Catch::Approx(115.0));
+        REQUIRE(line.data(4).y() == Catch::Approx(120.0));
+    }
+
+    SECTION("Line chart with multiple series") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+h = src.h
+l = src.l
+report = line_chart_report(title="OHLC Trends", category="Analysis", x_axis_label="Date", y_axis_label="Price")(c, h, l)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        REQUIRE(reports.contains(aapl));
+
+        auto& tearsheet = reports[aapl];
+        auto& chart = tearsheet.charts().charts(0);
+        auto& lines_def = chart.lines_def();
+
+        // Should have 3 line series (close, high, low)
+        REQUIRE(lines_def.lines_size() == 3);
+
+        // Each series should have 3 data points
+        for (int i = 0; i < lines_def.lines_size(); ++i) {
+            REQUIRE(lines_def.lines(i).data_size() == 3);
+        }
+    }
+}
+
+// ============================================================================
+// AREA CHART REPORT TESTS
+// ============================================================================
+
+TEST_CASE("Orchestrator Report Generation - area_chart_report", "[orchestrator][report][chart][area]") {
+    const auto dailyTF = TestTimeFrames::Daily();
+    const std::string aapl = TestAssetConstants::AAPL;
+
+    SECTION("Area chart with single series") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = area_chart_report(title="Price Area", category="Analysis", x_axis_label="Date", y_axis_label="Price", stack_type="normal")(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        REQUIRE(reports.contains(aapl));
+
+        auto& tearsheet = reports[aapl];
+        REQUIRE(tearsheet.has_charts());
+        REQUIRE(tearsheet.charts().charts_size() == 1);
+
+        auto& chart = tearsheet.charts().charts(0);
+        REQUIRE(chart.has_area_def());
+        auto& area_def = chart.area_def();
+
+        // Verify chart metadata
+        REQUIRE(area_def.chart_def().title() == "Price Area");
+        REQUIRE(area_def.chart_def().category() == "Analysis");
+        REQUIRE(area_def.chart_def().x_axis().label() == "Date");
+        REQUIRE(area_def.chart_def().y_axis().label() == "Price");
+
+        // Verify axis types
+        REQUIRE(area_def.chart_def().x_axis().type() == epoch_proto::AxisDateTime);
+        REQUIRE(area_def.chart_def().y_axis().type() == epoch_proto::AxisLinear);
+
+        // Verify we have one area series
+        REQUIRE(area_def.areas_size() == 1);
+
+        // Verify data points
+        auto& series = area_def.areas(0);
+        REQUIRE(series.data_size() == 5);
+
+        // Verify each data point value
+        REQUIRE(series.data(0).y() == Catch::Approx(100.0));
+        REQUIRE(series.data(1).y() == Catch::Approx(105.0));
+        REQUIRE(series.data(2).y() == Catch::Approx(110.0));
+        REQUIRE(series.data(3).y() == Catch::Approx(115.0));
+        REQUIRE(series.data(4).y() == Catch::Approx(120.0));
+    }
+
+    SECTION("Area chart with percent stacking") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+h = src.h
+report = area_chart_report(title="Stacked Area", category="Analysis", stack_type="percent")(c, h)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        REQUIRE(reports.contains(aapl));
+
+        auto& tearsheet = reports[aapl];
+        auto& chart = tearsheet.charts().charts(0);
+        auto& area_def = chart.area_def();
+
+        // Should have 2 area series (close, high)
+        REQUIRE(area_def.areas_size() == 2);
+
+        // Verify stack type is percent
+        REQUIRE(area_def.stack_type() == epoch_proto::StackTypePercent);
+    }
+}
+
+// ============================================================================
+// BOXPLOT REPORT TESTS
+// ============================================================================
+
+TEST_CASE("Orchestrator Report Generation - boxplot_report", "[orchestrator][report][chart][boxplot]") {
+    const auto dailyTF = TestTimeFrames::Daily();
+    const std::string aapl = TestAssetConstants::AAPL;
+
+    SECTION("Boxplot with labeled data") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+is_high = gte()(c, 110)
+label = boolean_select_string()(is_high, "High", "Low")
+report = boxplot_report(title="Price Distribution", category="Analysis", x_axis_label="Category", y_axis_label="Price")(label, c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        REQUIRE(reports.contains(aapl));
+
+        auto& tearsheet = reports[aapl];
+        REQUIRE(tearsheet.has_charts());
+        REQUIRE(tearsheet.charts().charts_size() == 1);
+
+        auto& chart = tearsheet.charts().charts(0);
+        REQUIRE(chart.has_box_plot_def());
+        auto& boxplot_def = chart.box_plot_def();
+
+        // Verify chart metadata
+        REQUIRE(boxplot_def.chart_def().title() == "Price Distribution");
+        REQUIRE(boxplot_def.chart_def().category() == "Analysis");
+        REQUIRE(boxplot_def.chart_def().x_axis().label() == "Category");
+        REQUIRE(boxplot_def.chart_def().y_axis().label() == "Price");
+
+        // Verify axis types
+        REQUIRE(boxplot_def.chart_def().x_axis().type() == epoch_proto::AxisCategory);
+        REQUIRE(boxplot_def.chart_def().y_axis().type() == epoch_proto::AxisLinear);
+
+        // Should have 2 box plots (Low: 100, 105 and High: 110, 115, 120)
+        REQUIRE(boxplot_def.data().points_size() == 2);
+    }
+
+    SECTION("Boxplot statistics validation") {
+        // Create data with known distribution: 10, 20, 30, 40, 50
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = boxplot_report(title="Stats Test", category="Test")("Group A", c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({10.0, 20.0, 30.0, 40.0, 50.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        REQUIRE(reports.contains(aapl));
+
+        auto& tearsheet = reports[aapl];
+        auto& chart = tearsheet.charts().charts(0);
+        auto& boxplot_def = chart.box_plot_def();
+
+        // Should have exactly 1 box plot
+        REQUIRE(boxplot_def.data().points_size() == 1);
+
+        auto& point = boxplot_def.data().points(0);
+
+        // Verify boxplot statistics with Approx
+        // Note: Quartile calculation may vary by implementation
+        REQUIRE(point.low() == Catch::Approx(10.0));      // min
+        REQUIRE(point.median() == Catch::Approx(30.0));   // 50th percentile
+        REQUIRE(point.high() == Catch::Approx(50.0));     // max
+    }
+}
+
+// ============================================================================
+// CROSS-SECTIONAL LINE CHART REPORT TESTS
+// ============================================================================
+
+TEST_CASE("Orchestrator Report Generation - cs_line_chart_report", "[orchestrator][report][chart][line][cross-sectional]") {
+    const auto dailyTF = TestTimeFrames::Daily();
+    const std::string aapl = TestAssetConstants::AAPL;
+    const std::string msft = TestAssetConstants::MSFT;
+
+    SECTION("Cross-sectional line chart comparing assets") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = cs_line_chart_report(title="Asset Comparison", category="Cross-Section", x_axis_label="Date", y_axis_label="Price")(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl, msft}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});
+        inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 210.0, 220.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        REQUIRE(reports.contains(epoch_script::GROUP_KEY));
+
+        auto& tearsheet = reports[epoch_script::GROUP_KEY];
+        REQUIRE(tearsheet.has_charts());
+        REQUIRE(tearsheet.charts().charts_size() == 1);
+
+        auto& chart = tearsheet.charts().charts(0);
+        REQUIRE(chart.has_lines_def());
+        auto& lines_def = chart.lines_def();
+
+        // Verify chart metadata
+        REQUIRE(lines_def.chart_def().title() == "Asset Comparison");
+        REQUIRE(lines_def.chart_def().category() == "Cross-Section");
+        REQUIRE(lines_def.chart_def().x_axis().label() == "Date");
+        REQUIRE(lines_def.chart_def().y_axis().label() == "Price");
+
+        // Verify axis types
+        REQUIRE(lines_def.chart_def().x_axis().type() == epoch_proto::AxisDateTime);
+        REQUIRE(lines_def.chart_def().y_axis().type() == epoch_proto::AxisLinear);
+
+        // Verify we have lines for both assets
+        REQUIRE(lines_def.lines_size() == 2);
+
+        // Collect line names and their data points
+        std::unordered_map<std::string, std::vector<double>> lineData;
+        for (int i = 0; i < lines_def.lines_size(); ++i) {
+            auto& line = lines_def.lines(i);
+            std::vector<double> values;
+            for (int j = 0; j < line.data_size(); ++j) {
+                values.push_back(line.data(j).y());
+            }
+            lineData[line.name()] = values;
+        }
+
+        // Verify each line has 3 data points
+        for (const auto& [name, values] : lineData) {
+            REQUIRE(values.size() == 3);
+        }
+    }
+
+    SECTION("Cross-sectional line chart data point values") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = cs_line_chart_report(title="Price Trends", category="CS")(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl, msft}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 150.0, 200.0});
+        inputData[dailyTF.ToString()][msft] = CreateOHLCVData({50.0, 75.0, 100.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        auto& tearsheet = reports[epoch_script::GROUP_KEY];
+        auto& lines_def = tearsheet.charts().charts(0).lines_def();
+
+        REQUIRE(lines_def.lines_size() == 2);
+
+        // Verify data point values for each line
+        for (int i = 0; i < lines_def.lines_size(); ++i) {
+            auto& line = lines_def.lines(i);
+            REQUIRE(line.data_size() == 3);
+
+            // The values should be either AAPL's (100, 150, 200) or MSFT's (50, 75, 100)
+            double first = line.data(0).y();
+            if (first == Catch::Approx(100.0)) {
+                // This is AAPL
+                REQUIRE(line.data(1).y() == Catch::Approx(150.0));
+                REQUIRE(line.data(2).y() == Catch::Approx(200.0));
+            } else {
+                // This is MSFT
+                REQUIRE(line.data(0).y() == Catch::Approx(50.0));
+                REQUIRE(line.data(1).y() == Catch::Approx(75.0));
+                REQUIRE(line.data(2).y() == Catch::Approx(100.0));
+            }
+        }
+    }
+}
+
+// ============================================================================
+// CROSS-SECTIONAL HEATMAP REPORT TESTS
+// ============================================================================
+
+TEST_CASE("Orchestrator Report Generation - cs_heatmap_report", "[orchestrator][report][chart][heatmap][cross-sectional]") {
+    const auto dailyTF = TestTimeFrames::Daily();
+    const std::string aapl = TestAssetConstants::AAPL;
+    const std::string msft = TestAssetConstants::MSFT;
+    const std::string goog = TestAssetConstants::GOOG;
+
+    SECTION("Cross-sectional heatmap in correlation mode") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = cs_heatmap_report(title="Correlation Matrix", category="Cross-Section", mode="correlation")(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl, msft, goog}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        // Use perfectly correlated data (all increase by 10 each day)
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0, 130.0, 140.0});
+        inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 210.0, 220.0, 230.0, 240.0});
+        inputData[dailyTF.ToString()][goog] = CreateOHLCVData({300.0, 310.0, 320.0, 330.0, 340.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        REQUIRE(reports.contains(epoch_script::GROUP_KEY));
+
+        auto& tearsheet = reports[epoch_script::GROUP_KEY];
+        REQUIRE(tearsheet.has_charts());
+        REQUIRE(tearsheet.charts().charts_size() == 1);
+
+        auto& chart = tearsheet.charts().charts(0);
+        REQUIRE(chart.has_heat_map_def());
+        auto& heat_map_def = chart.heat_map_def();
+
+        // Verify chart metadata
+        REQUIRE(heat_map_def.chart_def().title() == "Correlation Matrix");
+        REQUIRE(heat_map_def.chart_def().category() == "Cross-Section");
+
+        // Verify axis types (category for both in heatmap)
+        REQUIRE(heat_map_def.chart_def().x_axis().type() == epoch_proto::AxisCategory);
+        REQUIRE(heat_map_def.chart_def().y_axis().type() == epoch_proto::AxisCategory);
+
+        // For 3 assets, we should have 9 correlation values (3x3 matrix)
+        REQUIRE(heat_map_def.points_size() == 9);
+
+        // All correlations should be 1.0 (perfect correlation) since all series
+        // have the same linear trend
+        for (int i = 0; i < heat_map_def.points_size(); ++i) {
+            auto& point = heat_map_def.points(i);
+            REQUIRE(point.value() == Catch::Approx(1.0).epsilon(0.01));
+        }
+    }
+
+    SECTION("Cross-sectional heatmap correlation with inverse relationship") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = cs_heatmap_report(title="Correlation", category="CS", mode="correlation")(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl, msft}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        // AAPL increases, MSFT decreases - should be negatively correlated
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0, 130.0, 140.0});
+        inputData[dailyTF.ToString()][msft] = CreateOHLCVData({140.0, 130.0, 120.0, 110.0, 100.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        auto& heat_map_def = reports[epoch_script::GROUP_KEY].charts().charts(0).heat_map_def();
+
+        // For 2 assets, we have 4 points (2x2 matrix)
+        REQUIRE(heat_map_def.points_size() == 4);
+
+        // Diagonal should be 1.0 (self-correlation)
+        // Off-diagonal should be -1.0 (perfect negative correlation)
+        for (int i = 0; i < heat_map_def.points_size(); ++i) {
+            auto& point = heat_map_def.points(i);
+            if (point.x() == point.y()) {
+                // Diagonal: self-correlation = 1.0
+                REQUIRE(point.value() == Catch::Approx(1.0).epsilon(0.01));
+            } else {
+                // Off-diagonal: negative correlation = -1.0
+                REQUIRE(point.value() == Catch::Approx(-1.0).epsilon(0.01));
+            }
+        }
+    }
+
+    SECTION("Cross-sectional heatmap in values mode with last aggregation") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = cs_heatmap_report(title="Asset Values", category="Cross-Section", mode="values", agg="last")(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl, msft}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});
+        inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 210.0, 220.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        REQUIRE(reports.contains(epoch_script::GROUP_KEY));
+
+        auto& tearsheet = reports[epoch_script::GROUP_KEY];
+        auto& heat_map_def = tearsheet.charts().charts(0).heat_map_def();
+
+        // Verify chart metadata
+        REQUIRE(heat_map_def.chart_def().title() == "Asset Values");
+
+        // In values mode with 2 assets, we should have 2 points (1xN)
+        REQUIRE(heat_map_def.points_size() == 2);
+
+        // Verify the last values are used (120.0 for AAPL, 220.0 for MSFT)
+        std::vector<double> values;
+        for (int i = 0; i < heat_map_def.points_size(); ++i) {
+            values.push_back(heat_map_def.points(i).value());
+        }
+        std::sort(values.begin(), values.end());
+        REQUIRE(values[0] == Catch::Approx(120.0));
+        REQUIRE(values[1] == Catch::Approx(220.0));
+    }
+
+    SECTION("Cross-sectional heatmap in values mode with mean aggregation") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = cs_heatmap_report(title="Mean Values", category="CS", mode="values", agg="mean")(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl, msft}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});  // mean = 110
+        inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 220.0, 240.0});  // mean = 220
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        auto& heat_map_def = reports[epoch_script::GROUP_KEY].charts().charts(0).heat_map_def();
+
+        REQUIRE(heat_map_def.points_size() == 2);
+
+        // Verify the mean values
+        std::vector<double> values;
+        for (int i = 0; i < heat_map_def.points_size(); ++i) {
+            values.push_back(heat_map_def.points(i).value());
+        }
+        std::sort(values.begin(), values.end());
+        REQUIRE(values[0] == Catch::Approx(110.0));
+        REQUIRE(values[1] == Catch::Approx(220.0));
+    }
+
+    SECTION("Cross-sectional heatmap in values mode with sum aggregation") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = cs_heatmap_report(title="Sum Values", category="CS", mode="values", agg="sum")(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl, msft}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});  // sum = 330
+        inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 220.0, 240.0});  // sum = 660
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        auto& heat_map_def = reports[epoch_script::GROUP_KEY].charts().charts(0).heat_map_def();
+
+        REQUIRE(heat_map_def.points_size() == 2);
+
+        // Verify the sum values
+        std::vector<double> values;
+        for (int i = 0; i < heat_map_def.points_size(); ++i) {
+            values.push_back(heat_map_def.points(i).value());
+        }
+        std::sort(values.begin(), values.end());
+        REQUIRE(values[0] == Catch::Approx(330.0));
+        REQUIRE(values[1] == Catch::Approx(660.0));
+    }
+}
+
+// ============================================================================
+// CROSS-SECTIONAL BOXPLOT REPORT TESTS
+// ============================================================================
+
+TEST_CASE("Orchestrator Report Generation - cs_boxplot_report", "[orchestrator][report][chart][boxplot][cross-sectional]") {
+    const auto dailyTF = TestTimeFrames::Daily();
+    const std::string aapl = TestAssetConstants::AAPL;
+    const std::string msft = TestAssetConstants::MSFT;
+
+    SECTION("Cross-sectional boxplot comparing asset distributions") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = cs_boxplot_report(title="Asset Distribution", category="Cross-Section", x_axis_label="Asset", y_axis_label="Price")(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl, msft}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
+        inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 210.0, 220.0, 230.0, 240.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        REQUIRE(reports.contains(epoch_script::GROUP_KEY));
+
+        auto& tearsheet = reports[epoch_script::GROUP_KEY];
+        REQUIRE(tearsheet.has_charts());
+        REQUIRE(tearsheet.charts().charts_size() == 1);
+
+        auto& chart = tearsheet.charts().charts(0);
+        REQUIRE(chart.has_box_plot_def());
+        auto& boxplot_def = chart.box_plot_def();
+
+        // Verify chart metadata
+        REQUIRE(boxplot_def.chart_def().title() == "Asset Distribution");
+        REQUIRE(boxplot_def.chart_def().category() == "Cross-Section");
+        REQUIRE(boxplot_def.chart_def().x_axis().label() == "Asset");
+        REQUIRE(boxplot_def.chart_def().y_axis().label() == "Price");
+
+        // Verify axis types
+        REQUIRE(boxplot_def.chart_def().x_axis().type() == epoch_proto::AxisCategory);
+        REQUIRE(boxplot_def.chart_def().y_axis().type() == epoch_proto::AxisLinear);
+
+        // Should have 2 box plot data points (one per asset)
+        REQUIRE(boxplot_def.data().points_size() == 2);
+    }
+
+    SECTION("Cross-sectional boxplot statistics validation") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = cs_boxplot_report(title="Distribution Compare", category="CS")(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl, msft}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        // AAPL: 10, 20, 30, 40, 50 -> min=10, q1=15, median=30, q3=45, max=50
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({10.0, 20.0, 30.0, 40.0, 50.0});
+        // MSFT: 100, 200, 300, 400, 500 -> min=100, q1=150, median=300, q3=450, max=500
+        inputData[dailyTF.ToString()][msft] = CreateOHLCVData({100.0, 200.0, 300.0, 400.0, 500.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        auto& boxplot_def = reports[epoch_script::GROUP_KEY].charts().charts(0).box_plot_def();
+
+        REQUIRE(boxplot_def.data().points_size() == 2);
+
+        // Collect statistics by min value to identify which box is which
+        std::vector<std::tuple<double, double, double, double, double>> stats;
+        for (int i = 0; i < boxplot_def.data().points_size(); ++i) {
+            auto& point = boxplot_def.data().points(i);
+            stats.emplace_back(point.low(), point.q1(), point.median(), point.q3(), point.high());
+        }
+
+        // Sort by min value to identify AAPL (lower) and MSFT (higher)
+        std::sort(stats.begin(), stats.end());
+
+        // AAPL stats (lower values) - using actual quartile calculation
+        REQUIRE(std::get<0>(stats[0]) == Catch::Approx(10.0));   // low
+        REQUIRE(std::get<2>(stats[0]) == Catch::Approx(30.0));   // median
+        REQUIRE(std::get<4>(stats[0]) == Catch::Approx(50.0));   // high
+
+        // MSFT stats (higher values)
+        REQUIRE(std::get<0>(stats[1]) == Catch::Approx(100.0));  // low
+        REQUIRE(std::get<2>(stats[1]) == Catch::Approx(300.0));  // median
+        REQUIRE(std::get<4>(stats[1]) == Catch::Approx(500.0));  // high
+    }
+
+    SECTION("Cross-sectional boxplot with whisker IQR setting") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+report = cs_boxplot_report(title="Custom Whiskers", category="CS", whisker_iqr=1.5)(c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        // Data with potential outliers
+        inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({10.0, 20.0, 30.0, 40.0, 50.0});
+
+        orch.ExecutePipeline(std::move(inputData));
+
+        auto reports = orch.GetGeneratedReports();
+        auto& boxplot_def = reports[epoch_script::GROUP_KEY].charts().charts(0).box_plot_def();
+
+        REQUIRE(boxplot_def.data().points_size() == 1);
+
+        // Verify the boxplot was generated with custom whisker settings
+        auto& point = boxplot_def.data().points(0);
+        REQUIRE(point.low() == Catch::Approx(10.0));
+        REQUIRE(point.high() == Catch::Approx(50.0));
     }
 }

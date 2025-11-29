@@ -27,6 +27,10 @@
 #include "components/indicators/intraday_returns.h"
 #include "components/indicators/ffill.h"
 #include "components/statistics/winsorize.h"
+#include "components/statistics/gmm_metadata.h"
+#include "components/statistics/clustering_metadata.h"
+#include "components/ml/liblinear_metadata.h"
+#include "components/ml/lightgbm_metadata.h"
 #include "components/cross_sectional/cs_winsorize.h"
 #include "components/cross_sectional/rank.h"
 #include "components/datetime/datetime_metadata.h"
@@ -81,6 +85,13 @@ void RegisterTransformMetadata(FileLoaderInterface const &loader) {
   metaDataList.emplace_back(epoch_script::transform::MakeShortVolumeDataSource());
   metaDataList.emplace_back(epoch_script::transform::MakeDatetimeTransforms());
   metaDataList.emplace_back(epoch_script::transform::MakeSageMakerSentimentTransforms());
+  metaDataList.emplace_back(epoch_script::transform::MakeGMMMetaData());
+  metaDataList.emplace_back(epoch_script::transform::MakeKMeansMetaData());
+  metaDataList.emplace_back(epoch_script::transform::MakeDBSCANMetaData());
+  metaDataList.emplace_back(epoch_script::transform::MakePCAMetaData());
+  metaDataList.emplace_back(epoch_script::transform::MakeICAMetaData());
+  metaDataList.emplace_back(epoch_script::transform::MakeLiblinearMetaData());
+  metaDataList.emplace_back(epoch_script::transform::MakeLightGBMMetaData());
   // Aggregation nodes are loaded from the transforms.yaml file
 
   for (auto &&indicator : std::views::join(metaDataList)) {

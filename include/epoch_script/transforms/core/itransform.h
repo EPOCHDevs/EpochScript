@@ -15,6 +15,12 @@ namespace epoch_tearsheet {
     class DashboardBuilder;
 }
 
+// Forward declaration for progress emitter
+namespace epoch_script::runtime::events {
+    class TransformProgressEmitter;
+    using TransformProgressEmitterPtr = std::shared_ptr<TransformProgressEmitter>;
+}
+
 namespace epoch_script::transform {
 struct ITransformBase {
 
@@ -64,6 +70,12 @@ struct ITransformBase {
   // Default returns metadata requiredDataSources, but transforms can override
   // to do template expansion (e.g., FRED replaces {category} with actual option value)
   virtual std::vector<std::string> GetRequiredDataSources() const = 0;
+
+  // Progress emitter for internal transform progress reporting
+  // Set by orchestrator before execution, used by transforms to emit progress events
+  virtual void SetProgressEmitter(
+      runtime::events::TransformProgressEmitterPtr emitter) = 0;
+  virtual runtime::events::TransformProgressEmitterPtr GetProgressEmitter() const = 0;
 
   virtual ~ITransformBase() = default;
 };
@@ -163,6 +175,16 @@ public:
     return m_config.GetTransformDefinition().GetMetadata().requiredDataSources;
   }
 
+  // Progress emitter implementation
+  void SetProgressEmitter(
+      runtime::events::TransformProgressEmitterPtr emitter) override {
+    m_progressEmitter = std::move(emitter);
+  }
+
+  runtime::events::TransformProgressEmitterPtr GetProgressEmitter() const override {
+    return m_progressEmitter;
+  }
+
   ~ITransform() override = default;
   using Ptr = std::shared_ptr<ITransform>;
 
@@ -176,7 +198,28 @@ protected:
     return series.to_frame(GetOutputId());
   }
 
+  // Helper methods for derived classes to emit progress
+  // These are no-ops if no emitter is set
+  // Implementations are in itransform_progress.cpp to avoid header dependency
+  void EmitProgress(size_t current, size_t total,
+                    const std::string& message = "") const;
+
+  void EmitEpoch(size_t epoch, size_t total_epochs,
+                 std::optional<double> loss = std::nullopt,
+                 std::optional<double> accuracy = std::nullopt) const;
+
+  void EmitIteration(size_t iteration,
+                     std::optional<double> metric = std::nullopt,
+                     const std::string& message = "") const;
+
+  // Check cancellation and throw if cancelled
+  void ThrowIfCancelled() const;
+
+  // Check if pipeline has been cancelled
+  [[nodiscard]] bool IsCancelled() const;
+
   TransformConfiguration m_config;
+  mutable runtime::events::TransformProgressEmitterPtr m_progressEmitter;
 };
 
 using ITransformBasePtr = std::unique_ptr<ITransformBase>;

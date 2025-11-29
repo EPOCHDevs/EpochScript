@@ -3,9 +3,14 @@
 //
 
 #pragma once
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-aliasing"
+#include <DataFrame/DataFrameFinancialVisitors.h>
+#pragma GCC diagnostic pop
 #include "../common_utils.h"
 #include <epoch_script/transforms/core/itransform.h>
-#include <DataFrame/DataFrameFinancialVisitors.h>
+
 #include <epoch_frame/factory/dataframe_factory.h>
 
 using namespace epoch_frame;

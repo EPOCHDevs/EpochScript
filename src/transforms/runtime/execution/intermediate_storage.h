@@ -32,6 +32,10 @@ namespace epoch_script::runtime {
                                   const epoch_script::transform::ITransformBase &transformer,
                                   const epoch_frame::DataFrame &data) override;
 
+        void StoreAssetScalar(const AssetID &asset_id,
+                              const std::string &outputId,
+                              const epoch_frame::Scalar &value) override;
+
         std::vector<AssetID> GetAssetIDs() const final {
             std::shared_lock lock(m_assetIDsMutex);
             return m_asset_ids;
@@ -55,6 +59,9 @@ namespace epoch_script::runtime {
         // Scalar optimization: Global scalar cache (no timeframe/asset dimensions)
         ScalarCache m_scalarCache;                     // outputId -> scalar value
         std::unordered_set<std::string> m_scalarOutputs; // Track which outputs are scalars
+
+        // AssetScalar cache: per-asset scalars (for asset_ref and similar)
+        AssetScalarCache m_assetScalarCache;          // outputId -> (assetId -> scalar)
 
         // Report cache for reporter transforms
         AssetReportMap m_reportCache;

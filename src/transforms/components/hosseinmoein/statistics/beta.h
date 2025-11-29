@@ -56,7 +56,7 @@ public:
               return Scalar{visitor.get_result()};
             });
 
-    return beta.to_frame(GetOutputId("beta"));
+    return beta.to_frame(GetOutputId("result"));
   }
 
 private:

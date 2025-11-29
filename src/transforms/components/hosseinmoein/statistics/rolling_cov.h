@@ -52,7 +52,7 @@ public:
           return Scalar{visitor.get_result()};
         });
 
-    return covariance.to_frame(GetOutputId("covariance"));
+    return covariance.to_frame(GetOutputId("result"));
   }
 
 private:

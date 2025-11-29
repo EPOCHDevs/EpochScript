@@ -61,7 +61,10 @@ static std::vector<Profile> GetProfiles() {
       {"large_index", {"SP500"}, std::nullopt, std::nullopt},
       {"moat_analysis", {"AAPL-Stocks", "MSFT-Stocks", "GOOGL-Stocks", "NVDA-Stocks", "META-Stocks"},
           DateRangeConfig{"2022-11-28", "2025-11-25"},  // intraday
-          DateRangeConfig{"2022-11-28", "2025-11-25"}}  // eod
+          DateRangeConfig{"2022-11-28", "2025-11-25"}},  // eod
+      {"spy_15yr", {"SPY-Stocks"},
+          DateRangeConfig{"2024-01-01", "2025-11-28"},  // intraday (1 year)
+          DateRangeConfig{"2010-01-01", "2025-11-28"}}  // eod (15 years)
   };
 }
 
@@ -336,7 +339,7 @@ void RunTest(const std::string& source, const std::string& output_dir, const std
 
   if (it == all_profiles.end()) {
     throw std::runtime_error("Invalid profile: " + selected_profile_name +
-                             ". Must be one of: single_stock, small_index, large_index, moat_analysis");
+                             ". Must be one of: single_stock, small_index, large_index, moat_analysis, spy_15yr");
   }
 
   const auto& profile = *it;
