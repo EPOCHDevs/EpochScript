@@ -9,12 +9,9 @@ target_sources(epoch_script_test PRIVATE
     orchestrator_graph_topologies_real_test.cpp
     orchestrator_basic_all_datasource.cpp
     orchestrator_cross_sectional.cpp
-    # Event system unit tests
-    events/cancellation_token_test.cpp
-    events/event_filter_test.cpp
-    events/event_dispatcher_test.cpp
-    events/transform_progress_emitter_test.cpp
-    events/orchestrator_events_integration_test.cpp
+    orchestrator_ml_integration_test.cpp
+    pairs_trading_test.cpp
+    events/orchestrator_event_bridge_test.cpp
 )
 
 target_include_directories(epoch_script_test PRIVATE

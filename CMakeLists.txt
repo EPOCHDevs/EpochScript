@@ -55,6 +55,7 @@ if (BUILD_TEST)
 endif()
 
 include(${PROJECT_SOURCE_DIR}/cmake/EpochDashboard.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/EpochDataSDK.cmake)
 include(${PROJECT_SOURCE_DIR}/cmake/Tulip.cmake)
 # Tree-sitter setup via CPM
 include(${PROJECT_SOURCE_DIR}/cmake/TreeSitter.cmake)
@@ -101,6 +102,7 @@ target_link_libraries(epoch_script PUBLIC
         armadillo
         DataFrame::DataFrame
        epoch::dashboard
+       epoch::data_sdk
        yaml-cpp::yaml-cpp
        libmpdec++
        libmpdec
