@@ -38,9 +38,9 @@ TEST_CASE("ml_zscore basic functionality", "[ml_preprocess]") {
 
   auto df = read_ml_input("regression_input.csv");
 
-  auto cfg = run_op("ml_zscore", "zscore_test",
-      {{epoch_script::ARG, {input_ref("src", "signal_1"),
-                            input_ref("src", "signal_2")}}},
+  auto cfg = run_op("ml_zscore_2", "zscore_test",
+      {{"feature_0", {input_ref("src", "signal_1")}},
+       {"feature_1", {input_ref("src", "signal_2")}}},
       {{"split_ratio", MetaDataOptionDefinition{0.7}}},
       tf);
 
@@ -77,8 +77,9 @@ TEST_CASE("ml_zscore training set has zero mean unit variance", "[ml_preprocess]
   const double split_ratio = 0.7;
   const size_t train_size = static_cast<size_t>(std::ceil(df.num_rows() * split_ratio));
 
-  auto cfg = run_op("ml_zscore", "zscore_stats",
-      {{epoch_script::ARG, {input_ref("src", "signal_1")}}},
+  auto cfg = run_op("ml_zscore_2", "zscore_stats",
+      {{"feature_0", {input_ref("src", "signal_1")}},
+       {"feature_1", {input_ref("src", "signal_2")}}},
       {{"split_ratio", MetaDataOptionDefinition{split_ratio}}},
       tf);
 
@@ -114,9 +115,9 @@ TEST_CASE("ml_minmax basic functionality", "[ml_preprocess]") {
 
   auto df = read_ml_input("regression_input.csv");
 
-  auto cfg = run_op("ml_minmax", "minmax_test",
-      {{epoch_script::ARG, {input_ref("src", "signal_1"),
-                            input_ref("src", "signal_2")}}},
+  auto cfg = run_op("ml_minmax_2", "minmax_test",
+      {{"feature_0", {input_ref("src", "signal_1")}},
+       {"feature_1", {input_ref("src", "signal_2")}}},
       {{"split_ratio", MetaDataOptionDefinition{0.7}}},
       tf);
 
@@ -146,8 +147,9 @@ TEST_CASE("ml_minmax training set in [0,1] range", "[ml_preprocess]") {
   const double split_ratio = 0.7;
   const size_t train_size = static_cast<size_t>(std::ceil(df.num_rows() * split_ratio));
 
-  auto cfg = run_op("ml_minmax", "minmax_range",
-      {{epoch_script::ARG, {input_ref("src", "signal_1")}}},
+  auto cfg = run_op("ml_minmax_2", "minmax_range",
+      {{"feature_0", {input_ref("src", "signal_1")}},
+       {"feature_1", {input_ref("src", "signal_2")}}},
       {{"split_ratio", MetaDataOptionDefinition{split_ratio}}},
       tf);
 
@@ -177,9 +179,9 @@ TEST_CASE("ml_robust basic functionality", "[ml_preprocess]") {
 
   auto df = read_ml_input("regression_input.csv");
 
-  auto cfg = run_op("ml_robust", "robust_test",
-      {{epoch_script::ARG, {input_ref("src", "signal_1"),
-                            input_ref("src", "signal_2")}}},
+  auto cfg = run_op("ml_robust_2", "robust_test",
+      {{"feature_0", {input_ref("src", "signal_1")}},
+       {"feature_1", {input_ref("src", "signal_2")}}},
       {{"split_ratio", MetaDataOptionDefinition{0.7}}},
       tf);
 
@@ -209,8 +211,9 @@ TEST_CASE("ml_robust training set centered on median", "[ml_preprocess]") {
   const double split_ratio = 0.7;
   const size_t train_size = static_cast<size_t>(std::ceil(df.num_rows() * split_ratio));
 
-  auto cfg = run_op("ml_robust", "robust_median",
-      {{epoch_script::ARG, {input_ref("src", "signal_1")}}},
+  auto cfg = run_op("ml_robust_2", "robust_median",
+      {{"feature_0", {input_ref("src", "signal_1")}},
+       {"feature_1", {input_ref("src", "signal_2")}}},
       {{"split_ratio", MetaDataOptionDefinition{split_ratio}}},
       tf);
 
@@ -239,8 +242,9 @@ TEST_CASE("ml_zscore with different split ratios", "[ml_preprocess]") {
 
   for (double ratio : {0.5, 0.7, 0.9}) {
     DYNAMIC_SECTION("split_ratio=" << ratio) {
-      auto cfg = run_op("ml_zscore", "zscore_ratio",
-          {{epoch_script::ARG, {input_ref("src", "signal_1")}}},
+      auto cfg = run_op("ml_zscore_2", "zscore_ratio",
+          {{"feature_0", {input_ref("src", "signal_1")}},
+           {"feature_1", {input_ref("src", "signal_2")}}},
           {{"split_ratio", MetaDataOptionDefinition{ratio}}},
           tf);
 
@@ -256,26 +260,31 @@ TEST_CASE("ml_zscore with different split ratios", "[ml_preprocess]") {
 TEST_CASE("ml_zscore invalid split_ratio throws", "[ml_preprocess]") {
   const auto tf = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
-  // split_ratio = 0 should throw
-  REQUIRE_THROWS(run_op("ml_zscore", "zscore_invalid",
-      {{epoch_script::ARG, {input_ref("src", "signal_1")}}},
+  // split_ratio = 0 should throw during transform construction
+  auto cfg0 = run_op("ml_zscore_2", "zscore_invalid",
+      {{"feature_0", {input_ref("src", "signal_1")}},
+       {"feature_1", {input_ref("src", "signal_2")}}},
       {{"split_ratio", MetaDataOptionDefinition{0.0}}},
-      tf));
+      tf);
+  REQUIRE_THROWS(MAKE_TRANSFORM(cfg0));
 
-  // split_ratio > 1 should throw
-  REQUIRE_THROWS(run_op("ml_zscore", "zscore_invalid2",
-      {{epoch_script::ARG, {input_ref("src", "signal_1")}}},
+  // split_ratio > 1 should throw during transform construction
+  auto cfg1 = run_op("ml_zscore_2", "zscore_invalid2",
+      {{"feature_0", {input_ref("src", "signal_1")}},
+       {"feature_1", {input_ref("src", "signal_2")}}},
       {{"split_ratio", MetaDataOptionDefinition{1.5}}},
-      tf));
+      tf);
+  REQUIRE_THROWS(MAKE_TRANSFORM(cfg1));
 }
 
-TEST_CASE("ml_preprocess with single feature", "[ml_preprocess]") {
+TEST_CASE("ml_preprocess with two features", "[ml_preprocess]") {
   const auto tf = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   auto df = read_ml_input("regression_input.csv");
 
-  auto cfg = run_op("ml_zscore", "zscore_single",
-      {{epoch_script::ARG, {input_ref("src", "signal_1")}}},
+  auto cfg = run_op("ml_zscore_2", "zscore_two",
+      {{"feature_0", {input_ref("src", "signal_1")}},
+       {"feature_1", {input_ref("src", "signal_2")}}},
       {{"split_ratio", MetaDataOptionDefinition{0.7}}},
       tf);
 
@@ -283,7 +292,7 @@ TEST_CASE("ml_preprocess with single feature", "[ml_preprocess]") {
   auto t = dynamic_cast<ITransform *>(tbase.get());
 
   auto out = t->TransformData(df);
-  REQUIRE(out.num_cols() == 1);
+  REQUIRE(out.num_cols() == 2);
 }
 
 TEST_CASE("ml_preprocess with many features", "[ml_preprocess]") {
@@ -291,10 +300,10 @@ TEST_CASE("ml_preprocess with many features", "[ml_preprocess]") {
 
   auto df = read_ml_input("regression_input.csv");
 
-  auto cfg = run_op("ml_zscore", "zscore_multi",
-      {{epoch_script::ARG, {input_ref("src", "signal_1"),
-                            input_ref("src", "signal_2"),
-                            input_ref("src", "noise")}}},
+  auto cfg = run_op("ml_zscore_3", "zscore_multi",
+      {{"feature_0", {input_ref("src", "signal_1")}},
+       {"feature_1", {input_ref("src", "signal_2")}},
+       {"feature_2", {input_ref("src", "noise")}}},
       {{"split_ratio", MetaDataOptionDefinition{0.7}}},
       tf);
 

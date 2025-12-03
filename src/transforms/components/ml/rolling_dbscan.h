@@ -25,7 +25,7 @@ namespace epoch_script::transform {
  */
 struct RollingDBSCANOutputs {
   std::vector<int64_t> cluster_label;
-  std::vector<int64_t> is_anomaly;
+  std::vector<bool> is_anomaly;  // Boolean: true=anomaly/noise, false=in cluster
   std::vector<int64_t> cluster_count;
 };
 
@@ -149,7 +149,7 @@ public:
       if (model.core_points.empty()) {
         // No core points found in training - mark all as anomaly
         outputs.cluster_label[output_offset + i] = -1;
-        outputs.is_anomaly[output_offset + i] = 1;
+        outputs.is_anomaly[output_offset + i] = true;
         outputs.cluster_count[output_offset + i] = 0;
         continue;
       }
@@ -169,10 +169,10 @@ public:
       // Assign to cluster if within epsilon, else mark as anomaly
       if (min_dist <= model.epsilon && nearest_label != SIZE_MAX) {
         outputs.cluster_label[output_offset + i] = static_cast<int64_t>(nearest_label);
-        outputs.is_anomaly[output_offset + i] = 0;
+        outputs.is_anomaly[output_offset + i] = false;
       } else {
         outputs.cluster_label[output_offset + i] = -1;
-        outputs.is_anomaly[output_offset + i] = 1;
+        outputs.is_anomaly[output_offset + i] = true;
       }
       outputs.cluster_count[output_offset + i] = static_cast<int64_t>(model.num_clusters);
     }
@@ -194,7 +194,7 @@ public:
    */
   void InitializeOutputVectors(OutputVectors& outputs, size_t n_rows) const {
     outputs.cluster_label.resize(n_rows, -1);
-    outputs.is_anomaly.resize(n_rows, 1);
+    outputs.is_anomaly.resize(n_rows, true);
     outputs.cluster_count.resize(n_rows, 0);
   }
 

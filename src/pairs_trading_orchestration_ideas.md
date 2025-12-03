@@ -1,4 +1,4 @@
-# Pairs Trading Orchestration: Architecture Extension Ideas
+header# Pairs Trading Orchestration: Architecture Extension Ideas
 
 ## Current Architecture Summary
 

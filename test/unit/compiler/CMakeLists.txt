@@ -11,4 +11,5 @@ target_sources(epoch_script_test PRIVATE
     ternary_operator_test.cpp
     python_boolean_operators_test.cpp
     timestamp_type_resolution_test.cpp
+    slot_kwargs_test.cpp
 )

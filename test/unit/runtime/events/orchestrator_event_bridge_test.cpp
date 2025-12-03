@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <transforms/runtime/events/orchestrator_event_bridge.h>
-#include <epoch_data_sdk/common/generic_event_dispatcher.h>
+// SDK types (LifecycleEvent, etc.) are already exposed via orchestrator_event_bridge.h
 
 using namespace epoch_script::runtime::events;
 // Use qualified names for data_sdk types to avoid Now() ambiguity
@@ -20,7 +20,7 @@ TEST_CASE("ToGenericEvent converts PipelineStartedEvent", "[events][bridge]") {
     REQUIRE(le.status == OperationStatus::Started);
     REQUIRE(le.operation_type == "pipeline");
     REQUIRE(le.items_total.value() == 5);
-    REQUIRE(le.path.ToString() == "job:job123");
+    REQUIRE(le.path.ToString() == "Job:job123");
 }
 
 TEST_CASE("ToGenericEvent converts PipelineCompletedEvent", "[events][bridge]") {
@@ -94,8 +94,8 @@ TEST_CASE("ToGenericEvent converts NodeStartedEvent", "[events][bridge]") {
     REQUIRE(le.operation_type == "node");
     REQUIRE(le.operation_name == "SMA_20");
     REQUIRE(le.items_total.value() == 50);
-    // Path should be job:job123/stage:nodes/node:node_sma
-    REQUIRE(le.path.ToString().find("node:node_sma") != std::string::npos);
+    // Path should be Job:job123/Stage:nodes/Node:node_sma
+    REQUIRE(le.path.ToString().find("Node:node_sma") != std::string::npos);
 }
 
 TEST_CASE("ToGenericEvent converts NodeCompletedEvent", "[events][bridge]") {
@@ -195,7 +195,7 @@ TEST_CASE("ToGenericEvent converts TransformProgressEvent with asset", "[events]
 
     auto& pe = std::get<ProgressEvent>(generic);
     // Path should include asset
-    REQUIRE(pe.path.ToString().find("asset:AAPL") != std::string::npos);
+    REQUIRE(pe.path.ToString().find("Asset:AAPL") != std::string::npos);
 }
 
 TEST_CASE("ToGenericEvent converts ProgressSummaryEvent", "[events][bridge]") {

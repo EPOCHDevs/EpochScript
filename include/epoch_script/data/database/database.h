@@ -5,6 +5,7 @@
 #pragma once
 #include <epoch_script/data/database/idatabase_impl.h>
 #include <epoch_data_sdk/model/asset/asset.hpp>
+#include <epoch_data_sdk/events/all.h>
 #include <string>
 #include <epoch_frame/series.h>
 
@@ -29,7 +30,7 @@ public:
 
   Database(IDatabaseImplPtr);
 
-  void RunPipeline();
+  void RunPipeline(data_sdk::events::ScopedProgressEmitter& emitter);
 
   std::unordered_map<std::string, epoch_proto::TearSheet> GetGeneratedReports() const {
     return m_impl->GetGeneratedReports();

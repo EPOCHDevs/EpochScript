@@ -25,6 +25,7 @@
 #include <epoch_frame/factory/index_factory.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+#include <epoch_data_sdk/events/all.h>
 
 #include "epoch_script/core/bar_attribute.h"
 
@@ -34,6 +35,13 @@ using namespace epoch_script;
 using namespace epoch_script::transform;
 using namespace std::chrono_literals;
 using namespace epoch_frame;
+
+namespace {
+    auto ExecuteWithEmitter(DataFlowRuntimeOrchestrator& orch, TimeFrameAssetDataFrameMap inputData) {
+        data_sdk::events::ScopedProgressEmitter emitter;
+        return orch.ExecutePipeline(std::move(inputData), emitter);
+    }
+}
 
 // ============================================================================
 // TEST CASES
@@ -67,7 +75,7 @@ topk = top_k(k=2)(c)
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({300.0, 250.0, 200.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({200.0, 200.0, 300.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         REQUIRE(results.contains(dailyTF.ToString()));
         for (const auto& asset : assets) {
@@ -120,7 +128,7 @@ bottomk = bottom_k(k=1)(c)
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({300.0, 250.0, 200.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({200.0, 100.0, 300.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         auto aapl_bottomk = results[dailyTF.ToString()][TestAssetConstants::AAPL]["bottomk#result"];
         auto msft_bottomk = results[dailyTF.ToString()][TestAssetConstants::MSFT]["bottomk#result"];
@@ -164,7 +172,7 @@ topkpct = top_k_percent(k=34)(c)
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({300.0, 150.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({200.0, 250.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         // Day 1: MSFT(300), GOOGL(200) are top 34% (2 assets)
         auto aapl_result = results[dailyTF.ToString()][TestAssetConstants::AAPL]["topkpct#result"];
@@ -202,7 +210,7 @@ z = cs_zscore()(c)
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({200.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({300.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         auto aapl_z = results[dailyTF.ToString()][TestAssetConstants::AAPL]["z#result"];
         auto msft_z = results[dailyTF.ToString()][TestAssetConstants::MSFT]["z#result"];
@@ -241,7 +249,7 @@ mom = cs_momentum()(c)
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({200.0, 220.0, 242.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({300.0, 330.0, 363.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         // All assets should have mom#result with same values (broadcast)
         REQUIRE(results[dailyTF.ToString()][TestAssetConstants::AAPL].contains("mom#result"));
@@ -304,7 +312,7 @@ topk = top_k(k=1)(ma)
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({400.0, 300.0, 200.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({200.0, 200.0, 400.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         // Verify SMA values are computed correctly
         auto aapl_ma = results[dailyTF.ToString()][TestAssetConstants::AAPL]["ma#result"];
@@ -359,7 +367,7 @@ topk = top_k(k=1)(z)
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({200.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({300.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         auto aapl_topk = results[dailyTF.ToString()][TestAssetConstants::AAPL]["topk#result"];
         auto msft_topk = results[dailyTF.ToString()][TestAssetConstants::MSFT]["topk#result"];
@@ -401,7 +409,7 @@ topk = top_k(k=1)(ret)
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({200.0, 210.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({150.0, 180.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         // Verify ROC values are computed correctly
         // ROC = (current - previous) / previous
@@ -449,7 +457,7 @@ topk = top_k(k=3)(c)
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({250.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({300.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         REQUIRE(results[dailyTF.ToString()][TestAssetConstants::AAPL].contains("topk#result"));
 
@@ -486,7 +494,7 @@ cs_table_report(title="CS Snapshot", category="Test", agg="last")(topk)
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({200.0, 220.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({300.0, 330.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         // Verify top_k selects all assets (k=3) at each timestamp
         auto aapl_topk = results[dailyTF.ToString()][TestAssetConstants::AAPL]["topk#result"];
@@ -527,7 +535,7 @@ cs_bar_chart_report(agg="last", title="Asset ZScores", x_axis_label="Asset", y_a
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({200.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({300.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         // Verify cs_zscore values: z = (value - mean) / std
         auto aapl_z = results[dailyTF.ToString()][TestAssetConstants::AAPL]["z#result"];
@@ -565,7 +573,7 @@ cs_numeric_cards_report(agg="last", category="Test", title="Bottom Prices")(bott
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({250.0, 275.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({350.0, 375.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         // Verify bottom_k selects AAPL (lowest price) at each timestamp
         auto aapl_bottomk = results[dailyTF.ToString()][TestAssetConstants::AAPL]["bottomk#result"];
@@ -609,7 +617,7 @@ z = cs_zscore()(c)
         inputData[dailyTF.ToString()]["TSLA-Stock"] = CreateOHLCVData({150.0, 200.0, 250.0});
         inputData[dailyTF.ToString()]["AMZN-Stock"] = CreateOHLCVData({250.0, 240.0, 230.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         // Verify all assets have outputs
         REQUIRE(results.contains(dailyTF.ToString()));
@@ -681,7 +689,7 @@ short_signal = bottom_k(k=1)(c)
         inputData[dailyTF.ToString()][TestAssetConstants::MSFT] = CreateOHLCVData({200.0});
         inputData[dailyTF.ToString()][TestAssetConstants::GOOG] = CreateOHLCVData({300.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         // GOOGL is long signal (top 1)
         REQUIRE(results[dailyTF.ToString()][TestAssetConstants::GOOG]["long_signal#result"].iloc(0).as_bool() == true);

@@ -30,6 +30,9 @@
 #include <absl/log/initialize.h>
 #include <epoch_data_sdk/model/asset/asset_database.hpp>
 #include <epoch_core/macros.h>
+#include <epoch_data_sdk/events/all.h>
+#include <epoch_data_sdk/tools/event_viewer.h>
+#include <spdlog/spdlog.h>
 
 namespace fs = std::filesystem;
 
@@ -64,7 +67,11 @@ static std::vector<Profile> GetProfiles() {
           DateRangeConfig{"2022-11-28", "2025-11-25"}},  // eod
       {"spy_15yr", {"SPY-Stocks"},
           DateRangeConfig{"2024-01-01", "2025-11-28"},  // intraday (1 year)
-          DateRangeConfig{"2010-01-01", "2025-11-28"}}  // eod (15 years)
+          DateRangeConfig{"2010-01-01", "2025-11-28"}},  // eod (15 years)
+      // Pairs trading profile: GLD (Gold ETF) and GDX (Gold Miners ETF) - classically cointegrated
+      {"pairs_trading", {"GLD-Stocks", "GDX-Stocks"},
+          DateRangeConfig{"2024-01-01", "2025-11-28"},  // intraday
+          DateRangeConfig{"2015-01-01", "2025-11-28"}}  // eod (10 years for cointegration analysis)
   };
 }
 
@@ -316,7 +323,7 @@ void SaveEventMarkersAsJson(
 }
 
 // Run test on EpochScript source with output directory
-void RunTest(const std::string& source, const std::string& output_dir, const std::string& selected_profile_name) {
+void RunTest(const std::string& source, const std::string& output_dir, const std::string& selected_profile_name, bool enable_event_viewer = false) {
   // Compile EpochScript source
   auto compiler = std::make_unique<epoch_script::strategy::PythonSource>(source, false);
 
@@ -339,7 +346,7 @@ void RunTest(const std::string& source, const std::string& output_dir, const std
 
   if (it == all_profiles.end()) {
     throw std::runtime_error("Invalid profile: " + selected_profile_name +
-                             ". Must be one of: single_stock, small_index, large_index, moat_analysis, spy_15yr");
+                             ". Must be one of: single_stock, small_index, large_index, moat_analysis, spy_15yr, pairs_trading");
   }
 
   const auto& profile = *it;
@@ -365,22 +372,49 @@ void RunTest(const std::string& source, const std::string& output_dir, const std
   auto factory = epoch_script::data::factory::DataModuleFactory(std::move(dataModuleOption));
   auto database = factory.CreateDatabase();
 
-  // 3. Run database pipeline (load + transform data)
-  database->RunPipeline();
+  // 3. Create progress emitter with optional console event viewer
+  // When viewer is enabled, create a real dispatcher; otherwise use default (null dispatcher)
+  data_sdk::events::IGenericEventDispatcherPtr dispatcher;
+  data_sdk::tools::IEventViewerPtr viewer;
 
-  // 4. Get outputs directly from database
+  if (enable_event_viewer) {
+    // Disable spdlog when viewer is active to avoid interference with FTXUI
+    spdlog::set_level(spdlog::level::off);
+
+    // Create real dispatcher for events
+    dispatcher = data_sdk::events::MakeGenericEventDispatcher();
+    viewer = data_sdk::tools::MakeConsoleEventViewer(dispatcher);
+    viewer->Start();
+  }
+
+  // Create emitter with dispatcher (or null dispatcher if viewer not enabled)
+  data_sdk::events::ScopedProgressEmitter emitter(
+      dispatcher ? dispatcher : data_sdk::events::MakeNullGenericEventDispatcher(),
+      nullptr,  // No cancellation token
+      data_sdk::events::EventPath()  // Root path
+  );
+
+  // 4. Run database pipeline (load + transform data)
+  database->RunPipeline(emitter);
+
+  // 5. Stop the viewer if running
+  if (viewer) {
+    viewer->Stop();
+  }
+
+  // 6. Get outputs directly from database
   auto db_output_data = database->GetTransformedData();
   auto reports = database->GetGeneratedReports();
   auto event_markers = database->GetGeneratedEventMarkers();
 
-  // 5. Validate that at least one output was generated
+  // 7. Validate that at least one output was generated
   bool has_output = !db_output_data.empty() || !reports.empty() || !event_markers.empty();
 
   if (!has_output) {
     throw std::runtime_error("Runtime execution produced no outputs for profile: " + profile.name);
   }
 
-  // 6. Save all outputs
+  // 8. Save all outputs
   SaveTransformedDataAsParquet(output_dir, profile.name, db_output_data);
   SaveReportsAsJson(output_dir, profile.name, reports);
   SaveEventMarkersAsJson(output_dir, profile.name, event_markers);
@@ -403,11 +437,12 @@ std::string ReadCodeFromFile(const std::string& test_case_dir) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc != 2) {
-    std::cerr << "Usage: epoch_test_runner \"<output_dir>\"\n";
+  if (argc < 2 || argc > 3) {
+    std::cerr << "Usage: epoch_test_runner \"<output_dir>\" [--viewer]\n";
     std::cerr << "\n";
     std::cerr << "Arguments:\n";
     std::cerr << "  output_dir  Directory containing test case files and where outputs will be saved\n";
+    std::cerr << "  --viewer    Optional: Enable event viewer to visualize pipeline progress\n";
     std::cerr << "\n";
     std::cerr << "Expected input:\n";
     std::cerr << "  {output_dir}/code.epochscript  EpochScript source code to compile and run\n";
@@ -421,6 +456,7 @@ int main(int argc, char* argv[]) {
   }
 
   const std::string output_dir = argv[1];
+  bool enable_event_viewer = (argc == 3 && std::string(argv[2]) == "--viewer");
 
   try {
     // Read EpochScript code from code.epochscript file
@@ -446,7 +482,7 @@ int main(int argc, char* argv[]) {
     InitializeRuntime();
 
     // Run test with output directory and selected asset config (throws on error)
-    RunTest(epochscript_code, output_dir, metadata.asset_config);
+    RunTest(epochscript_code, output_dir, metadata.asset_config, enable_event_viewer);
 
     // Cleanup runtime
     ShutdownRuntime();

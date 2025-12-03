@@ -46,7 +46,7 @@ YAML::Node makeInputRefSeq(const std::vector<std::string>& cols) {
 // Virtual data generator for creating appropriate test data based on transform requirements
 class VirtualDataGenerator {
 public:
-  static constexpr size_t DEFAULT_NUM_BARS = 100;  // Increased for statistical transforms like HMM
+  static constexpr size_t DEFAULT_NUM_BARS = 300;  // 300 bars to accommodate rolling ML transforms (default window 252)
   static constexpr size_t DEFAULT_NUM_ASSETS = 5;
 
   // Generate varied price data with realistic patterns
@@ -153,26 +153,41 @@ public:
   }
 
   // Get array from IODataType for non-cross-sectional transforms
-  static arrow::ChunkedArrayPtr getArrayFromType(IODataType type, size_t numBars = DEFAULT_NUM_BARS, int64_t maxValue = -1) {
+  // variantIndex: used to generate different patterns for multi-input transforms (0, 1, 2, ...)
+  static arrow::ChunkedArrayPtr getArrayFromType(IODataType type, size_t numBars = DEFAULT_NUM_BARS, int64_t maxValue = -1, size_t variantIndex = 0) {
     switch (type) {
       case IODataType::Any:
       case IODataType::Decimal:
-      case IODataType::Number:
-        return factory::array::make_array(generatePricePattern(numBars, 100.0, 5.0));
+      case IODataType::Number: {
+        // Different base prices and volatilities for each variant to avoid correlation
+        double basePrice = 100.0 + (variantIndex * 30.0);
+        double volatility = 5.0 + (variantIndex * 3.0);
+        // Add phase shift to oscillation for different variants
+        std::vector<double> prices;
+        prices.reserve(numBars);
+        double price = basePrice;
+        for (size_t i = 0; i < numBars; ++i) {
+          double trend = i * 0.1 * (1.0 + variantIndex * 0.2);
+          double oscillation = std::sin(i * 0.3 + variantIndex * 1.5) * volatility;
+          price = basePrice + trend + oscillation;
+          prices.push_back(price);
+        }
+        return factory::array::make_array(prices);
+      }
       case IODataType::Integer: {
         std::vector<int64_t> values(numBars);
         if (maxValue > 0) {
           // Generate values in range [0, maxValue] using modulo for select_N transforms
-          for (size_t i = 0; i < numBars; ++i) values[i] = static_cast<int64_t>(i % (maxValue + 1));
+          for (size_t i = 0; i < numBars; ++i) values[i] = static_cast<int64_t>((i + variantIndex) % (maxValue + 1));
         } else {
-          // Default: sequential values
-          for (size_t i = 0; i < numBars; ++i) values[i] = static_cast<int64_t>(i);
+          // Default: sequential values with offset
+          for (size_t i = 0; i < numBars; ++i) values[i] = static_cast<int64_t>(i + variantIndex * 10);
         }
         return factory::array::make_array(values);
       }
       case IODataType::Boolean: {
         std::vector<bool> values(numBars);
-        for (size_t i = 0; i < numBars; ++i) values[i] = i % 2 == 0;
+        for (size_t i = 0; i < numBars; ++i) values[i] = (i + variantIndex) % 2 == 0;
         return factory::array::make_array(values);
       }
       case IODataType::Timestamp: {
@@ -182,15 +197,24 @@ public:
                                         arrow::default_memory_pool());
         (void)builder.Reserve(numBars);
         for (int64_t i = 0; i < static_cast<int64_t>(numBars); ++i) {
-          builder.UnsafeAppend((start + chrono_hours(1)).count()); // Add hours in nanoseconds
+          builder.UnsafeAppend((start + chrono_hours(1 + variantIndex)).count()); // Add hours in nanoseconds
         }
         std::shared_ptr<arrow::Array> array_temp;
        (void) builder.Finish(&array_temp);
         return std::make_shared<arrow::ChunkedArray>(array_temp);
       }
       default:
-        return factory::array::make_array(std::vector<std::string>(numBars, "test_string"));
+        return factory::array::make_array(std::vector<std::string>(numBars, "test_string_" + std::to_string(variantIndex)));
     }
+  }
+
+  // Generate classifier label array (values in [0, num_classes) range)
+  static arrow::ChunkedArrayPtr getClassifierLabels(size_t numBars, size_t numClasses = 2) {
+    std::vector<int64_t> labels(numBars);
+    for (size_t i = 0; i < numBars; ++i) {
+      labels[i] = static_cast<int64_t>(i % numClasses);
+    }
+    return factory::array::make_array(labels);
   }
 };
 
@@ -235,14 +259,20 @@ TEST_CASE("Transform Metadata Factory") {
   // Generate test data using VirtualDataGenerator (50 bars for better statistical coverage)
   constexpr size_t NUM_TEST_BARS = VirtualDataGenerator::DEFAULT_NUM_BARS;
   const auto dataSources = VirtualDataGenerator::generateSingleAssetData(NUM_TEST_BARS);
-  const auto index = factory::index::date_range(
-      {.start = DateTime::from_date_str("2022-01-01").timestamp(),
-       .periods = static_cast<int64_t>(NUM_TEST_BARS),
-       .offset = factory::offset::hours(6)});
+
+  // Create UTC nanosecond timestamps - Epoch standard is timestamp[ns, tz=UTC]
+  constexpr int64_t BASE_NS = 1640995200000000000LL; // 2022-01-01 00:00:00 UTC in nanoseconds
+  constexpr int64_t DAY_NS = 86400000000000LL;       // nanoseconds per day
+  std::vector<int64_t> timestamps(NUM_TEST_BARS);
+  for (size_t i = 0; i < NUM_TEST_BARS; ++i) {
+    timestamps[i] = BASE_NS + static_cast<int64_t>(i) * DAY_NS;
+  }
+  const auto index = factory::index::make_datetime_index(timestamps, "index", "UTC");
 
   // Use VirtualDataGenerator for creating arrays from types
-  auto getArrayFromType = [&](auto const &type, int64_t maxValue = -1) {
-    return VirtualDataGenerator::getArrayFromType(type, NUM_TEST_BARS, maxValue);
+  // variantIndex parameter creates different data patterns to avoid correlation issues
+  auto getArrayFromType = [&](auto const &type, int64_t maxValue = -1, size_t variantIndex = 0) {
+    return VirtualDataGenerator::getArrayFromType(type, NUM_TEST_BARS, maxValue, variantIndex);
   };
 
   auto makeConfig = [&](auto const &id) {
@@ -329,18 +359,38 @@ TEST_CASE("Transform Metadata Factory") {
         }
         inputs_vec.emplace_back(getArrayFromType(valueType));
       } else {
-        // Default: provide single input for other VARARG transforms
-        config["inputs"][epoch_script::ARG] = makeInputRefSeq({"result"});
-        // Column name needs # prefix to match GetInputId() format
-        fields_vec = {"#result"};
-        inputs_vec.emplace_back(getArrayFromType(metadata.inputs.front().type));
+        // Default: provide 2 inputs for VARARG transforms (some like PCA require at least 2)
+        config["inputs"][epoch_script::ARG] = makeInputRefSeq({"result0", "result1"});
+        // Column names need # prefix to match GetInputId() format
+        fields_vec = {"#result0", "#result1"};
+
+        // Check if this is a classifier transform - needs proper label data
+        bool isClassifier = id.find("classifier") != std::string::npos ||
+                            id.find("logistic") != std::string::npos;
+
+        // Use different variantIndex for each input to generate non-correlated data
+        // This is important for HMM, PCA, and other transforms that fail with identical inputs
+        inputs_vec.emplace_back(getArrayFromType(metadata.inputs.front().type, -1, 0));
+
+        if (isClassifier) {
+          // Classifiers need labels in [0, num_classes) range
+          // Most classifiers default to 2 classes, so use labels 0 and 1
+          inputs_vec.emplace_back(VirtualDataGenerator::getClassifierLabels(NUM_TEST_BARS, 2));
+        } else {
+          inputs_vec.emplace_back(getArrayFromType(metadata.inputs.front().type, -1, 1));
+        }
       }
     } else {
       // Regular transforms with one or more single-connection inputs
       for (auto const &[i, inputMetadata] :
            metadata.inputs | std::views::enumerate) {
         std::string col = std::to_string(i);
-        config["inputs"][inputMetadata.id] = makeInputRef(col);
+        // Use sequence for allowMultipleConnections inputs, single ref otherwise
+        if (inputMetadata.allowMultipleConnections) {
+          config["inputs"][inputMetadata.id] = makeInputRefSeq({col});
+        } else {
+          config["inputs"][inputMetadata.id] = makeInputRef(col);
+        }
         // Column names need # prefix to match GetInputId() format (node_id + "#" + handle)
         fields_vec.emplace_back("#" + col);
 
@@ -350,10 +400,16 @@ TEST_CASE("Transform Metadata Factory") {
           size_t N = std::stoull(id.substr(7)); // Skip "select_" prefix
           inputs_vec.emplace_back(getArrayFromType(inputMetadata.type, N - 1));
         // Special handling for switchN_* transforms: limit index values to valid range [0, N-1]
+        // Also handles switch_type (variable N) by using a default of 2
         } else if (id.starts_with("switch") && inputMetadata.id == "index") {
-          // Extract N from "switchN_type" (e.g., "switch3_timestamp" -> N=3)
           size_t underscorePos = id.find('_');
-          size_t N = std::stoull(id.substr(6, underscorePos - 6)); // Skip "switch" prefix
+          // Check if there's a number between "switch" and "_" (e.g., "switch3_timestamp")
+          // If underscore is at position 6, it's "switch_type" pattern (no N), use default N=2
+          size_t N = 2; // default for switch_type patterns
+          if (underscorePos > 6) {
+            // Extract N from "switchN_type" (e.g., "switch3_timestamp" -> N=3)
+            N = std::stoull(id.substr(6, underscorePos - 6)); // Skip "switch" prefix
+          }
           inputs_vec.emplace_back(getArrayFromType(inputMetadata.type, N - 1));
         // Special handling for static_cast_* transforms: provide input matching output type
         } else if (id == "static_cast_to_integer") {
@@ -380,6 +436,11 @@ TEST_CASE("Transform Metadata Factory") {
                    && inputMetadata.id == "group_key") {
           // Provide String input for groupby key column (common groupby use case)
           inputs_vec.emplace_back(getArrayFromType(IODataType::String));
+        // Special handling for classifier transforms: target/label input needs values in [0, num_classes)
+        } else if ((id.find("classifier") != std::string::npos || id.find("logistic") != std::string::npos)
+                   && (inputMetadata.id == "target" || inputMetadata.id == "label")) {
+          // Classifiers need labels in [0, num_classes) range - default to 2 classes
+          inputs_vec.emplace_back(VirtualDataGenerator::getClassifierLabels(NUM_TEST_BARS, 2));
         } else {
           inputs_vec.emplace_back(getArrayFromType(inputMetadata.type));
         }
@@ -541,6 +602,14 @@ TEST_CASE("Transform Metadata Factory") {
       continue;
     }
 
+    // SKIP: Asset reference transforms - handled specially in execution layer
+    // These transforms filter by asset reference and are processed in OrchestratorImpl,
+    // not via direct TransformData calls. They throw an error if called directly.
+    // Dedicated test: test/unit/transforms/utility/asset_ref_test.cpp
+    if (id.starts_with("asset_ref_passthrough") || id == "is_asset_ref") {
+      continue;
+    }
+
     // =============================================================================
     // TEST EXECUTION - All other transforms should work with auto-generated config
     // The test intelligently provides data sources based on metadata.requiredDataSources
@@ -619,9 +688,23 @@ TEST_CASE("Transform Metadata Factory") {
     } else {
       // Non-cross-sectional: result should have AT LEAST the expected outputs
       // May have more columns due to dual column naming (both raw and #-prefixed)
-      REQUIRE(outputs.size() <= result.num_cols());
+      // Some transforms have dynamic output count based on input dimensions:
+      // - PCA: output count is limited by input dimensions
+      // - Preprocessing (zscore, minmax, robust): output count equals input count
+      bool isPcaFamily = id == "pca" || id.starts_with("pca_") || id == "rolling_pca";
+      bool isPreprocessFamily = id == "ml_zscore" || id == "ml_minmax" || id == "ml_robust" ||
+                                id == "rolling_ml_zscore" || id == "rolling_ml_minmax" ||
+                                id == "rolling_ml_robust";
+      bool hasDynamicOutputs = isPcaFamily || isPreprocessFamily;
+      if (!hasDynamicOutputs) {
+        REQUIRE(outputs.size() <= result.num_cols());
+      }
 
       for (auto const &output : outputs) {
+        // Dynamic output transforms may not produce all declared outputs
+        if (hasDynamicOutputs && !result.contains(transform->GetOutputId(output.id))) {
+          continue;  // Skip outputs that don't exist due to limited input dimensions
+        }
         auto outputCol = transform->GetOutputId(output.id);
         INFO("Output: " << outputCol << "\nresult:\n" << result);
 

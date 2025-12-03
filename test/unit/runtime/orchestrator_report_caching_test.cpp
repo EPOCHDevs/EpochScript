@@ -22,11 +22,19 @@
 #include <trompeloeil.hpp>
 #include <epoch_protos/tearsheet.pb.h>
 #include <epoch_dashboard/tearsheet/tearsheet_builder.h>
+#include <epoch_data_sdk/events/all.h>
 
 using namespace epoch_script::runtime;
 using namespace epoch_script::runtime;
 using namespace epoch_script::runtime::test;
 using namespace epoch_script;
+
+namespace {
+    auto ExecuteWithEmitter(DataFlowRuntimeOrchestrator& orch, TimeFrameAssetDataFrameMap inputData) {
+        data_sdk::events::ScopedProgressEmitter emitter;
+        return orch.ExecutePipeline(std::move(inputData), emitter);
+    }
+}
 
 // Helper to create a dashboard builder with specific content
 epoch_tearsheet::DashboardBuilder CreateDashboardWithCards(int cardCount) {
@@ -84,7 +92,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = epoch_frame::DataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         // GetGeneratedReports should be empty because empty report was not cached
         auto reports = orch.GetGeneratedReports();
@@ -112,7 +120,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = epoch_frame::DataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         // Verify report was cached
         auto reports = orch.GetGeneratedReports();
@@ -146,7 +154,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         inputData[dailyTF.ToString()][msft] = epoch_frame::DataFrame();
         inputData[dailyTF.ToString()][googl] = epoch_frame::DataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         // Verify report cached for ALL assets
         auto reports = orch.GetGeneratedReports();
@@ -186,7 +194,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = epoch_frame::DataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         // Reports should be merged: 2 + 3 = 5 cards total
         auto reports = orch.GetGeneratedReports();
@@ -231,7 +239,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         inputData[dailyTF.ToString()][aapl] = epoch_frame::DataFrame();
         inputData[dailyTF.ToString()][msft] = epoch_frame::DataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         // Each asset should have merged reports from all 3 reporters
         // 1 + 2 + 3 = 6 cards per asset
@@ -265,7 +273,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = epoch_frame::DataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.at(aapl).cards().cards_size() == 12);  // 5 + 7
@@ -295,7 +303,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = epoch_frame::DataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.at(aapl).charts().charts_size() == 7);  // 3 + 4
@@ -325,7 +333,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = epoch_frame::DataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.at(aapl).tables().tables_size() == 5);  // 2 + 3
@@ -364,7 +372,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = epoch_frame::DataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.at(aapl).cards().cards_size() == 2);
@@ -389,7 +397,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = epoch_frame::DataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.empty());
@@ -414,7 +422,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Report Caching", "[.][orchestrator][rep
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = epoch_frame::DataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.at(aapl).cards().cards_size() == 20);

@@ -33,33 +33,38 @@ public:
 
     const Series x = df[GetInputId("x")];
     const Series y = df[GetInputId("y")];
-    std::vector<double> residuals, intercepts;
 
-    residuals.reserve(df.num_rows());
-    intercepts.reserve(df.num_rows());
+    // Create driver DataFrame for rolling_apply (same pattern as engle_granger)
+    auto driver_df = make_dataframe(df.index(), {x.array(), y.array()},
+                                    {GetInputId("x"), GetInputId("y")});
 
-    const Series fitted =
-        x.rolling_apply({.window_size = m_window}).apply([&](const Series &xw) {
-          const Series yw = y.loc(xw.index());
-          hmdf::linfit_v<double, int64_t> visitor;
-          const SeriesSpan<> xs{xw};
-          const SeriesSpan<> ys{yw};
-          run_visit(xw, visitor, xs, ys);
-          residuals.push_back(visitor.get_residual());
-          intercepts.push_back(visitor.get_intercept());
-          return Scalar{visitor.get_slope()};
-        });
+    auto out_df = driver_df.rolling_apply({.window_size = m_window})
+                      .apply([&](const DataFrame &win) {
+                        const Series xw = win[GetInputId("x")];
+                        const Series yw = win[GetInputId("y")];
 
-    auto residualInterceptDF = make_dataframe(
-        fitted.index(),
-        {factory::array::make_array(residuals),
-         factory::array::make_array(intercepts)},
-        {GetOutputId("residual"), GetOutputId("intercept")});
+                        hmdf::linfit_v<double, int64_t> visitor;
+                        const SeriesSpan<> xs{xw};
+                        const SeriesSpan<> ys{yw};
+                        run_visit(xw, visitor, xs, ys);
 
-    return epoch_frame::concat(ConcatOptions{
-        .frames = {residualInterceptDF, fitted.to_frame(GetOutputId("slope"))},
-        .joinType = epoch_frame::JoinType::Outer,
-        .axis = epoch_frame::AxisType::Column});
+                        double slope = visitor.get_slope();
+                        double intercept = visitor.get_intercept();
+                        double residual = visitor.get_residual();
+
+                        auto win_idx = factory::index::make_datetime_index(
+                            {xw.index()->at(-1).to_datetime()}, "", "UTC");
+                        return make_dataframe(
+                            win_idx,
+                            {factory::array::make_array(std::vector<double>{slope}),
+                             factory::array::make_array(std::vector<double>{intercept}),
+                             factory::array::make_array(std::vector<double>{residual})},
+                            {GetOutputId("slope"), GetOutputId("intercept"),
+                             GetOutputId("residual")});
+                      });
+
+    // rolling_apply reindexes to the driver index, padding warm-up rows with nulls
+    return out_df;
   }
 
 private:

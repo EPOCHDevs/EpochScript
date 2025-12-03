@@ -7,7 +7,7 @@
 #include <epoch_script/transforms/core/itransform.h>
 #include <epoch_script/transforms/core/transform_configuration.h>
 #include <epoch_script/transforms/core/transform_registry.h>
-#include "transforms/components/agg.h"
+#include "transforms/components/aggregation/agg.h"
 #include <catch2/catch_test_macros.hpp>
 #include <epoch_core/catch_defs.h>
 #include <epoch_frame/factory/index_factory.h>

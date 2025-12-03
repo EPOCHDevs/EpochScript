@@ -35,6 +35,7 @@
 #include <epoch_frame/factory/index_factory.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+#include <epoch_data_sdk/events/all.h>
 
 #include "epoch_script/core/bar_attribute.h"
 
@@ -44,6 +45,13 @@ using namespace epoch_script;
 using namespace epoch_script::transform;
 using namespace std::chrono_literals;
 using namespace epoch_frame;
+
+namespace {
+    auto ExecuteWithEmitter(DataFlowRuntimeOrchestrator& orch, TimeFrameAssetDataFrameMap inputData) {
+        data_sdk::events::ScopedProgressEmitter emitter;
+        return orch.ExecutePipeline(std::move(inputData), emitter);
+    }
+}
 
 // ============================================================================
 // MARKET DATA SOURCE TESTS
@@ -68,7 +76,8 @@ ma = sma(period=3)(c)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 102.0, 104.0, 106.0, 108.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         REQUIRE(results.contains(dailyTF.ToString()));
         REQUIRE(results[dailyTF.ToString()].contains(aapl));
@@ -76,11 +85,11 @@ ma = sma(period=3)(c)
         auto aapl_df = results[dailyTF.ToString()][aapl];
         REQUIRE(aapl_df.contains("ma#result"));
 
-        auto sma = aapl_df["ma#result"].drop_null();
-        REQUIRE(sma.size() >= 3);
-        REQUIRE(sma.iloc(0).as_double() == Catch::Approx(102.0));
-        REQUIRE(sma.iloc(1).as_double() == Catch::Approx(104.0));
-        REQUIRE(sma.iloc(2).as_double() == Catch::Approx(106.0));
+        auto sma_ = aapl_df["ma#result"].drop_null();
+        REQUIRE(sma_.size() >= 3);
+        REQUIRE(sma_.iloc(0).as_double() == Catch::Approx(102.0));
+        REQUIRE(sma_.iloc(1).as_double() == Catch::Approx(104.0));
+        REQUIRE(sma_.iloc(2).as_double() == Catch::Approx(106.0));
     }
 
     SECTION("Boolean comparison on close") {
@@ -96,8 +105,8 @@ signal = gte()(c, 105)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 103.0, 105.0, 107.0, 110.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto aapl_df = results[dailyTF.ToString()][aapl];
         REQUIRE(aapl_df.contains("signal#result"));
 
@@ -122,8 +131,8 @@ doubled = mul()(c, 2)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 150.0, 200.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto aapl_df = results[dailyTF.ToString()][aapl];
         REQUIRE(aapl_df.contains("doubled#result"));
 
@@ -149,7 +158,8 @@ result = add()(c, 10)
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 101.0, 102.0});
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 201.0, 202.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto aapl_df = results[dailyTF.ToString()][aapl];
         auto msft_df = results[dailyTF.ToString()][msft];
@@ -188,8 +198,8 @@ doubled = mul()(amt, 2)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateDividendData(5, 0.25);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         REQUIRE(results.contains(dailyTF.ToString()));
         REQUIRE(results[dailyTF.ToString()].contains(aapl));
 
@@ -223,8 +233,8 @@ threshold = gte()(ratio, 30)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateShortVolumeData(5);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         REQUIRE(results.contains(dailyTF.ToString()));
         auto aapl_df = results[dailyTF.ToString()][aapl];
         REQUIRE(aapl_df.contains("threshold#result"));
@@ -259,8 +269,8 @@ scaled = div()(si, 1000000)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateShortInterestData(5, 5000000);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         REQUIRE(results.contains(dailyTF.ToString()));
         auto aapl_df = results[dailyTF.ToString()][aapl];
         REQUIRE(aapl_df.contains("scaled#result"));
@@ -293,8 +303,8 @@ net_cash = sub()(cash, debt)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateBalanceSheetData(4, 10000000.0);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         REQUIRE(results.contains(dailyTF.ToString()));
         auto aapl_df = results[dailyTF.ToString()][aapl];
         REQUIRE(aapl_df.contains("net_cash#result"));
@@ -330,8 +340,8 @@ margin = div()(net_income, revenue)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateIncomeStatementData(4);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         REQUIRE(results.contains(dailyTF.ToString()));
         auto aapl_df = results[dailyTF.ToString()][aapl];
         REQUIRE(aapl_df.contains("margin#result"));
@@ -364,8 +374,8 @@ fcf = add()(cfo, capex)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateCashFlowData(4, 20000000.0);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         REQUIRE(results.contains(dailyTF.ToString()));
         auto aapl_df = results[dailyTF.ToString()][aapl];
         REQUIRE(aapl_df.contains("fcf#result"));
@@ -397,8 +407,8 @@ cheap = lte()(pe, 18)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateFinancialRatiosData(5, 20.0);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         REQUIRE(results.contains(dailyTF.ToString()));
         auto aapl_df = results[dailyTF.ToString()][aapl];
         REQUIRE(aapl_df.contains("cheap#result"));
@@ -440,8 +450,8 @@ high_inflation = gte()(val, 3.5)
         // Category must match what's in the Python code: economic_indicator(category="CPI", ...)
         inputData[dailyTF.ToString()][aapl] = CreateEconomicIndicatorData("CPI", 5, 3.0);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         REQUIRE(results.contains(dailyTF.ToString()));
         auto aapl_df = results[dailyTF.ToString()][aapl];
         REQUIRE(aapl_df.contains("high_inflation#result"));
@@ -480,8 +490,8 @@ sentiment = finbert_sentiment()(title)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateNewsData(3);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         REQUIRE(results.contains(dailyTF.ToString()));
         REQUIRE(results[dailyTF.ToString()].contains(aapl));
 
@@ -516,8 +526,8 @@ ratio = div()(split_to, split_from)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateSplitsData(3);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         REQUIRE(results.contains(dailyTF.ToString()));
         REQUIRE(results[dailyTF.ToString()].contains(aapl));
 
@@ -555,8 +565,8 @@ signal = gte()(c, 105)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 103.0, 105.0, 107.0, 110.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         REQUIRE(results.contains(dailyTF.ToString()));
         auto aapl_df = results[dailyTF.ToString()][aapl];
         REQUIRE(aapl_df.contains("signal#result"));

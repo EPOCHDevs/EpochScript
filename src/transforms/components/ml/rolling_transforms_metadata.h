@@ -7,8 +7,8 @@
 // - Rolling LIBLINEAR (logistic_l1, logistic_l2, svr_l1, svr_l2)
 // - Rolling Preprocessors (ml_zscore, ml_minmax, ml_robust)
 // - Rolling Clustering (kmeans_2-5, dbscan)
-// - Rolling Decomposition (pca, ica)
-// - Rolling Probabilistic (gmm_2-5, hmm_2-5)
+// - Rolling Decomposition (pca_2-6) - ICA removed as redundant with PCA
+// - Rolling Probabilistic (hmm_2-5) - GMM removed as redundant with HMM
 //
 
 #include <epoch_script/transforms/core/metadata.h>
@@ -312,9 +312,13 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingMLPr
     };
   };
 
+  // Dynamic outputs - one scaled column per input (matches non-rolling ml_preprocess)
   auto makePreprocessOutputs = []() -> std::vector<epoch_script::transforms::IOMetaData> {
     return {
-      {epoch_core::IODataType::Decimal, "SLOT", "Normalized Features", true, false}
+      {epoch_core::IODataType::Decimal, "scaled_0", "Scaled Feature 0", true, false},
+      {epoch_core::IODataType::Decimal, "scaled_1", "Scaled Feature 1", true, false},
+      {epoch_core::IODataType::Decimal, "scaled_2", "Scaled Feature 2", true, false},
+      {epoch_core::IODataType::Decimal, "scaled_3", "Scaled Feature 3", true, false}
     };
   };
 
@@ -400,14 +404,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingClus
         .defaultValue = MetaDataOptionDefinition(1000.0),
         .min = 10,
         .max = 10000,
-        .desc = "Maximum number of K-Means iterations"
-      },
-      MetaDataOption{
-        .id = "compute_zscore",
-        .name = "Z-Score Normalization",
-        .type = epoch_core::MetaDataOptionType::Boolean,
-        .defaultValue = MetaDataOptionDefinition(true),
-        .desc = "Standardize features before clustering"
+        .desc = "Maximum Lloyd's algorithm iterations. 1000 is usually sufficient for convergence."
       }
     };
   };
@@ -449,7 +446,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingClus
       .tags = {"kmeans", "ml", "clustering", "rolling", "adaptive", "regime"},
       .requiresTimeFrame = false,
       .strategyTypes = {"regime-based", "adaptive-strategy"},
-      .relatedTransforms = {"kmeans_" + std::to_string(k), "rolling_gmm_" + std::to_string(k)},
+      .relatedTransforms = {"kmeans_" + std::to_string(k), "rolling_hmm_" + std::to_string(k)},
       .usageContext = "Use for adaptive regime detection where cluster definitions evolve over time.",
       .limitations = "Higher computational cost. Clusters may shift between windows."
     });
@@ -469,7 +466,8 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingClus
         .defaultValue = MetaDataOptionDefinition(0.5),
         .min = 0.001,
         .max = 10.0,
-        .desc = "Maximum distance for two points to be neighbors"
+        .desc = "Maximum Euclidean distance for points to be neighbors. Lower values find tighter clusters, "
+                "higher values merge clusters. Default 0.5 works for z-score normalized data."
       },
       MetaDataOption{
         .id = "min_points",
@@ -478,24 +476,18 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingClus
         .defaultValue = MetaDataOptionDefinition(5.0),
         .min = 2,
         .max = 100,
-        .desc = "Minimum points required to form a dense region"
-      },
-      MetaDataOption{
-        .id = "compute_zscore",
-        .name = "Z-Score Normalization",
-        .type = epoch_core::MetaDataOptionType::Boolean,
-        .defaultValue = MetaDataOptionDefinition(true),
-        .desc = "Standardize features before clustering"
+        .desc = "Minimum neighbors required to form a core point. Higher values ignore sparse regions. "
+                "Default 5 balances noise resistance with cluster detection."
       }
     }),
     .isCrossSectional = false,
     .desc = "Rolling window DBSCAN clustering for adaptive anomaly detection. "
-            "Number of clusters adapts to data density.",
+            "Number of clusters adapts to data density. Points not in any cluster are marked as anomalies.",
     .inputs = makeClusteringInputs(),
     .outputs = {
-      {epoch_core::IODataType::Integer, "cluster_label", "Cluster Label (-1 for noise)", true, false},
-      {epoch_core::IODataType::Integer, "is_anomaly", "Is Anomaly (1=noise, 0=in cluster)", true, false},
-      {epoch_core::IODataType::Integer, "cluster_count", "Total Clusters Found", true, false}
+      {epoch_core::IODataType::Integer, "cluster_label", "Cluster assignment (-1 = noise/anomaly, 0+ = cluster index)", true, false},
+      {epoch_core::IODataType::Boolean, "is_anomaly", "True if point classified as noise (cluster_label == -1)", true, false},
+      {epoch_core::IODataType::Integer, "cluster_count", "Number of distinct clusters found (excluding noise)", true, false}
     },
     .atLeastOneInputRequired = true,
     .tags = {"dbscan", "ml", "clustering", "rolling", "anomaly", "adaptive"},
@@ -510,179 +502,85 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingClus
 }
 
 // =============================================================================
-// Rolling Decomposition Metadata (PCA, ICA)
+// Rolling Decomposition Metadata (PCA only - ICA removed as redundant)
 // =============================================================================
 
 inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingDecompositionMetaData() {
   std::vector<epoch_script::transforms::TransformsMetaData> metadataList;
 
-  auto makeDecompositionInputs = []() -> std::vector<epoch_script::transforms::IOMetaData> {
+  // PCA uses SLOT (variadic) inputs - accepts any number of features
+  // The N in rolling_pca_N refers to max components extracted, not required inputs
+  auto makePCAInputs = []() -> std::vector<epoch_script::transforms::IOMetaData> {
     return {
       {epoch_core::IODataType::Number, "SLOT", "Features", true, false}
     };
   };
 
-  // Rolling PCA
-  metadataList.emplace_back(epoch_script::transforms::TransformsMetaData{
-    .id = "rolling_pca",
-    .category = epoch_core::TransformCategory::ML,
-    .plotKind = epoch_core::TransformPlotKind::panel_line,
-    .name = "Rolling PCA",
-    .options = CombineWithRollingOptions({
-      MetaDataOption{
-        .id = "n_components",
-        .name = "Number of Components",
-        .type = epoch_core::MetaDataOptionType::Integer,
-        .defaultValue = MetaDataOptionDefinition(0.0),
-        .min = 0,
-        .max = 100,
-        .desc = "Number of components to keep (0 = keep all)"
-      },
-      MetaDataOption{
-        .id = "variance_retained",
-        .name = "Variance Retained",
-        .type = epoch_core::MetaDataOptionType::Decimal,
-        .defaultValue = MetaDataOptionDefinition(0.0),
-        .min = 0.0,
-        .max = 1.0,
-        .desc = "Keep components to retain this fraction of variance"
-      },
-      MetaDataOption{
-        .id = "scale_data",
-        .name = "Scale Data",
-        .type = epoch_core::MetaDataOptionType::Boolean,
-        .defaultValue = MetaDataOptionDefinition(true),
-        .desc = "Standardize features before PCA"
-      }
-    }),
-    .isCrossSectional = false,
-    .desc = "Rolling window Principal Component Analysis. Recomputes principal components as new data "
-            "arrives, adapting factor loadings to current market structure.",
-    .inputs = makeDecompositionInputs(),
-    .outputs = {
-      {epoch_core::IODataType::Decimal, "pc_0", "Principal Component 0", true, false},
-      {epoch_core::IODataType::Decimal, "pc_1", "Principal Component 1", true, false},
-      {epoch_core::IODataType::Decimal, "pc_2", "Principal Component 2", true, false},
-      {epoch_core::IODataType::Decimal, "pc_3", "Principal Component 3", true, false},
-      {epoch_core::IODataType::Decimal, "pc_4", "Principal Component 4", true, false},
-      {epoch_core::IODataType::Decimal, "explained_variance_ratio", "Cumulative Explained Variance", true, false}
-    },
-    .atLeastOneInputRequired = true,
-    .tags = {"pca", "ml", "decomposition", "rolling", "factor", "adaptive"},
-    .requiresTimeFrame = false,
-    .strategyTypes = {"factor-investing", "risk-decomposition", "adaptive-strategy"},
-    .relatedTransforms = {"pca", "rolling_ica"},
-    .usageContext = "Use for adaptive factor extraction where loadings evolve over time.",
-    .limitations = "Component interpretations may shift between windows. Sign flips possible."
-  });
+  auto makePCAOutputs = [](int n) -> std::vector<epoch_script::transforms::IOMetaData> {
+    std::vector<epoch_script::transforms::IOMetaData> outputs;
+    outputs.reserve(n + 1);
+    for (int i = 0; i < n; ++i) {
+      outputs.push_back({
+        epoch_core::IODataType::Decimal,
+        "pc_" + std::to_string(i),
+        "Principal Component " + std::to_string(i),
+        true,
+        false
+      });
+    }
+    outputs.push_back({
+      epoch_core::IODataType::Decimal,
+      "explained_variance_ratio",
+      "Cumulative Explained Variance",
+      true,
+      false
+    });
+    return outputs;
+  };
 
-  // Rolling ICA
-  metadataList.emplace_back(epoch_script::transforms::TransformsMetaData{
-    .id = "rolling_ica",
-    .category = epoch_core::TransformCategory::ML,
-    .plotKind = epoch_core::TransformPlotKind::panel_line,
-    .name = "Rolling ICA",
-    .options = CombineWithRollingOptions({
-      MetaDataOption{
-        .id = "noise_std_dev",
-        .name = "Noise Std Dev",
-        .type = epoch_core::MetaDataOptionType::Decimal,
-        .defaultValue = MetaDataOptionDefinition(0.175),
-        .min = 0.01,
-        .max = 1.0,
-        .desc = "Standard deviation of Gaussian noise for RADICAL algorithm"
-      },
-      MetaDataOption{
-        .id = "replicates",
-        .name = "Replicates",
-        .type = epoch_core::MetaDataOptionType::Integer,
-        .defaultValue = MetaDataOptionDefinition(30.0),
-        .min = 5,
-        .max = 100,
-        .desc = "Number of perturbed replicates per data point"
-      },
-      MetaDataOption{
-        .id = "angles",
-        .name = "Angles",
-        .type = epoch_core::MetaDataOptionType::Integer,
-        .defaultValue = MetaDataOptionDefinition(150.0),
-        .min = 30,
-        .max = 500,
-        .desc = "Number of angles to consider in rotation search"
-      }
-    }),
-    .isCrossSectional = false,
-    .desc = "Rolling window Independent Component Analysis. Separates mixed signals into independent "
-            "sources that adapt to current market dynamics.",
-    .inputs = makeDecompositionInputs(),
-    .outputs = {
-      {epoch_core::IODataType::Decimal, "ic_0", "Independent Component 0", true, false},
-      {epoch_core::IODataType::Decimal, "ic_1", "Independent Component 1", true, false},
-      {epoch_core::IODataType::Decimal, "ic_2", "Independent Component 2", true, false},
-      {epoch_core::IODataType::Decimal, "ic_3", "Independent Component 3", true, false},
-      {epoch_core::IODataType::Decimal, "ic_4", "Independent Component 4", true, false}
-    },
-    .atLeastOneInputRequired = true,
-    .tags = {"ica", "ml", "decomposition", "rolling", "factor", "adaptive"},
-    .requiresTimeFrame = false,
-    .strategyTypes = {"factor-investing", "signal-separation", "adaptive-strategy"},
-    .relatedTransforms = {"ica", "rolling_pca"},
-    .usageContext = "Use for adaptive independent source separation.",
-    .limitations = "Higher computational cost. Component ordering may change between windows."
-  });
+  // Rolling PCA variants (N = 2 to 6)
+  for (int n = 2; n <= 6; ++n) {
+    const std::string suffix = "_" + std::to_string(n);
+
+    metadataList.emplace_back(epoch_script::transforms::TransformsMetaData{
+      .id = "rolling_pca" + suffix,
+      .category = epoch_core::TransformCategory::ML,
+      .plotKind = epoch_core::TransformPlotKind::panel_line,
+      .name = "Rolling PCA (" + std::to_string(n) + " components)",
+      .options = CombineWithRollingOptions({
+        MetaDataOption{
+          .id = "scale_data",
+          .name = "Scale Data",
+          .type = epoch_core::MetaDataOptionType::Boolean,
+          .defaultValue = MetaDataOptionDefinition(true),
+          .desc = "Standardize features before PCA"
+        }
+      }),
+      .isCrossSectional = false,
+      .desc = "Rolling window PCA with " + std::to_string(n) + " principal components. "
+              "Recomputes factor loadings as the window advances, adapting to evolving market structure.",
+      .inputs = makePCAInputs(),
+      .outputs = makePCAOutputs(n),
+      .atLeastOneInputRequired = true,
+      .tags = {"pca", "ml", "decomposition", "rolling", "factor", "adaptive"},
+      .requiresTimeFrame = false,
+      .strategyTypes = {"factor-investing", "risk-decomposition", "adaptive-strategy"},
+      .relatedTransforms = {"pca"},
+      .usageContext = "Use for adaptive " + std::to_string(n) + "-factor extraction where loadings evolve over time. "
+                      "Common uses: yield curve (3), equity factors (5-6).",
+      .limitations = "Component interpretations may shift between windows. Sign flips possible."
+    });
+  }
 
   return metadataList;
 }
 
 // =============================================================================
-// Rolling Probabilistic Metadata (GMM, HMM)
+// Rolling Probabilistic Metadata (HMM only - GMM removed as redundant)
 // =============================================================================
 
 inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingProbabilisticMetaData() {
   std::vector<epoch_script::transforms::TransformsMetaData> metadataList;
-
-  auto makeGMMOptions = []() -> MetaDataOptionList {
-    return {
-      MetaDataOption{
-        .id = "max_iterations",
-        .name = "Max Iterations",
-        .type = epoch_core::MetaDataOptionType::Integer,
-        .defaultValue = MetaDataOptionDefinition(300.0),
-        .min = 10,
-        .max = 10000,
-        .desc = "Maximum number of EM iterations"
-      },
-      MetaDataOption{
-        .id = "tolerance",
-        .name = "Convergence Tolerance",
-        .type = epoch_core::MetaDataOptionType::Decimal,
-        .defaultValue = MetaDataOptionDefinition(1e-10),
-        .min = 1e-15,
-        .max = 1e-3,
-        .desc = "Convergence tolerance for EM algorithm"
-      },
-      MetaDataOption{
-        .id = "trials",
-        .name = "EM Restarts",
-        .type = epoch_core::MetaDataOptionType::Integer,
-        .defaultValue = MetaDataOptionDefinition(1.0),
-        .min = 1,
-        .max = 10,
-        .desc = "Number of EM algorithm restarts"
-      },
-      MetaDataOption{
-        .id = "covariance_type",
-        .name = "Covariance Type",
-        .type = epoch_core::MetaDataOptionType::Select,
-        .defaultValue = MetaDataOptionDefinition(std::string("full")),
-        .selectOption = {
-          {"Full", "full"},
-          {"Diagonal", "diagonal"}
-        },
-        .desc = "Covariance matrix type"
-      }
-    };
-  };
 
   auto makeHMMOptions = []() -> MetaDataOptionList {
     return {
@@ -693,7 +591,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingProb
         .defaultValue = MetaDataOptionDefinition(300.0),
         .min = 10,
         .max = 10000,
-        .desc = "Maximum number of EM (Baum-Welch) iterations"
+        .desc = "Maximum Baum-Welch iterations. 300 is usually sufficient for convergence."
       },
       MetaDataOption{
         .id = "tolerance",
@@ -702,7 +600,8 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingProb
         .defaultValue = MetaDataOptionDefinition(1e-10),
         .min = 1e-15,
         .max = 1e-3,
-        .desc = "Convergence tolerance for Baum-Welch algorithm"
+        .desc = "Stops training when log-likelihood improvement < tolerance. Default 1e-10 ensures thorough convergence. "
+                "Larger values (1e-6) train faster but may underfit transition probabilities."
       }
     };
   };
@@ -711,21 +610,6 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingProb
     return {
       {epoch_core::IODataType::Number, "SLOT", "Features", true, false}
     };
-  };
-
-  auto makeGMMOutputs = [](size_t n) -> std::vector<epoch_script::transforms::IOMetaData> {
-    std::vector<epoch_script::transforms::IOMetaData> outputs;
-    outputs.push_back({epoch_core::IODataType::Integer, "component", "Component", true, false});
-    for (size_t c = 0; c < n; ++c) {
-      outputs.push_back({
-        epoch_core::IODataType::Decimal,
-        "component_" + std::to_string(c) + "_prob",
-        "Component " + std::to_string(c) + " Probability",
-        true, false
-      });
-    }
-    outputs.push_back({epoch_core::IODataType::Decimal, "log_likelihood", "Log Likelihood", true, false});
-    return outputs;
   };
 
   auto makeHMMOutputs = [](size_t n) -> std::vector<epoch_script::transforms::IOMetaData> {
@@ -741,29 +625,6 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingProb
     }
     return outputs;
   };
-
-  // Rolling GMM 2-5 components
-  for (size_t n = 2; n <= 5; ++n) {
-    metadataList.emplace_back(epoch_script::transforms::TransformsMetaData{
-      .id = "rolling_gmm_" + std::to_string(n),
-      .category = epoch_core::TransformCategory::ML,
-      .plotKind = epoch_core::TransformPlotKind::gmm,
-      .name = "Rolling GMM (" + std::to_string(n) + " Components)",
-      .options = CombineWithRollingOptions(makeGMMOptions()),
-      .isCrossSectional = false,
-      .desc = "Rolling window Gaussian Mixture Model with " + std::to_string(n) + " components. "
-              "Adapts mixture distributions to evolving market conditions.",
-      .inputs = makeProbabilisticInputs(),
-      .outputs = makeGMMOutputs(n),
-      .atLeastOneInputRequired = true,
-      .tags = {"gmm", "ml", "clustering", "rolling", "probabilistic", "regime"},
-      .requiresTimeFrame = false,
-      .strategyTypes = {"regime-based", "anomaly-detection", "adaptive-strategy"},
-      .relatedTransforms = {"gmm_" + std::to_string(n), "rolling_hmm_" + std::to_string(n)},
-      .usageContext = "Use for adaptive probabilistic regime detection.",
-      .limitations = "Component labels may swap between windows. Higher computational cost."
-    });
-  }
 
   // Rolling HMM 2-5 states
   for (size_t n = 2; n <= 5; ++n) {
@@ -782,7 +643,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeRollingProb
       .tags = {"hmm", "ml", "sequence", "rolling", "probabilistic", "regime"},
       .requiresTimeFrame = false,
       .strategyTypes = {"regime-based", "sequential", "adaptive-strategy"},
-      .relatedTransforms = {"hmm_" + std::to_string(n), "rolling_gmm_" + std::to_string(n)},
+      .relatedTransforms = {"hmm_" + std::to_string(n), "rolling_kmeans_" + std::to_string(n)},
       .usageContext = "Use for adaptive sequential regime detection with temporal dependencies.",
       .limitations = "State labels may swap between windows. Higher computational cost."
     });

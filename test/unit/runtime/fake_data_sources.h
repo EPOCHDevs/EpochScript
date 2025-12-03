@@ -50,6 +50,9 @@ inline std::vector<int64_t> CreateTimestampsNS(int numDays, int dayMultiplier = 
  * @brief Create OHLCV market data (o, h, l, c, v columns)
  * Used by: market_data_source
  * @param closeValues Vector of close prices to derive OHLCV from
+ *
+ * Alternates between bullish (open < close) and bearish (open > close) candles
+ * to ensure ML classifiers have both classes when using c >= o as labels.
  */
 inline DataFrame CreateOHLCVData(const std::vector<double>& closeValues) {
     auto& C = EpochStratifyXConstants::instance();
@@ -58,9 +61,17 @@ inline DataFrame CreateOHLCVData(const std::vector<double>& closeValues) {
 
     for (size_t i = 0; i < closeValues.size(); ++i) {
         double close = closeValues[i];
-        opens.push_back(close * 0.99);
-        highs.push_back(close * 1.01);
-        lows.push_back(close * 0.98);
+        // Alternate between bullish (open < close) and bearish (open > close)
+        // to ensure binary classification tests have both classes
+        if (i % 3 == 0) {
+            // Bearish candle: open > close
+            opens.push_back(close * 1.01);
+        } else {
+            // Bullish candle: open < close
+            opens.push_back(close * 0.99);
+        }
+        highs.push_back(close * 1.02);
+        lows.push_back(close * 0.97);
         closes.push_back(close);
         volumes.push_back(1000000.0 + (i * 10000.0));
     }

@@ -2,14 +2,15 @@
 //
 // Rolling Window Iterator for ML Transforms
 //
-// Provides shared window iteration logic for all rolling ML transforms.
-// Supports both rolling (fixed window) and expanding (cumulative) modes.
+// Provides walk-forward validation window generation for ML transforms.
+// Generates train/predict window pairs for rolling or expanding windows.
 //
-#include "epoch_frame/dataframe.h"
+#include <epoch_frame/index.h>
 #include <cstddef>
 #include <vector>
 #include <functional>
 #include <stdexcept>
+
 
 namespace epoch_script::transform::ml_utils {
 
@@ -22,7 +23,11 @@ enum class WindowType {
 };
 
 /**
- * @brief Window specification for a single iteration
+ * @brief Window specification for a single ML iteration
+ *
+ * Extends epoch_frame's WindowBound with prediction semantics:
+ * - train_start/train_end: The training window (from epoch_frame)
+ * - predict_start/predict_end: The prediction window (rows after training)
  */
 struct WindowSpec {
   size_t train_start;      // Start index of training window (inclusive)
@@ -44,20 +49,18 @@ struct WindowSpec {
 };
 
 /**
- * @brief Generates rolling/expanding window specifications
+ * @brief ML Rolling Window Iterator using epoch_frame infrastructure
  *
- * This is the shared iteration logic used by all rolling ML transforms.
- * Avoids duplication of the window calculation loop.
+ * Wraps epoch_frame::window::RollingWindow or ExpandingWindow
+ * and adds train/predict semantics for ML walk-forward validation.
  *
  * For Rolling mode:
  *   Window 0: train [0, window_size), predict [window_size, window_size + step_size)
  *   Window 1: train [step_size, window_size + step_size), predict [window_size + step_size, ...)
- *   ...
  *
  * For Expanding mode:
  *   Window 0: train [0, min_window), predict [min_window, min_window + step_size)
  *   Window 1: train [0, min_window + step_size), predict [min_window + step_size, ...)
- *   ...
  */
 class RollingWindowIterator {
 public:
@@ -92,19 +95,15 @@ public:
                                std::to_string(total_rows) + ")");
     }
 
-    // Calculate total number of windows
-    size_t remaining = total_rows - window_size;
-    m_total_windows = (remaining / step_size) + 1;
-    if (remaining % step_size != 0) {
-      m_total_windows++;  // Partial final window
-    }
+    // Use epoch_frame's window generators to get bounds
+    GenerateMLWindowBounds();
   }
 
   /**
    * @brief Check if there are more windows to process
    */
   [[nodiscard]] bool HasNext() const {
-    return m_current_position < m_total_windows;
+    return m_current_position < m_window_specs.size();
   }
 
   /**
@@ -114,41 +113,13 @@ public:
     if (!HasNext()) {
       throw std::runtime_error("RollingWindowIterator: No more windows");
     }
-
-    WindowSpec spec;
-    spec.iteration_index = m_current_position;
-
-    size_t offset = m_current_position * m_step_size;
-
-    if (m_type == WindowType::Rolling) {
-      // Fixed-size sliding window
-      spec.train_start = offset;
-      spec.train_end = offset + m_window_size;
-    } else {
-      // Expanding window from start
-      spec.train_start = 0;
-      spec.train_end = m_window_size + offset;
-    }
-
-    // Prediction window starts after training ends
-    spec.predict_start = spec.train_end;
-    spec.predict_end = std::min(spec.predict_start + m_step_size, m_total_rows);
-
-    // Handle edge case: last window may have fewer prediction points
-    if (spec.predict_end > m_total_rows) {
-      spec.predict_end = m_total_rows;
-    }
-
-    spec.is_final = (m_current_position == m_total_windows - 1);
-
-    m_current_position++;
-    return spec;
+    return m_window_specs[m_current_position++];
   }
 
   /**
    * @brief Get total number of windows
    */
-  [[nodiscard]] size_t TotalWindows() const { return m_total_windows; }
+  [[nodiscard]] size_t TotalWindows() const { return m_window_specs.size(); }
 
   /**
    * @brief Get window size
@@ -189,7 +160,76 @@ private:
   size_t m_step_size;
   WindowType m_type;
   size_t m_current_position;
-  size_t m_total_windows;
+  std::vector<WindowSpec> m_window_specs;
+
+  /**
+   * @brief Generate ML window bounds for walk-forward validation
+   *
+   * For Rolling mode:
+   *   Window 0: train [0, window_size), predict [window_size, window_size + step_size)
+   *   Window 1: train [step_size, window_size + step_size), predict [window_size + step_size, ...]
+   *   ...
+   *
+   * For Expanding mode:
+   *   Window 0: train [0, window_size), predict [window_size, window_size + step_size)
+   *   Window 1: train [0, window_size + step_size), predict [window_size + step_size, ...]
+   *   ...
+   */
+  void GenerateMLWindowBounds() {
+    // Calculate how many prediction windows we can generate
+    // First prediction starts at index window_size
+    if (m_window_size >= m_total_rows) {
+      return;  // No room for prediction
+    }
+
+    const size_t first_predict_idx = m_window_size;
+    const size_t num_predict_rows = m_total_rows - first_predict_idx;
+
+    // Number of windows = ceil(num_predict_rows / step_size)
+    const size_t num_windows = (num_predict_rows + m_step_size - 1) / m_step_size;
+
+    m_window_specs.reserve(num_windows);
+
+    for (size_t w = 0; w < num_windows; ++w) {
+      size_t train_start, train_end, predict_start, predict_end;
+
+      if (m_type == WindowType::Rolling) {
+        // Rolling: fixed-size window that slides
+        // Window w starts training at w * step_size
+        train_start = w * m_step_size;
+        train_end = train_start + m_window_size;
+      } else {
+        // Expanding: train from beginning, window grows
+        train_start = 0;
+        train_end = m_window_size + w * m_step_size;
+      }
+
+      // Prediction starts right after training window
+      predict_start = train_end;
+      predict_end = std::min(predict_start + m_step_size, m_total_rows);
+
+      // Validate bounds
+      if (train_end > m_total_rows || predict_start >= m_total_rows) {
+        break;
+      }
+
+      WindowSpec spec{
+        .train_start = train_start,
+        .train_end = train_end,
+        .predict_start = predict_start,
+        .predict_end = predict_end,
+        .iteration_index = m_window_specs.size(),
+        .is_final = false
+      };
+
+      m_window_specs.push_back(spec);
+    }
+
+    // Mark the last window as final
+    if (!m_window_specs.empty()) {
+      m_window_specs.back().is_final = true;
+    }
+  }
 };
 
 /**

@@ -37,12 +37,21 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeKMeansMetaD
         .desc = "Standardize features before clustering"
       },
       MetaDataOption{
-        .id = "lookback_window",
-        .name = "Lookback Window",
+        .id = "split_ratio",
+        .name = "Training Split Ratio",
+        .type = epoch_core::MetaDataOptionType::Decimal,
+        .defaultValue = MetaDataOptionDefinition(1.0),
+        .min = 0.1,
+        .max = 1.0,
+        .desc = "Ratio of data to use for training (1.0 = all data for research mode)"
+      },
+      MetaDataOption{
+        .id = "split_gap",
+        .name = "Purge Gap",
         .type = epoch_core::MetaDataOptionType::Integer,
         .defaultValue = MetaDataOptionDefinition(0.0),
         .min = 0,
-        .desc = "Number of bars for training (0 = use all data for research mode)"
+        .desc = "Gap between training and test data (Marcos López de Prado purging)"
       }
     };
   };
@@ -84,7 +93,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeKMeansMetaD
       .tags = {"kmeans", "ml", "clustering", "unsupervised", "regime"},
       .requiresTimeFrame = false,
       .strategyTypes = {"regime-based", "clustering", "risk-parity"},
-      .relatedTransforms = {"gmm_" + std::to_string(k), "hmm_" + std::to_string(k), "dbscan"},
+      .relatedTransforms = {"hmm_" + std::to_string(k), "dbscan"},
       .usageContext = "Use for regime detection with fixed number of clusters. Distance to each centroid helps "
                       "measure regime certainty. Best when clusters are spherical and roughly equal sized.",
       .limitations = "Requires specifying K upfront. Sensitive to initialization. Assumes spherical clusters. "
@@ -142,12 +151,21 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeDBSCANMetaD
         .desc = "Standardize features before clustering"
       },
       MetaDataOption{
-        .id = "lookback_window",
-        .name = "Lookback Window",
+        .id = "split_ratio",
+        .name = "Training Split Ratio",
+        .type = epoch_core::MetaDataOptionType::Decimal,
+        .defaultValue = MetaDataOptionDefinition(1.0),
+        .min = 0.1,
+        .max = 1.0,
+        .desc = "Ratio of data to use for training (1.0 = all data for research mode)"
+      },
+      MetaDataOption{
+        .id = "split_gap",
+        .name = "Purge Gap",
         .type = epoch_core::MetaDataOptionType::Integer,
         .defaultValue = MetaDataOptionDefinition(0.0),
         .min = 0,
-        .desc = "Number of bars for training (0 = use all data for research mode)"
+        .desc = "Gap between training and test data (Marcos López de Prado purging)"
       }
     },
     .isCrossSectional = false,
@@ -163,7 +181,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeDBSCANMetaD
     .tags = {"dbscan", "ml", "clustering", "unsupervised", "anomaly", "outlier"},
     .requiresTimeFrame = false,
     .strategyTypes = {"anomaly-detection", "regime-based", "outlier-filtering"},
-    .relatedTransforms = {"kmeans_3", "gmm_3", "pca"},
+    .relatedTransforms = {"kmeans_3", "pca"},
     .usageContext = "Use for anomaly detection and regime discovery when number of clusters is unknown. "
                     "Noise points (label=-1) are potential anomalies. Good for non-spherical cluster shapes.",
     .limitations = "Sensitive to epsilon and min_points parameters. Struggles with varying density clusters. "
@@ -220,12 +238,21 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakePCAMetaData
         .desc = "Standardize features before PCA"
       },
       MetaDataOption{
-        .id = "lookback_window",
-        .name = "Lookback Window",
+        .id = "split_ratio",
+        .name = "Training Split Ratio",
+        .type = epoch_core::MetaDataOptionType::Decimal,
+        .defaultValue = MetaDataOptionDefinition(1.0),
+        .min = 0.1,
+        .max = 1.0,
+        .desc = "Ratio of data to use for training (1.0 = all data for research mode)"
+      },
+      MetaDataOption{
+        .id = "split_gap",
+        .name = "Purge Gap",
         .type = epoch_core::MetaDataOptionType::Integer,
         .defaultValue = MetaDataOptionDefinition(0.0),
         .min = 0,
-        .desc = "Number of bars for training (0 = use all data for research mode)"
+        .desc = "Gap between training and test data (Marcos López de Prado purging)"
       }
     },
     .isCrossSectional = false,
@@ -244,93 +271,11 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakePCAMetaData
     .tags = {"pca", "ml", "dimensionality-reduction", "factor", "decomposition"},
     .requiresTimeFrame = false,
     .strategyTypes = {"factor-investing", "risk-decomposition", "feature-engineering"},
-    .relatedTransforms = {"ica", "kmeans_3", "gmm_3"},
+    .relatedTransforms = {"kmeans_3"},
     .usageContext = "Use for extracting hidden factors from multiple correlated series. PC0 often represents "
                     "market beta, subsequent PCs capture sector/style factors. Good for portfolio risk decomposition.",
     .limitations = "Assumes linear relationships. Components are uncorrelated but not independent. "
                    "Sensitive to outliers. Interpretation of components requires domain knowledge."
-  });
-
-  return metadataList;
-}
-
-/**
- * @brief Create ICA metadata
- *
- * ICA (Independent Component Analysis) using RADICAL algorithm.
- * Separates mixed signals into statistically independent sources.
- *
- * Financial Applications:
- * - Separating mixed market signals
- * - Extracting hidden factors from asset returns
- * - Identifying independent risk sources
- * - Blind source separation of market influences
- */
-inline std::vector<epoch_script::transforms::TransformsMetaData> MakeICAMetaData() {
-  std::vector<epoch_script::transforms::TransformsMetaData> metadataList;
-
-  metadataList.emplace_back(epoch_script::transforms::TransformsMetaData{
-    .id = "ica",
-    .category = epoch_core::TransformCategory::ML,
-    .plotKind = epoch_core::TransformPlotKind::panel_line,
-    .name = "ICA (Independent Component Analysis)",
-    .options = {
-      MetaDataOption{
-        .id = "noise_std_dev",
-        .name = "Noise Std Dev",
-        .type = epoch_core::MetaDataOptionType::Decimal,
-        .defaultValue = MetaDataOptionDefinition(0.175),
-        .min = 0.01,
-        .max = 1.0,
-        .desc = "Standard deviation of Gaussian noise for RADICAL algorithm"
-      },
-      MetaDataOption{
-        .id = "replicates",
-        .name = "Replicates",
-        .type = epoch_core::MetaDataOptionType::Integer,
-        .defaultValue = MetaDataOptionDefinition(30.0),
-        .min = 5,
-        .max = 100,
-        .desc = "Number of perturbed replicates per data point"
-      },
-      MetaDataOption{
-        .id = "angles",
-        .name = "Angles",
-        .type = epoch_core::MetaDataOptionType::Integer,
-        .defaultValue = MetaDataOptionDefinition(150.0),
-        .min = 30,
-        .max = 500,
-        .desc = "Number of angles to consider in rotation search"
-      },
-      MetaDataOption{
-        .id = "lookback_window",
-        .name = "Lookback Window",
-        .type = epoch_core::MetaDataOptionType::Integer,
-        .defaultValue = MetaDataOptionDefinition(0.0),
-        .min = 0,
-        .desc = "Number of bars for training (0 = use all data for research mode)"
-      }
-    },
-    .isCrossSectional = false,
-    .desc = "Independent Component Analysis separates mixed signals into statistically independent sources. "
-            "Unlike PCA which finds uncorrelated components, ICA finds truly independent components.",
-    .inputs = {{epoch_core::IODataType::Number, "SLOT", "Features", true, false}},
-    .outputs = {
-      {epoch_core::IODataType::Decimal, "ic_0", "Independent Component 0", true, false},
-      {epoch_core::IODataType::Decimal, "ic_1", "Independent Component 1", true, false},
-      {epoch_core::IODataType::Decimal, "ic_2", "Independent Component 2", true, false},
-      {epoch_core::IODataType::Decimal, "ic_3", "Independent Component 3", true, false},
-      {epoch_core::IODataType::Decimal, "ic_4", "Independent Component 4", true, false}
-    },
-    .atLeastOneInputRequired = true,
-    .tags = {"ica", "ml", "dimensionality-reduction", "factor", "blind-source-separation"},
-    .requiresTimeFrame = false,
-    .strategyTypes = {"factor-investing", "signal-separation", "feature-engineering"},
-    .relatedTransforms = {"pca", "kmeans_3", "gmm_3"},
-    .usageContext = "Use when underlying factors are expected to be non-Gaussian and independent. "
-                    "Better than PCA for separating market microstructure effects or identifying hidden risk sources.",
-    .limitations = "Assumes sources are statistically independent (stronger than uncorrelated). "
-                   "Computational cost higher than PCA. Order of components is arbitrary."
   });
 
   return metadataList;

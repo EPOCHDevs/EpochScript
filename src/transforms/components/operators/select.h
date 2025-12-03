@@ -58,7 +58,7 @@ extern template class ZeroIndexSelectTransform<4>;
 
 extern template class ZeroIndexSelectTransform<5>;
 
-// Typed Switch transforms - DRY template pattern
+// Typed Switch transforms - DRY template pattern (fixed N slots - deprecated, use TypedSwitch)
 template <size_t N, typename TypeTag>
 class TypedZeroIndexSelect : public ITransform {
 public:
@@ -110,6 +110,29 @@ extern template class TypedZeroIndexSelect<5, StringType>;
 extern template class TypedZeroIndexSelect<5, NumberType>;
 extern template class TypedZeroIndexSelect<5, BooleanType>;
 extern template class TypedZeroIndexSelect<5, TimestampType>;
+
+// Varargs Switch transforms - supports any number of inputs
+template <typename TypeTag>
+class TypedSwitch : public ITransform {
+public:
+  explicit TypedSwitch(const TransformConfiguration &config)
+      : ITransform(config) {}
+
+  [[nodiscard]] epoch_frame::DataFrame
+  TransformData(epoch_frame::DataFrame const &bars) const override;
+};
+
+// Type aliases for varargs switch: switch_{type}
+using SwitchString = TypedSwitch<StringType>;
+using SwitchNumber = TypedSwitch<NumberType>;
+using SwitchBoolean = TypedSwitch<BooleanType>;
+using SwitchTimestamp = TypedSwitch<TimestampType>;
+
+// Extern template declarations
+extern template class TypedSwitch<StringType>;
+extern template class TypedSwitch<NumberType>;
+extern template class TypedSwitch<BooleanType>;
+extern template class TypedSwitch<TimestampType>;
 
 // Advanced Selection classes
 class PercentileSelect : public ITransform {

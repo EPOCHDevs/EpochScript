@@ -46,12 +46,21 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeLiblinearMe
         .desc = "Bias term (-1 to disable)"
       },
       MetaDataOption{
-        .id = "lookback_window",
-        .name = "Lookback Window",
+        .id = "split_ratio",
+        .name = "Training Split Ratio",
+        .type = epoch_core::MetaDataOptionType::Decimal,
+        .defaultValue = MetaDataOptionDefinition(1.0),
+        .min = 0.1,
+        .max = 1.0,
+        .desc = "Ratio of data to use for training (1.0 = all data for research mode)"
+      },
+      MetaDataOption{
+        .id = "split_gap",
+        .name = "Purge Gap",
         .type = epoch_core::MetaDataOptionType::Integer,
-        .defaultValue = MetaDataOptionDefinition(252.0),
+        .defaultValue = MetaDataOptionDefinition(0.0),
         .min = 0,
-        .desc = "Number of bars for training (0 = use all data for research mode)"
+        .desc = "Gap between training and test data (Marcos López de Prado purging)"
       },
       MetaDataOption{
         .id = "min_training_samples",
@@ -68,7 +77,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeLiblinearMe
   // Common inputs - SLOT approach for features + target
   auto makeLinearInputs = []() -> std::vector<epoch_script::transforms::IOMetaData> {
     return {
-      {epoch_core::IODataType::Number, "SLOT", "Features", true, false},
+      {epoch_core::IODataType::Number, ARG, "Features", true, false},
       {epoch_core::IODataType::Number, "target", "Target", false, false}
     };
   };
@@ -82,10 +91,10 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeLiblinearMe
     };
   };
 
-  // Regressor outputs (SVR models)
+  // Regressor outputs (SVR models) - single output uses "result" convention
   auto makeRegressorOutputs = []() -> std::vector<epoch_script::transforms::IOMetaData> {
     return {
-      {epoch_core::IODataType::Decimal, "prediction", "Prediction", true, false}
+      {epoch_core::IODataType::Decimal, "result", "Prediction", true, false}
     };
   };
 

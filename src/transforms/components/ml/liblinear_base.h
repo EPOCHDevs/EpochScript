@@ -3,6 +3,7 @@
 // LIBLINEAR Base Utilities and RAII Wrappers for Financial ML Transforms
 //
 #include <liblinear/linear.h>
+#include <spdlog/spdlog.h>
 #include <memory>
 #include <vector>
 #include <stdexcept>
@@ -153,10 +154,22 @@ private:
 };
 
 /**
- * @brief Suppress LIBLINEAR's default output
+ * @brief Setup LIBLINEAR logging to use spdlog
+ *
+ * Routes LIBLINEAR's internal output through spdlog at debug level.
+ * Call this before training to capture optimization progress.
  */
-inline void SuppressOutput() {
-  set_print_string_function([](const char*) {});
+inline void SetupLogging() {
+  set_print_string_function([](const char* msg) {
+    // Strip trailing newline if present
+    std::string message(msg);
+    while (!message.empty() && (message.back() == '\n' || message.back() == '\r')) {
+      message.pop_back();
+    }
+    if (!message.empty()) {
+      spdlog::debug("[LIBLINEAR] {}", message);
+    }
+  });
 }
 
 /**

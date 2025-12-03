@@ -16,4 +16,14 @@ struct CumProdOperation : ITransform {
   }
 };
 
+struct CumSumOperation : ITransform {
+  explicit CumSumOperation(const TransformConfiguration &config)
+      : ITransform(config) {}
+
+  [[nodiscard]] epoch_frame::DataFrame
+  TransformData(epoch_frame::DataFrame const &bars) const override {
+    return bars[GetInputId()].cumulative_sum().to_frame(GetOutputId());
+  }
+};
+
 } // namespace epoch_script::transform

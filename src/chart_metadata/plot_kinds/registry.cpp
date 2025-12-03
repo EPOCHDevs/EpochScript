@@ -36,7 +36,6 @@
 #include "builders/head_and_shoulders_builder.h"
 #include "builders/inverse_head_and_shoulders_builder.h"
 #include "builders/hmm_builder.h"
-#include "builders/gmm_builder.h"
 #include "builders/linear_model_builder.h"
 #include "builders/lightgbm_builder.h"
 #include "builders/line_builder.h"
@@ -117,7 +116,6 @@ void PlotKindBuilderRegistry::InitializeBuilders() {
   Register(PK::sessions, std::make_unique<SessionsBuilder>());
   Register(PK::pivot_point_detector, std::make_unique<PivotPointDetectorBuilder>());
   Register(PK::hmm, std::make_unique<HMMBuilder>());
-  Register(PK::gmm, std::make_unique<GMMBuilder>());
   Register(PK::linear_model, std::make_unique<LinearModelBuilder>());
   Register(PK::lightgbm, std::make_unique<LightGBMBuilder>());
 

@@ -8,15 +8,16 @@
 #include <memory>
 #include "epoch_protos/tearsheet.pb.h"
 #include <epoch_script/transforms/runtime/iorchestrator.h>
+#include <epoch_data_sdk/events/all.h>
 
 namespace epoch_script::data {
 
 struct IDatabaseImpl {
   virtual ~IDatabaseImpl() = default;
 
-  virtual void RunPipeline() = 0;
+  virtual void RunPipeline(data_sdk::events::ScopedProgressEmitter& emitter) = 0;
 
-  virtual void RefreshPipeline() = 0;
+  virtual void RefreshPipeline(data_sdk::events::ScopedProgressEmitter& emitter) = 0;
 
   virtual const DatabaseIndexer &GetIndexer() const = 0;
 

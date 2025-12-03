@@ -46,7 +46,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeCointegrati
       {.type = epoch_core::IODataType::Number,
        .id = "ar1_coef",
        .name = "AR(1) Coefficient"},
-      {.type = epoch_core::IODataType::Number,
+      {.type = epoch_core::IODataType::Integer,
        .id = "is_mean_reverting",
        .name = "Is Mean Reverting (0 or 1)"}
     },
@@ -75,14 +75,22 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeCointegrati
        .type = epoch_core::MetaDataOptionType::Integer,
        .isRequired = true,
        .desc = "Rolling window size for ADF test. Minimum 50 recommended for reliable results."},
-      {.id = "max_lags",
-       .name = "Maximum Lags",
+      {.id = "adf_lag",
+       .name = "ADF Lags",
        .type = epoch_core::MetaDataOptionType::Integer,
+       .defaultValue = MetaDataOptionDefinition(1.0),
        .isRequired = false,
-       .desc = "Maximum lags for ADF regression. If not specified, uses floor(12*(n/100)^0.25)."},
+       .desc = "Number of lags for ADF regression (default 1)."},
+      {.id = "significance",
+       .name = "Significance Level",
+       .type = epoch_core::MetaDataOptionType::Decimal,
+       .defaultValue = MetaDataOptionDefinition(0.05),
+       .isRequired = false,
+       .desc = "Significance level for is_stationary output (default 0.05, options: 0.01, 0.05, 0.10)."},
       {.id = "deterministic",
        .name = "Deterministic Terms",
        .type = epoch_core::MetaDataOptionType::String,
+       .defaultValue = MetaDataOptionDefinition(std::string("c")),
        .isRequired = false,
        .desc = "Deterministic terms: 'nc' (no constant), 'c' (constant only, default), 'ct' (constant + trend)."}
     },
@@ -112,7 +120,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeCointegrati
       {.type = epoch_core::IODataType::Number,
        .id = "critical_10pct",
        .name = "10% Critical Value"},
-      {.type = epoch_core::IODataType::Number,
+      {.type = epoch_core::IODataType::Integer,
        .id = "is_stationary",
        .name = "Is Stationary (0 or 1)"}
     },
@@ -141,16 +149,18 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeCointegrati
        .type = epoch_core::MetaDataOptionType::Integer,
        .isRequired = true,
        .desc = "Rolling window size for cointegration test. Minimum 100 recommended."},
-      {.id = "max_lags",
-       .name = "Maximum Lags",
+      {.id = "adf_lag",
+       .name = "ADF Lags",
        .type = epoch_core::MetaDataOptionType::Integer,
+       .defaultValue = MetaDataOptionDefinition(1.0),
        .isRequired = false,
-       .desc = "Maximum lags for ADF test on residuals. If not specified, auto-selected."},
-      {.id = "deterministic",
-       .name = "Deterministic Terms",
-       .type = epoch_core::MetaDataOptionType::String,
+       .desc = "Number of lags for ADF test on residuals (default 1)."},
+      {.id = "significance",
+       .name = "Significance Level",
+       .type = epoch_core::MetaDataOptionType::Decimal,
+       .defaultValue = MetaDataOptionDefinition(0.05),
        .isRequired = false,
-       .desc = "Deterministic terms for ADF: 'nc', 'c' (default), 'ct'."}
+       .desc = "Significance level for is_cointegrated output (default 0.05)."}
     },
     .isCrossSectional = false,
     .desc = "Two-step Engle-Granger cointegration test for two time series. "
@@ -190,7 +200,7 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeCointegrati
       {.type = epoch_core::IODataType::Number,
        .id = "critical_10pct",
        .name = "10% Critical Value"},
-      {.type = epoch_core::IODataType::Number,
+      {.type = epoch_core::IODataType::Integer,
        .id = "is_cointegrated",
        .name = "Is Cointegrated (0 or 1)"}
     },
@@ -230,7 +240,8 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeCointegrati
 
     // Outputs for Johansen
     std::vector<IOMetaData> outputs;
-    outputs.push_back({.type = epoch_core::IODataType::Number, .id = "rank", .name = "Cointegration Rank"});
+    // Rank is an integer (0, 1, 2, ..., n) representing cointegration rank
+    outputs.push_back({.type = epoch_core::IODataType::Integer, .id = "rank", .name = "Cointegration Rank"});
 
     // Trace statistics, max eigenvalue statistics, eigenvalues, and betas for each variable
     for (int i = 0; i < n; ++i) {
@@ -276,13 +287,15 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeCointegrati
         {.id = "lag_p",
          .name = "VAR Lag Order",
          .type = epoch_core::MetaDataOptionType::Integer,
+         .defaultValue = MetaDataOptionDefinition(1.0),
          .isRequired = false,
          .desc = "Lag order for VAR model. Default: 1."},
         {.id = "det_order",
          .name = "Deterministic Order",
          .type = epoch_core::MetaDataOptionType::Integer,
+         .defaultValue = MetaDataOptionDefinition(0.0),
          .isRequired = false,
-         .desc = "Deterministic specification: -1 (no deterministic), 0 (constant), 1 (constant + trend)."}
+         .desc = "Deterministic specification: -1 (no deterministic), 0 (constant, default), 1 (constant + trend)."}
       },
       .isCrossSectional = false,
       .desc = desc,

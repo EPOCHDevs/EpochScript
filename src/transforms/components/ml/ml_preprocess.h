@@ -10,14 +10,15 @@
 // All transforms use split_ratio to fit parameters on training data
 // and apply those parameters to transform the full dataset.
 //
+// Uses epoch_frame operations directly - no Armadillo dependency.
+//
 #include "ml_split_utils.h"
-#include "../statistics/dataframe_armadillo_utils.h"
 #include "epoch_frame/aliases.h"
 #include <epoch_script/transforms/core/itransform.h>
 #include <arrow/array.h>
+#include <arrow/compute/api.h>
 #include <epoch_frame/factory/array_factory.h>
 #include <epoch_frame/factory/dataframe_factory.h>
-#include <armadillo>
 #include <cmath>
 
 namespace epoch_script::transform {
@@ -54,50 +55,43 @@ public:
     // Split data - get train view for fitting
     auto split = ml_utils::split_by_ratio(bars, m_split_ratio);
 
-    // Convert to armadillo for efficient computation
-    arma::mat train_X = utils::MatFromDataFrame(split.train, cols);
-    arma::mat X = utils::MatFromDataFrame(bars, cols);
-    const size_t n_cols = X.n_cols;
+    // Select only the input columns
+    auto train_df = split.train[cols];
+    auto full_df = bars[cols];
 
-    // Fit on training data
-    std::vector<double> means(n_cols), stds(n_cols);
-    for (size_t j = 0; j < n_cols; ++j) {
-      means[j] = arma::mean(train_X.col(j));
-      stds[j] = arma::stddev(train_X.col(j));
+    // Fit on training data: compute mean and std per column
+     std::vector<epoch_frame::Scalar> means, stds;
+    means.reserve(cols.size());
+    stds.reserve(cols.size());
+
+    for (const auto& col : cols) {
+      const auto& train_col = train_df[col];
+      means.push_back(train_col.mean());
+      stds.push_back(train_col.stddev(arrow::compute::VarianceOptions(1)));
     }
 
-    // Apply to full data
-    for (size_t j = 0; j < n_cols; ++j) {
-      if (stds[j] > 1e-10) {
-        X.col(j) = (X.col(j) - means[j]) / stds[j];
-      } else {
-        X.col(j) = X.col(j) - means[j];
+    // Apply transformation: (x - mean) / std
+    std::vector<std::string> output_columns;
+    std::vector<arrow::ChunkedArrayPtr> output_arrays;
+
+    static const epoch_frame::Scalar min_std{1e-10};
+    for (size_t j = 0; j < cols.size(); ++j) {
+      const auto& series = full_df[cols[j]];
+      epoch_frame::Series scaled = (series - means[j]);
+
+      if (stds[j] > min_std) {
+        scaled = scaled / stds[j];
       }
+
+      output_columns.push_back(GetOutputId("scaled_" + std::to_string(j)));
+      output_arrays.push_back(scaled.array());
     }
 
-    return GenerateOutputs(bars.index(), X);
+    return epoch_frame::make_dataframe(bars.index(), output_arrays, output_columns);
   }
 
 private:
   double m_split_ratio{0.7};
-
-  epoch_frame::DataFrame GenerateOutputs(
-      const epoch_frame::IndexPtr &index,
-      const arma::mat &X) const {
-    std::vector<std::string> output_columns;
-    std::vector<arrow::ChunkedArrayPtr> output_arrays;
-
-    for (size_t j = 0; j < X.n_cols; ++j) {
-      std::vector<double> col_vec(X.n_rows);
-      for (size_t i = 0; i < X.n_rows; ++i) {
-        col_vec[i] = X(i, j);
-      }
-      output_columns.push_back(GetOutputId("scaled_" + std::to_string(j)));
-      output_arrays.push_back(epoch_frame::factory::array::make_array(col_vec));
-    }
-
-    return epoch_frame::make_dataframe(index, output_arrays, output_columns);
-  }
 };
 
 /**
@@ -132,57 +126,50 @@ public:
     // Split data - get train view for fitting
     auto split = ml_utils::split_by_ratio(bars, m_split_ratio);
 
-    // Convert to armadillo
-    arma::mat train_X = utils::MatFromDataFrame(split.train, cols);
-    arma::mat X = utils::MatFromDataFrame(bars, cols);
-    const size_t n_cols = X.n_cols;
+    // Select only the input columns
+    auto train_df = split.train[cols];
+    auto full_df = bars[cols];
 
-    // Fit on training data
-    std::vector<double> mins(n_cols), maxs(n_cols);
-    for (size_t j = 0; j < n_cols; ++j) {
-      mins[j] = arma::min(train_X.col(j));
-      maxs[j] = arma::max(train_X.col(j));
+    // Fit on training data: compute min and max per column
+    std::vector<epoch_frame::Scalar> mins, maxs;
+    mins.reserve(cols.size());
+    maxs.reserve(cols.size());
+
+    for (const auto& col : cols) {
+      const auto& train_col = train_df[col];
+      mins.push_back(train_col.min());
+      maxs.push_back(train_col.max());
     }
 
-    // Apply to full data
-    for (size_t j = 0; j < n_cols; ++j) {
-      double range = maxs[j] - mins[j];
-      if (range > 1e-10) {
-        X.col(j) = (X.col(j) - mins[j]) / range;
-      } else {
-        X.col(j).zeros();
+    // Apply transformation: (x - min) / (max - min)
+    std::vector<std::string> output_columns;
+    std::vector<arrow::ChunkedArrayPtr> output_arrays;
+
+    const epoch_frame::Scalar min_err{1e-10};
+    for (size_t j = 0; j < cols.size(); ++j) {
+      const auto& series = full_df[cols[j]];
+      epoch_frame::Scalar range = maxs[j] - mins[j];
+      epoch_frame::Series scaled = series - mins[j];
+
+      if (range > min_err) {
+        scaled = scaled / range;
       }
+
+      output_columns.push_back(GetOutputId("scaled_" + std::to_string(j)));
+      output_arrays.push_back(scaled.array());
     }
 
-    return GenerateOutputs(bars.index(), X);
+    return epoch_frame::make_dataframe(bars.index(), output_arrays, output_columns);
   }
 
 private:
   double m_split_ratio{0.7};
-
-  epoch_frame::DataFrame GenerateOutputs(
-      const epoch_frame::IndexPtr &index,
-      const arma::mat &X) const {
-    std::vector<std::string> output_columns;
-    std::vector<arrow::ChunkedArrayPtr> output_arrays;
-
-    for (size_t j = 0; j < X.n_cols; ++j) {
-      std::vector<double> col_vec(X.n_rows);
-      for (size_t i = 0; i < X.n_rows; ++i) {
-        col_vec[i] = X(i, j);
-      }
-      output_columns.push_back(GetOutputId("scaled_" + std::to_string(j)));
-      output_arrays.push_back(epoch_frame::factory::array::make_array(col_vec));
-    }
-
-    return epoch_frame::make_dataframe(index, output_arrays, output_columns);
-  }
 };
 
 /**
  * @brief ML Robust Scaling Transform
  *
- * Scales features using statistics that are robust to outliers.
+ * Scales features using statistics robust to outliers.
  * Uses median and interquartile range (IQR).
  * Fits on training portion (split_ratio), applies to full data.
  *
@@ -212,56 +199,46 @@ public:
     // Split data - get train view for fitting
     auto split = ml_utils::split_by_ratio(bars, m_split_ratio);
 
-    // Convert to armadillo
-    arma::mat train_X = utils::MatFromDataFrame(split.train, cols);
-    arma::mat X = utils::MatFromDataFrame(bars, cols);
-    const size_t n_cols = X.n_cols;
+    // Select only the input columns
+    auto train_df = split.train[cols];
+    auto full_df = bars[cols];
 
-    // Fit on training data
-    std::vector<double> medians(n_cols), iqrs(n_cols);
-    for (size_t j = 0; j < n_cols; ++j) {
-      arma::vec col = arma::sort(train_X.col(j));
-      medians[j] = arma::median(col);
+    // Fit on training data: compute median and IQR per column
+    std::vector<epoch_frame::Scalar> medians, iqrs;
+    medians.reserve(cols.size());
+    iqrs.reserve(cols.size());
 
-      // IQR = Q3 - Q1
-      size_t n = col.n_elem;
-      double q1 = col(static_cast<size_t>(n * 0.25));
-      double q3 = col(static_cast<size_t>(n * 0.75));
-      iqrs[j] = q3 - q1;
+    for (const auto& col : cols) {
+      const auto& train_col = train_df[col];
+      epoch_frame::Scalar median = train_col.quantile(arrow::compute::QuantileOptions{0.5});
+      epoch_frame::Scalar q1 = train_col.quantile(arrow::compute::QuantileOptions{0.25});
+      epoch_frame::Scalar q3 = train_col.quantile(arrow::compute::QuantileOptions{0.75});
+      medians.push_back(median);
+      iqrs.push_back(q3 - q1);
     }
 
-    // Apply to full data
-    for (size_t j = 0; j < n_cols; ++j) {
-      if (iqrs[j] > 1e-10) {
-        X.col(j) = (X.col(j) - medians[j]) / iqrs[j];
-      } else {
-        X.col(j) = X.col(j) - medians[j];
+    // Apply transformation: (x - median) / IQR
+    std::vector<std::string> output_columns;
+    std::vector<arrow::ChunkedArrayPtr> output_arrays;
+
+    const epoch_frame::Scalar min_err{1e-10};
+    for (size_t j = 0; j < cols.size(); ++j) {
+      const auto& series = full_df[cols[j]];
+      epoch_frame::Series scaled = series - medians[j];
+
+      if (iqrs[j] > min_err) {
+        scaled = scaled / iqrs[j];
       }
+
+      output_columns.push_back(GetOutputId("scaled_" + std::to_string(j)));
+      output_arrays.push_back(scaled.array());
     }
 
-    return GenerateOutputs(bars.index(), X);
+    return epoch_frame::make_dataframe(bars.index(), output_arrays, output_columns);
   }
 
 private:
   double m_split_ratio{0.7};
-
-  epoch_frame::DataFrame GenerateOutputs(
-      const epoch_frame::IndexPtr &index,
-      const arma::mat &X) const {
-    std::vector<std::string> output_columns;
-    std::vector<arrow::ChunkedArrayPtr> output_arrays;
-
-    for (size_t j = 0; j < X.n_cols; ++j) {
-      std::vector<double> col_vec(X.n_rows);
-      for (size_t i = 0; i < X.n_rows; ++i) {
-        col_vec[i] = X(i, j);
-      }
-      output_columns.push_back(GetOutputId("scaled_" + std::to_string(j)));
-      output_arrays.push_back(epoch_frame::factory::array::make_array(col_vec));
-    }
-
-    return epoch_frame::make_dataframe(index, output_arrays, output_columns);
-  }
 };
 
 } // namespace epoch_script::transform

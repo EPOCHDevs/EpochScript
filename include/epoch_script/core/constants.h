@@ -231,6 +231,7 @@ constexpr auto ARG0 = "SLOT0";
 constexpr auto ARG1 = "SLOT1";
 constexpr auto ARG2 = "SLOT2";
 constexpr auto ARG3 = "SLOT3";
+constexpr auto RESULT = "result";
 
 // Cross-sectional report key
 constexpr auto GROUP_KEY = "ALL";

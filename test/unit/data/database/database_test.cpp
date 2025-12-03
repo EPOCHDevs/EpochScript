@@ -6,6 +6,7 @@
 #include <epoch_script/data/common/constants.h>
 #include <catch2/catch_test_macros.hpp>
 #include <trompeloeil/mock.hpp>
+#include <epoch_data_sdk/events/all.h>
 
 using namespace epoch_script::data;
 using namespace epoch_script;
@@ -17,8 +18,9 @@ TEST_CASE("Database wraps impl", "[Database]") {
   const auto &C = EpochScriptAssetConstants::instance();
 
   SECTION("Calling RunPipeline calls impl") {
-    REQUIRE_CALL(*mock_impl, RunPipeline());
-    Database(std::move(mock_impl)).RunPipeline();
+    REQUIRE_CALL(*mock_impl, RunPipeline(trompeloeil::_));
+    data_sdk::events::ScopedProgressEmitter emitter;
+    Database(std::move(mock_impl)).RunPipeline(emitter);
   }
 
   SECTION("Calling GetTransformedData returns impl's transformed data") {

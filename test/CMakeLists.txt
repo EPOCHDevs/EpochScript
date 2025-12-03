@@ -48,7 +48,7 @@ target_compile_definitions(dump_transform_metadata PUBLIC
 
 # Standalone test runner for coverage agent
 add_executable(epoch_test_runner epoch_test_runner.cpp)
-target_link_libraries(epoch_test_runner PRIVATE epoch_script)
+target_link_libraries(epoch_test_runner PRIVATE epoch_script epoch_event_viewer)
 target_include_directories(epoch_test_runner PRIVATE ../src .)
 set_target_properties(epoch_test_runner PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

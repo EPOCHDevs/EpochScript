@@ -6,6 +6,7 @@
 #include <epoch_script/transforms/components/event_markers/event_marker.h>
 #include <epoch_script/transforms/core/itransform.h>
 #include <epoch_script/transforms/runtime/transform_manager/itransform_manager.h>
+#include <epoch_data_sdk/events/all.h>
 #include "epoch_protos/tearsheet.pb.h"
 
 namespace epoch_script::runtime {
@@ -13,7 +14,8 @@ namespace epoch_script::runtime {
         using Ptr = std::unique_ptr<IDataFlowOrchestrator>;
 
         virtual TimeFrameAssetDataFrameMap
-        ExecutePipeline(TimeFrameAssetDataFrameMap data) = 0;
+        ExecutePipeline(TimeFrameAssetDataFrameMap data,
+                        data_sdk::events::ScopedProgressEmitter& emitter) = 0;
 
         virtual AssetReportMap GetGeneratedReports() const = 0;
 

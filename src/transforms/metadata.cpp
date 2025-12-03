@@ -297,7 +297,7 @@ std::vector<TransformsMetaData> MakeComparativeMetaData() {
     metadataList.emplace_back(metadata);
   }
 
-  // Typed Switch transforms
+  // Typed Switch transforms (fixed N - deprecated, use varargs switch_{type})
   for (size_t N = 2; N <= 5; ++N) {
     for (auto const &[type, typeName] :
          std::initializer_list<std::array<std::string, 2>>{
@@ -339,6 +339,37 @@ std::vector<TransformsMetaData> MakeComparativeMetaData() {
 
       metadataList.emplace_back(metadata);
     }
+  }
+
+  // Varargs Typed Switch transforms - supports any number of inputs
+  for (auto const &[type, typeName] :
+       std::initializer_list<std::array<std::string, 2>>{
+           {"string", "String"},
+           {"number", "Number"},
+           {"boolean", "Boolean"},
+           {"timestamp", "Timestamp"}}) {
+    TransformsMetaData metadata{
+        .id = std::format("switch_{}", type),
+        .category = epoch_core::TransformCategory::ControlFlow,
+        .plotKind = epoch_core::TransformPlotKind::Null,
+        .name = std::format("Switch ({})", typeName),
+        .options = {},
+        .desc = std::format("Typed switch selecting one of N {} inputs based on zero-indexed selector. Supports any number of inputs. Type-safe variant ensuring all inputs and output are {}.", typeName, typeName),
+        .inputs = {
+            IOMetaData{.type = epoch_core::IODataType::Integer, .id = "index", .name = "Index"},
+            IOMetaData{.type = epoch_core::IODataTypeWrapper::FromString(typeName), .id = ARG, .name = "", .allowMultipleConnections = true}
+        },
+        .outputs = {IOMetaData{.type = epoch_core::IODataTypeWrapper::FromString(typeName),
+                               .id = "value",
+                               .name = "Selected Value"}},
+        .tags = {"flow-control", "selector", "switch", "conditional", "typed", "varargs"},
+        .requiresTimeFrame = false,
+        .allowNullInputs = true,
+        .strategyTypes = {"multi-strategy-selection", "regime-switching", "conditional-routing"},
+        .assetRequirements = {"single-asset"},
+        .usageContext = std::format("Multi-way routing for typed {} values. Use integer index to select between any number of values/signals. Ensures type safety throughout selection.", typeName),
+        .limitations = std::format("Index must be integer 0 to N-1 where N is the number of slot inputs. All inputs must be {} type. Out-of-range indices may cause errors.", typeName)};
+    metadataList.emplace_back(metadata);
   }
 
   // Typed PercentileSelect transforms

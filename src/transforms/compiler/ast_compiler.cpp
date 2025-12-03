@@ -7,6 +7,7 @@
 #include "parser/python_parser.h"
 #include "validators/boolean_select_validator.h"
 #include <epoch_script/transforms/core/transform_registry.h>
+#include "transforms/components/utility/asset_ref_passthrough_metadata.h"
 #include <stdexcept>
 #include <queue>
 #include <unordered_map>
@@ -27,12 +28,19 @@ namespace epoch_script
         return ref;
     }
 
-    // Helper function to check if a node type is a scalar/constant
+    // Helper function to check if a node type is a scalar/constant or runtime scalar
     // Scalars are timeframe-agnostic and should not require timeframe resolution
     // This checks the metadata's category field to determine if it's a Scalar type
+    // Also includes is_asset_ref which is a runtime scalar (value depends on asset, not timeframe)
     static bool isScalarType(const std::string& type,
                             const std::unordered_map<std::string, epoch_script::transforms::TransformsMetaData>& metadata_map)
     {
+        // is_asset_ref is a runtime scalar - it doesn't need timeframe validation
+        // Its value depends on the current asset being processed, not the timeframe
+        if (transform::IsAssetRefType(type)) {
+            return true;
+        }
+
         auto it = metadata_map.find(type);
         if (it == metadata_map.end())
         {
@@ -388,6 +396,14 @@ namespace epoch_script
 
                 if (!algo.timeframe.has_value())
                 {
+                    // Check if this transform explicitly doesn't require a timeframe
+                    // (e.g., static_cast_to_decimal, is_asset_ref, etc.)
+                    auto meta_it = metadata_map.find(algo.type);
+                    if (meta_it != metadata_map.end() && !meta_it->second.requiresTimeFrame)
+                    {
+                        continue;  // Skip - this transform doesn't need a timeframe
+                    }
+
                     throw std::runtime_error(
                         "Could not resolve timeframe for node '" + algo.id +
                         "' (type: " + algo.type + "). " +

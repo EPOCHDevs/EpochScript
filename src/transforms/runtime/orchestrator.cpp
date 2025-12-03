@@ -6,7 +6,8 @@
 #include <boost/container_hash/hash.hpp>
 #include <epoch_script/transforms/core/registration.h>
 #include <epoch_script/core/constants.h>
-#include "../components/utility/asset_ref.h"
+#include "../components/utility/asset_ref_passthrough.h"
+#include "../components/utility/asset_ref_passthrough_metadata.h"
 #include <format>
 #include <spdlog/spdlog.h>
 
@@ -16,6 +17,7 @@
 #include <tbb/parallel_for_each.h>
 
 #include "transform_manager/transform_manager.h"
+#include <epoch_data_sdk/events/event_ids.h>
 
 namespace {
   // Helper to check if transform metadata indicates it's a reporter
@@ -62,6 +64,8 @@ DataFlowRuntimeOrchestrator::DataFlowRuntimeOrchestrator(
   m_executionContext.nodesCompleted = &m_nodesCompleted;
   m_executionContext.nodesFailed = &m_nodesFailed;
   m_executionContext.nodesSkipped = &m_nodesSkipped;
+  m_executionContext.executionSequence = &m_executionSequence;
+  m_executionContext.completionSequence = &m_completionSequence;
   m_executionContext.onNodeStarted = [this](const std::string& nodeId) {
     MarkNodeStarted(nodeId);
   };
@@ -85,40 +89,6 @@ DataFlowRuntimeOrchestrator::DataFlowRuntimeOrchestrator(
           std::format("Duplicate transform id: {}", uniqueId));
     }
     usedIds.insert(uniqueId);
-
-    // Handle asset_ref (AssetScalar): pre-compute for all assets, store in cache
-    const auto& transformType = transform->GetConfiguration().GetTransformDefinition().GetType();
-    if (transformType == epoch_script::transforms::ASSET_REF_ID) {
-      SPDLOG_DEBUG("Processing AssetScalar transform: {}", uniqueId);
-
-      // Get the ticker filter option
-      std::string tickerFilter;
-      try {
-        tickerFilter = transform->GetOption("ticker").GetString();
-      } catch (...) {
-        tickerFilter = "";
-      }
-
-      // Get output ID for this transform
-      const auto outputId = transform->GetOutputId("match");
-
-      // Pre-compute for each asset and store in cache
-      for (const auto& asset_id : m_asset_ids) {
-        bool matches = epoch_script::transform::EvaluateAssetRefTicker(asset_id, tickerFilter);
-
-        // Store as boolean scalar in per-asset cache
-        // We need to create a DataFrame with a single boolean value
-        auto boolScalar = arrow::MakeScalar(matches);
-        m_executionContext.cache->StoreAssetScalar(asset_id, outputId,
-            epoch_frame::Scalar(boolScalar));
-
-        SPDLOG_DEBUG("AssetScalar {}: asset={}, ticker_filter={}, matches={}",
-                     uniqueId, asset_id, tickerFilter, matches);
-      }
-
-      // Don't register as execution node - already computed
-      continue;
-    }
 
     SPDLOG_DEBUG("Registering Transform {} ({}), Unique ID: {}",
                  transform->GetName(), transform->GetId(), uniqueId);
@@ -183,7 +153,12 @@ void DataFlowRuntimeOrchestrator::RegisterTransform(
 }
 
 TimeFrameAssetDataFrameMap
-DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
+DataFlowRuntimeOrchestrator::ExecutePipeline(
+    TimeFrameAssetDataFrameMap data,
+    data_sdk::events::ScopedProgressEmitter& emitter) {
+  // Store external emitter pointer for ExecutionContext
+  m_executionContext.externalEmitter = &emitter;
+
   // Record start time
   auto startTime = events::Now();
 
@@ -191,6 +166,8 @@ DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
   m_nodesCompleted.store(0);
   m_nodesFailed.store(0);
   m_nodesSkipped.store(0);
+  m_executionSequence.store(0);
+  m_completionSequence.store(0);
   m_cancellationToken->Reset();
 
   // Update execution context with total nodes
@@ -202,13 +179,19 @@ DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
   // Set up shared data
   m_executionContext.logger->clear();
 
-  // Emit pipeline started event
+  // Emit pipeline started event (internal)
   m_eventDispatcher->Emit(events::PipelineStartedEvent{
       .timestamp = startTime,
       .total_nodes = m_transforms.size(),
       .total_assets = m_asset_ids.size(),
       .node_ids = GetAllNodeIds()
   });
+
+  // Emit pipeline started to external emitter (ConsoleEventViewer)
+  using namespace data_sdk::events;
+  emitter.EmitStarted(std::string(OperationType::Pipeline), std::string(PipelineName::Transform));
+  emitter.SetContext(std::string(ContextKey::TotalNodes), static_cast<int64_t>(m_transforms.size()));
+  emitter.SetContext(std::string(ContextKey::TotalAssets), static_cast<int64_t>(m_asset_ids.size()));
 
   m_isExecuting.store(true);
 
@@ -233,7 +216,7 @@ DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
     StopProgressSummaryThread();
     m_isExecuting.store(false);
 
-    // Emit cancelled event
+    // Emit cancelled event (internal)
     auto elapsed = events::ToMillis(events::Now() - startTime);
     m_eventDispatcher->Emit(events::PipelineCancelledEvent{
         .timestamp = events::Now(),
@@ -241,6 +224,9 @@ DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
         .nodes_completed = m_nodesCompleted.load(),
         .nodes_total = m_transforms.size()
     });
+
+    // Emit to external emitter (ConsoleEventViewer)
+    emitter.EmitCancelled(std::string(OperationType::Pipeline), std::string(PipelineName::Transform));
 
     throw;
   }
@@ -254,7 +240,7 @@ DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
   if (!error.empty()) {
     SPDLOG_ERROR("Transform pipeline failed with errors: {}", error);
 
-    // Emit failed event
+    // Emit failed event (internal)
     auto elapsed = events::ToMillis(events::Now() - startTime);
     m_eventDispatcher->Emit(events::PipelineFailedEvent{
         .timestamp = events::Now(),
@@ -262,10 +248,13 @@ DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
         .error_message = error
     });
 
+    // Emit to external emitter (ConsoleEventViewer)
+    emitter.EmitFailed(std::string(OperationType::Pipeline), std::string(PipelineName::Transform), error);
+
     throw std::runtime_error(std::format("Transform pipeline failed: {}", error));
   }
 
-  // Emit completed event
+  // Emit completed event (internal)
   auto duration = events::ToMillis(events::Now() - startTime);
   m_eventDispatcher->Emit(events::PipelineCompletedEvent{
       .timestamp = events::Now(),
@@ -274,6 +263,13 @@ DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
       .nodes_failed = m_nodesFailed.load(),
       .nodes_skipped = m_nodesSkipped.load()
   });
+
+  // Emit to external emitter (ConsoleEventViewer)
+  emitter.EmitCompleted(std::string(OperationType::Pipeline), std::string(PipelineName::Transform));
+  emitter.SetContext(std::string(ContextKey::DurationMs), static_cast<int64_t>(duration.count()));
+  emitter.SetContext(std::string(ContextKey::NodesSucceeded), static_cast<int64_t>(m_nodesCompleted.load()));
+  emitter.SetContext(std::string(ContextKey::NodesFailed), static_cast<int64_t>(m_nodesFailed.load()));
+  emitter.SetContext(std::string(ContextKey::NodesSkipped), static_cast<int64_t>(m_nodesSkipped.load()));
 
   // Transfer cached reports from storage to orchestrator's report cache
   // Reports are captured in execution nodes during TransformData() calls
@@ -329,14 +325,27 @@ DataFlowRuntimeOrchestrator::ExecutePipeline(TimeFrameAssetDataFrameMap data) {
 
 std::function<void(execution_context_t)> DataFlowRuntimeOrchestrator::CreateExecutionFunction(
     const epoch_script::transform::ITransformBase &transform) {
+  // Check if this is an asset_ref_passthrough transform
+  const auto& transformType = transform.GetConfiguration().GetTransformDefinition().GetType();
+  if (epoch_script::transform::IsAssetRefPassthroughType(transformType)) {
+    SPDLOG_DEBUG("Creating asset_ref_passthrough execution node for transform '{}'", transform.GetId());
+    return MakeExecutionNode<ExecutionNodeType::AssetRefPassthrough>(transform, m_executionContext);
+  }
+
+  // Check if this is an is_asset_ref transform
+  if (epoch_script::transform::IsAssetRefType(transformType)) {
+    SPDLOG_DEBUG("Creating is_asset_ref execution node for transform '{}'", transform.GetId());
+    return MakeExecutionNode<ExecutionNodeType::IsAssetRef>(transform, m_executionContext);
+  }
+
   // Check if this transform is cross-sectional from its metadata
   bool isCrossSectional = transform.GetConfiguration().IsCrossSectional();
 
   if (isCrossSectional) {
     SPDLOG_DEBUG("Creating cross-sectional execution node for transform '{}'", transform.GetId());
-    return MakeExecutionNode<true>(transform, m_executionContext);
+    return MakeExecutionNode<ExecutionNodeType::CrossSectional>(transform, m_executionContext);
   } else {
-    return MakeExecutionNode<false>(transform, m_executionContext);
+    return MakeExecutionNode<ExecutionNodeType::Default>(transform, m_executionContext);
   }
 }
 
@@ -628,6 +637,36 @@ void DataFlowRuntimeOrchestrator::SetProgressSummaryInterval(std::chrono::millis
 
 void DataFlowRuntimeOrchestrator::SetProgressSummaryEnabled(bool enabled) {
   m_summaryEnabled = enabled;
+}
+
+// ============================================================================
+// External Event System Integration Implementation
+// ============================================================================
+
+void DataFlowRuntimeOrchestrator::SetExternalProgressEmitter(
+    data_sdk::events::ScopedProgressEmitterPtr emitter) {
+  m_externalEmitter = std::move(emitter);
+  SPDLOG_INFO("External progress emitter set for orchestrator");
+}
+
+void DataFlowRuntimeOrchestrator::SetExternalCancellationToken(
+    data_sdk::events::CancellationTokenPtr token) {
+  m_externalCancellationToken = std::move(token);
+  SPDLOG_INFO("External cancellation token set for orchestrator");
+}
+
+data_sdk::events::ScopedProgressEmitterPtr
+DataFlowRuntimeOrchestrator::GetExternalProgressEmitter() const {
+  return m_externalEmitter;
+}
+
+data_sdk::events::CancellationTokenPtr
+DataFlowRuntimeOrchestrator::GetExternalCancellationToken() const {
+  return m_externalCancellationToken;
+}
+
+bool DataFlowRuntimeOrchestrator::HasExternalEventSystem() const {
+  return m_externalEmitter != nullptr;
 }
 
 // ============================================================================

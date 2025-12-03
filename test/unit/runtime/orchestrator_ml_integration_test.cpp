@@ -11,11 +11,33 @@
  * 3. Third level: Freeze verified values as expected (after confirmation)
  *
  * ML Transforms Tested:
- * - Clustering: rolling_kmeans, rolling_gmm, rolling_dbscan
- * - Decomposition: rolling_pca, rolling_ica
- * - Probabilistic: rolling_hmm
- * - Supervised: rolling_lightgbm, rolling_logistic, rolling_svr
- * - Preprocessing: ml_zscore, ml_minmax, ml_robust
+ * ======================
+ *
+ * 1. Statistical/Probabilistic Models:
+ *    - hmm_N (N=2-5): Hidden Markov Models
+ *    - kmeans_N (N=2-5): K-Means Clustering
+ *    - dbscan: Density-based clustering
+ *    - pca: Principal Component Analysis
+ *
+ * 2. Supervised ML Models:
+ *    - lightgbm_classifier: LightGBM Classification
+ *    - lightgbm_regressor: LightGBM Regression
+ *    - logistic_l1: L1-regularized Logistic Regression
+ *    - logistic_l2: L2-regularized Logistic Regression
+ *    - svr_l1: L1-loss Support Vector Regression
+ *    - svr_l2: L2-loss Support Vector Regression
+ *
+ * 3. ML Preprocessing:
+ *    - ml_zscore_N (N=2-6): Z-score normalization
+ *    - ml_minmax_N (N=2-6): Min-Max scaling
+ *    - ml_robust_N (N=2-6): Robust scaling (IQR)
+ *
+ * 4. Rolling ML Transforms (walk-forward):
+ *    - rolling_kmeans_N, rolling_gmm_N, rolling_hmm_N
+ *    - rolling_dbscan, rolling_pca_N, rolling_ica
+ *    - rolling_lightgbm_classifier/regressor
+ *    - rolling_logistic_l1/l2, rolling_svr_l1/l2
+ *    - rolling_ml_zscore, rolling_ml_minmax, rolling_ml_robust
  */
 
 #include "transforms/runtime/orchestrator.h"
@@ -29,6 +51,7 @@
 #include <epoch_script/transforms/core/transform_definition.h>
 #include <epoch_frame/factory/dataframe_factory.h>
 #include <epoch_frame/factory/index_factory.h>
+#include <epoch_data_sdk/events/all.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
@@ -40,18 +63,24 @@ using namespace std::chrono_literals;
 using namespace epoch_frame;
 
 // ============================================================================
-// HELPER: Create multi-feature OHLCV data for ML transforms
+// HELPER FUNCTIONS
 // ============================================================================
 
 /**
  * @brief Create OHLCV data with enough rows for rolling ML transforms
  * @param numRows Number of rows (should be > window_size for rolling transforms)
+ *
+ * Creates a synthetic price series with:
+ * - Linear trend component
+ * - Sinusoidal cycle component
+ * - Noise component
+ *
+ * This gives ML algorithms some structure to learn from.
  */
 inline DataFrame CreateMLTestData(int numRows) {
     std::vector<double> closeValues;
     closeValues.reserve(numRows);
     for (int i = 0; i < numRows; ++i) {
-        // Create price series with some pattern for ML to detect
         double trend = 100.0 + i * 0.5;
         double cycle = 10.0 * std::sin(i * 0.1);
         double noise = (i % 7) * 0.3 - 1.0;
@@ -60,19 +89,43 @@ inline DataFrame CreateMLTestData(int numRows) {
     return CreateOHLCVData(closeValues);
 }
 
+/**
+ * @brief Helper to verify DataFrame contains expected columns
+ */
+inline void VerifyColumnsExist(const DataFrame& df, const std::vector<std::string>& columns) {
+    for (const auto& col : columns) {
+        INFO("Checking for column: " << col);
+        REQUIRE(df.contains(col));
+    }
+}
+
+/**
+ * @brief Helper to verify output size matches expected
+ */
+inline void VerifyOutputSize(const DataFrame& df, const std::string& col, int expected_size) {
+    REQUIRE(df[col].size() == expected_size);
+}
+
+/**
+ * @brief Helper to verify non-null values exist in output
+ */
+inline void VerifyNonNullOutput(const DataFrame& df, const std::string& col) {
+    auto non_null = df[col].drop_null();
+    INFO("Column " << col << " has " << non_null.size() << " non-null values");
+    REQUIRE(non_null.size() > 0);
+}
+
 // ============================================================================
-// TEST CASE: Rolling K-Means Clustering (rolling_kmeans_2 through rolling_kmeans_5)
+// SECTION 1: ROLLING K-MEANS CLUSTERING TESTS
+// Variants: rolling_kmeans_2, rolling_kmeans_3, rolling_kmeans_4, rolling_kmeans_5
 // ============================================================================
 
-TEST_CASE("Orchestrator - rolling_kmeans variants", "[orchestrator][ml][clustering][rolling_kmeans]") {
+TEST_CASE("ML Integration - Rolling K-Means Clustering", "[orchestrator][ml][clustering][kmeans]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
-
-    // Create enough data for rolling window (window_size=60, need enough data)
     const int NUM_ROWS = 150;
 
-    SECTION("rolling_kmeans_2 - basic execution") {
-        // Use raw price features directly (o, h, l, c are the features)
+    SECTION("rolling_kmeans_2 - two clusters basic") {
         auto code = R"(
 src = market_data_source(timeframe="1D")()
 c = src.c
@@ -85,25 +138,18 @@ result = rolling_kmeans_2(window_size=60, min_training_samples=40)(c, v)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         REQUIRE(results.contains(dailyTF.ToString()));
         REQUIRE(results[dailyTF.ToString()].contains(aapl));
 
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify output columns exist
-        REQUIRE(df.contains("result#cluster_label"));
-        REQUIRE(df.contains("result#cluster_0_dist"));
-        REQUIRE(df.contains("result#cluster_1_dist"));
-
-        // Verify output size matches input
-        REQUIRE(df["result#cluster_label"].size() == NUM_ROWS);
-
-        // Verify some cluster labels are valid (0 or 1 for K=2)
-        auto labels = df["result#cluster_label"].drop_null();
-        INFO("rolling_kmeans_2 produced " << labels.size() << " non-null cluster labels");
-        REQUIRE(labels.size() > 0);
+        // K=2: cluster_label + cluster_0_dist + cluster_1_dist
+        VerifyColumnsExist(df, {"result#cluster_label", "result#cluster_0_dist", "result#cluster_1_dist"});
+        VerifyOutputSize(df, "result#cluster_label", NUM_ROWS);
+        VerifyNonNullOutput(df, "result#cluster_label");
     }
 
     SECTION("rolling_kmeans_3 - three clusters") {
@@ -119,14 +165,42 @@ result = rolling_kmeans_3(window_size=60, min_training_samples=40)(c, v)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify 3 cluster distance columns
-        REQUIRE(df.contains("result#cluster_label"));
-        REQUIRE(df.contains("result#cluster_0_dist"));
-        REQUIRE(df.contains("result#cluster_1_dist"));
-        REQUIRE(df.contains("result#cluster_2_dist"));
+        // K=3: cluster_label + 3 distance columns
+        VerifyColumnsExist(df, {
+            "result#cluster_label",
+            "result#cluster_0_dist",
+            "result#cluster_1_dist",
+            "result#cluster_2_dist"
+        });
+    }
+
+    SECTION("rolling_kmeans_4 - four clusters") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+l = src.l
+c = src.c
+result = rolling_kmeans_4(window_size=60, min_training_samples=40)(o, h, l, c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        // K=4: cluster_label + 4 distance columns
+        for (int k = 0; k < 4; ++k) {
+            REQUIRE(df.contains(fmt::format("result#cluster_{}_dist", k)));
+        }
     }
 
     SECTION("rolling_kmeans_5 - five clusters with expanding window") {
@@ -142,32 +216,23 @@ result = rolling_kmeans_5(window_size=50, min_training_samples=40, window_type="
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify 5 cluster distance columns
+        // K=5: cluster_label + 5 distance columns
         REQUIRE(df.contains("result#cluster_label"));
         for (int k = 0; k < 5; ++k) {
             REQUIRE(df.contains(fmt::format("result#cluster_{}_dist", k)));
         }
     }
-}
 
-// ============================================================================
-// TEST CASE: Rolling GMM (rolling_gmm_2 through rolling_gmm_5)
-// ============================================================================
-
-TEST_CASE("Orchestrator - rolling_gmm variants", "[orchestrator][ml][clustering][rolling_gmm]") {
-    const auto dailyTF = TestTimeFrames::Daily();
-    const std::string aapl = TestAssetConstants::AAPL;
-    const int NUM_ROWS = 150;
-
-    SECTION("rolling_gmm_2 - basic execution") {
+    SECTION("rolling_kmeans - with step_size option") {
         auto code = R"(
 src = market_data_source(timeframe="1D")()
 c = src.c
 v = src.v
-result = rolling_gmm_2(window_size=60, min_training_samples=40)(c, v)
+result = rolling_kmeans_2(window_size=60, min_training_samples=40, step_size=5)(c, v)
 )";
         auto manager = CreateTransformManager(strategy::PythonSource{code, true});
         DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
@@ -175,81 +240,25 @@ result = rolling_gmm_2(window_size=60, min_training_samples=40)(c, v)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify GMM output columns
-        REQUIRE(df.contains("result#component"));
-        REQUIRE(df.contains("result#component_0_prob"));
-        REQUIRE(df.contains("result#component_1_prob"));
-        REQUIRE(df.contains("result#log_likelihood"));
-
-        // Verify output size
-        REQUIRE(df["result#component"].size() == NUM_ROWS);
-
-        // Verify some predictions exist
-        auto components = df["result#component"].drop_null();
-        INFO("rolling_gmm_2 produced " << components.size() << " non-null component assignments");
-        REQUIRE(components.size() > 0);
-    }
-
-    SECTION("rolling_gmm_3 - three components") {
-        auto code = R"(
-src = market_data_source(timeframe="1D")()
-c = src.c
-v = src.v
-result = rolling_gmm_3(window_size=60, min_training_samples=40)(c, v)
-)";
-        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
-        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
-
-        auto results = orch.ExecutePipeline(std::move(inputData));
-        auto df = results[dailyTF.ToString()][aapl];
-
-        // Verify 3 component probability columns
-        REQUIRE(df.contains("result#component"));
-        REQUIRE(df.contains("result#component_0_prob"));
-        REQUIRE(df.contains("result#component_1_prob"));
-        REQUIRE(df.contains("result#component_2_prob"));
-        REQUIRE(df.contains("result#log_likelihood"));
-    }
-
-    SECTION("rolling_gmm_5 - five components with custom params") {
-        auto code = R"(
-src = market_data_source(timeframe="1D")()
-c = src.c
-v = src.v
-result = rolling_gmm_5(window_size=60, min_training_samples=40, max_iterations=100, trials=2)(c, v)
-)";
-        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
-        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
-
-        auto results = orch.ExecutePipeline(std::move(inputData));
-        auto df = results[dailyTF.ToString()][aapl];
-
-        // Verify 5 component probability columns
-        for (int c = 0; c < 5; ++c) {
-            REQUIRE(df.contains(fmt::format("result#component_{}_prob", c)));
-        }
+        REQUIRE(df.contains("result#cluster_label"));
+        VerifyOutputSize(df, "result#cluster_label", NUM_ROWS);
     }
 }
 
 // ============================================================================
-// TEST CASE: Rolling DBSCAN
+// SECTION 2: ROLLING DBSCAN CLUSTERING TESTS
 // ============================================================================
 
-TEST_CASE("Orchestrator - rolling_dbscan", "[orchestrator][ml][clustering][rolling_dbscan]") {
+TEST_CASE("ML Integration - Rolling DBSCAN Clustering", "[orchestrator][ml][clustering][dbscan]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
     const int NUM_ROWS = 150;
 
-    SECTION("rolling_dbscan - basic execution with default params") {
+    SECTION("rolling_dbscan - default parameters") {
         auto code = R"(
 src = market_data_source(timeframe="1D")()
 c = src.c
@@ -262,16 +271,17 @@ result = rolling_dbscan(window_size=60, min_training_samples=40)(c, v)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify DBSCAN output columns
-        REQUIRE(df.contains("result#cluster_label"));
-        REQUIRE(df.contains("result#is_anomaly"));
-        REQUIRE(df.contains("result#cluster_count"));
-
-        // Verify output size
-        REQUIRE(df["result#cluster_label"].size() == NUM_ROWS);
+        // DBSCAN outputs: cluster_label, is_anomaly, cluster_count
+        VerifyColumnsExist(df, {
+            "result#cluster_label",
+            "result#is_anomaly",
+            "result#cluster_count"
+        });
+        VerifyOutputSize(df, "result#cluster_label", NUM_ROWS);
     }
 
     SECTION("rolling_dbscan - custom epsilon and min_points") {
@@ -287,20 +297,40 @@ result = rolling_dbscan(window_size=60, min_training_samples=40, epsilon=0.3, mi
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        REQUIRE(df.contains("result#cluster_label"));
+        VerifyColumnsExist(df, {"result#cluster_label", "result#is_anomaly", "result#cluster_count"});
+    }
+
+    SECTION("rolling_dbscan - tight epsilon for anomaly detection") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+v = src.v
+result = rolling_dbscan(window_size=60, min_training_samples=40, epsilon=0.1, min_points=5)(c, v)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
         REQUIRE(df.contains("result#is_anomaly"));
-        REQUIRE(df.contains("result#cluster_count"));
     }
 }
 
 // ============================================================================
-// TEST CASE: Rolling PCA (rolling_pca_2 through rolling_pca_6)
+// SECTION 4: ROLLING PCA DECOMPOSITION TESTS
+// Variants: rolling_pca_2 through rolling_pca_6
 // ============================================================================
 
-TEST_CASE("Orchestrator - rolling_pca variants", "[orchestrator][ml][decomposition][rolling_pca]") {
+TEST_CASE("ML Integration - Rolling PCA Decomposition", "[orchestrator][ml][decomposition][pca]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
     const int NUM_ROWS = 150;
@@ -319,19 +349,16 @@ result = rolling_pca_2(window_size=60, min_training_samples=40)(o, h, l)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify PCA output columns
-        REQUIRE(df.contains("result#pc_0"));
-        REQUIRE(df.contains("result#pc_1"));
-        REQUIRE(df.contains("result#explained_variance_ratio"));
-
-        // Verify output size
-        REQUIRE(df["result#pc_0"].size() == NUM_ROWS);
+        // PCA outputs: pc_0, pc_1, explained_variance_ratio
+        VerifyColumnsExist(df, {"result#pc_0", "result#pc_1", "result#explained_variance_ratio"});
+        VerifyOutputSize(df, "result#pc_0", NUM_ROWS);
     }
 
-    SECTION("rolling_pca_3 - three components for yield curve") {
+    SECTION("rolling_pca_3 - three components") {
         auto code = R"(
 src = market_data_source(timeframe="1D")()
 o = src.o
@@ -347,25 +374,21 @@ result = rolling_pca_3(window_size=60, min_training_samples=40)(o, h, l, c, v)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify 3 PC columns
-        REQUIRE(df.contains("result#pc_0"));
-        REQUIRE(df.contains("result#pc_1"));
-        REQUIRE(df.contains("result#pc_2"));
-        REQUIRE(df.contains("result#explained_variance_ratio"));
+        VerifyColumnsExist(df, {"result#pc_0", "result#pc_1", "result#pc_2", "result#explained_variance_ratio"});
     }
 
-    SECTION("rolling_pca_6 - six components with scale_data option") {
+    SECTION("rolling_pca_4 - four components") {
         auto code = R"(
 src = market_data_source(timeframe="1D")()
 o = src.o
 h = src.h
 l = src.l
 c = src.c
-v = src.v
-result = rolling_pca_6(window_size=60, min_training_samples=40, scale_data=true)(o, h, l, c, v)
+result = rolling_pca_4(window_size=60, min_training_samples=40)(o, h, l, c)
 )";
         auto manager = CreateTransformManager(strategy::PythonSource{code, true});
         DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
@@ -373,10 +396,61 @@ result = rolling_pca_6(window_size=60, min_training_samples=40, scale_data=true)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify at least 5 PC columns (from 5 inputs)
+        for (int k = 0; k < 4; ++k) {
+            REQUIRE(df.contains(fmt::format("result#pc_{}", k)));
+        }
+    }
+
+    SECTION("rolling_pca_5 - five components") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+l = src.l
+c = src.c
+v = src.v
+result = rolling_pca_5(window_size=60, min_training_samples=40)(o, h, l, c, v)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        for (int k = 0; k < 5; ++k) {
+            REQUIRE(df.contains(fmt::format("result#pc_{}", k)));
+        }
+    }
+
+    SECTION("rolling_pca_6 - six components with scale_data") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+l = src.l
+c = src.c
+v = src.v
+result = rolling_pca_6(window_size=60, min_training_samples=40, scale_data=True)(o, h, l, c, v)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        // With 5 inputs, max 5 components (even though pca_6 requests 6)
         for (int k = 0; k < 5; ++k) {
             REQUIRE(df.contains(fmt::format("result#pc_{}", k)));
         }
@@ -385,68 +459,11 @@ result = rolling_pca_6(window_size=60, min_training_samples=40, scale_data=true)
 }
 
 // ============================================================================
-// TEST CASE: Rolling ICA
+// SECTION 5: ROLLING HMM TESTS
+// Variants: rolling_hmm_2, rolling_hmm_3, rolling_hmm_4, rolling_hmm_5
 // ============================================================================
 
-TEST_CASE("Orchestrator - rolling_ica", "[orchestrator][ml][decomposition][rolling_ica]") {
-    const auto dailyTF = TestTimeFrames::Daily();
-    const std::string aapl = TestAssetConstants::AAPL;
-    const int NUM_ROWS = 150;
-
-    SECTION("rolling_ica - basic execution") {
-        auto code = R"(
-src = market_data_source(timeframe="1D")()
-o = src.o
-h = src.h
-l = src.l
-result = rolling_ica(window_size=60, min_training_samples=40)(o, h, l)
-)";
-        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
-        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
-
-        auto results = orch.ExecutePipeline(std::move(inputData));
-        auto df = results[dailyTF.ToString()][aapl];
-
-        // Verify ICA output columns (ic_0 through ic_4)
-        REQUIRE(df.contains("result#ic_0"));
-        REQUIRE(df.contains("result#ic_1"));
-        REQUIRE(df.contains("result#ic_2"));
-
-        // Verify output size
-        REQUIRE(df["result#ic_0"].size() == NUM_ROWS);
-    }
-
-    SECTION("rolling_ica - with custom RADICAL params") {
-        auto code = R"(
-src = market_data_source(timeframe="1D")()
-o = src.o
-h = src.h
-l = src.l
-c = src.c
-result = rolling_ica(window_size=60, min_training_samples=40, noise_std_dev=0.2, replicates=20)(o, h, l, c)
-)";
-        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
-        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
-
-        auto results = orch.ExecutePipeline(std::move(inputData));
-        auto df = results[dailyTF.ToString()][aapl];
-
-        // Verify output exists
-        REQUIRE(df.contains("result#ic_0"));
-    }
-}
-
-// ============================================================================
-// TEST CASE: Rolling HMM (rolling_hmm_2 through rolling_hmm_5)
-// ============================================================================
-
-TEST_CASE("Orchestrator - rolling_hmm variants", "[orchestrator][ml][hmm][rolling_hmm]") {
+TEST_CASE("ML Integration - Rolling HMM", "[orchestrator][ml][hmm]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
     const int NUM_ROWS = 150;
@@ -464,16 +481,13 @@ result = rolling_hmm_2(window_size=60, min_training_samples=40)(c, v)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify HMM output columns
-        REQUIRE(df.contains("result#state"));
-        REQUIRE(df.contains("result#state_0_prob"));
-        REQUIRE(df.contains("result#state_1_prob"));
-
-        // Verify output size
-        REQUIRE(df["result#state"].size() == NUM_ROWS);
+        // HMM outputs: state + N state probability columns
+        VerifyColumnsExist(df, {"result#state", "result#state_0_prob", "result#state_1_prob"});
+        VerifyOutputSize(df, "result#state", NUM_ROWS);
     }
 
     SECTION("rolling_hmm_3 - three states") {
@@ -489,14 +503,39 @@ result = rolling_hmm_3(window_size=60, min_training_samples=40)(c, v)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify 3 state probability columns
+        VerifyColumnsExist(df, {
+            "result#state",
+            "result#state_0_prob",
+            "result#state_1_prob",
+            "result#state_2_prob"
+        });
+    }
+
+    SECTION("rolling_hmm_4 - four states") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+v = src.v
+result = rolling_hmm_4(window_size=60, min_training_samples=40)(c, v)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
         REQUIRE(df.contains("result#state"));
-        REQUIRE(df.contains("result#state_0_prob"));
-        REQUIRE(df.contains("result#state_1_prob"));
-        REQUIRE(df.contains("result#state_2_prob"));
+        for (int s = 0; s < 4; ++s) {
+            REQUIRE(df.contains(fmt::format("result#state_{}_prob", s)));
+        }
     }
 
     SECTION("rolling_hmm_5 - five states with custom convergence") {
@@ -512,10 +551,10 @@ result = rolling_hmm_5(window_size=60, min_training_samples=40, max_iterations=5
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify 5 state probability columns
         for (int s = 0; s < 5; ++s) {
             REQUIRE(df.contains(fmt::format("result#state_{}_prob", s)));
         }
@@ -523,25 +562,23 @@ result = rolling_hmm_5(window_size=60, min_training_samples=40, max_iterations=5
 }
 
 // ============================================================================
-// TEST CASE: Rolling LightGBM Classifier
+// SECTION 7: ROLLING LIGHTGBM TESTS (CLASSIFIER AND REGRESSOR)
 // ============================================================================
 
-TEST_CASE("Orchestrator - rolling_lightgbm_classifier", "[orchestrator][ml][supervised][lightgbm]") {
+TEST_CASE("ML Integration - Rolling LightGBM Classifier", "[orchestrator][ml][supervised][lightgbm][classifier]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
-    const int NUM_ROWS = 200;  // Need more data for supervised learning
+    const int NUM_ROWS = 200;
 
-    SECTION("rolling_lightgbm_classifier - binary classification") {
-        // Create a simple binary label from price data
+    SECTION("rolling_lightgbm_classifier - binary classification basic") {
         auto code = R"(
 src = market_data_source(timeframe="1D")()
 o = src.o
 h = src.h
 l = src.l
 c = src.c
-# Create binary label: 1 if c > o (up day), else 0
 label = gte()(c, o)
-result = rolling_lightgbm_classifier(window_size=60, min_training_samples=40, num_estimators=10)(o, h, l, label)
+result = rolling_lightgbm_classifier(window_size=60, min_training_samples=40, num_estimators=10)(o, h, l, target=label)
 )";
         auto manager = CreateTransformManager(strategy::PythonSource{code, true});
         DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
@@ -549,15 +586,13 @@ result = rolling_lightgbm_classifier(window_size=60, min_training_samples=40, nu
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify LightGBM classifier output columns
-        REQUIRE(df.contains("result#prediction"));
-        REQUIRE(df.contains("result#probability"));
-
-        // Verify output size
-        REQUIRE(df["result#prediction"].size() == NUM_ROWS);
+        // LightGBM classifier outputs: prediction, probability
+        VerifyColumnsExist(df, {"result#prediction", "result#probability"});
+        VerifyOutputSize(df, "result#prediction", NUM_ROWS);
     }
 
     SECTION("rolling_lightgbm_classifier - with hyperparameters") {
@@ -574,7 +609,7 @@ result = rolling_lightgbm_classifier(
     learning_rate=0.05,
     num_leaves=15,
     min_data_in_leaf=5
-)(o, h, label)
+)(o, h, target=label)
 )";
         auto manager = CreateTransformManager(strategy::PythonSource{code, true});
         DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
@@ -582,34 +617,56 @@ result = rolling_lightgbm_classifier(
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
         REQUIRE(df.contains("result#prediction"));
         REQUIRE(df.contains("result#probability"));
     }
+
+    SECTION("rolling_lightgbm_classifier - with regularization") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+c = src.c
+label = gte()(c, o)
+result = rolling_lightgbm_classifier(
+    window_size=60,
+    min_training_samples=40,
+    num_estimators=15,
+    lambda_l1=0.1,
+    lambda_l2=0.1
+)(o, target=label)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        REQUIRE(df.contains("result#prediction"));
+    }
 }
 
-// ============================================================================
-// TEST CASE: Rolling LightGBM Regressor
-// ============================================================================
-
-TEST_CASE("Orchestrator - rolling_lightgbm_regressor", "[orchestrator][ml][supervised][lightgbm]") {
+TEST_CASE("ML Integration - Rolling LightGBM Regressor", "[orchestrator][ml][supervised][lightgbm][regressor]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
     const int NUM_ROWS = 200;
 
-    SECTION("rolling_lightgbm_regressor - return prediction") {
-        // Use h-l as target (a simple range)
+    SECTION("rolling_lightgbm_regressor - basic regression") {
         auto code = R"(
 src = market_data_source(timeframe="1D")()
 o = src.o
 h = src.h
 l = src.l
 c = src.c
-# Predict high-low range
 target = sub()(h, l)
-result = rolling_lightgbm_regressor(window_size=60, min_training_samples=40, num_estimators=10)(o, c, target)
+result = rolling_lightgbm_regressor(window_size=60, min_training_samples=40, num_estimators=10)(o, c, target=target)
 )";
         auto manager = CreateTransformManager(strategy::PythonSource{code, true});
         DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
@@ -617,12 +674,13 @@ result = rolling_lightgbm_regressor(window_size=60, min_training_samples=40, num
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify LightGBM regressor output column
+        // LightGBM regressor output: prediction
         REQUIRE(df.contains("result#prediction"));
-        REQUIRE(df["result#prediction"].size() == NUM_ROWS);
+        VerifyOutputSize(df, "result#prediction", NUM_ROWS);
     }
 
     SECTION("rolling_lightgbm_regressor - with regularization") {
@@ -637,7 +695,7 @@ result = rolling_lightgbm_regressor(
     num_estimators=15,
     lambda_l1=0.1,
     lambda_l2=0.1
-)(o, target)
+)(o, target=target)
 )";
         auto manager = CreateTransformManager(strategy::PythonSource{code, true});
         DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
@@ -645,7 +703,36 @@ result = rolling_lightgbm_regressor(
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        REQUIRE(df.contains("result#prediction"));
+    }
+
+    SECTION("rolling_lightgbm_regressor - with custom options") {
+        // Test with num_leaves option (integer) instead of max_depth (select)
+        // to avoid YAML parser issues with numeric string values
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+target = sub()(h, o)
+result = rolling_lightgbm_regressor(
+    window_size=60,
+    min_training_samples=40,
+    num_estimators=10,
+    num_leaves=20
+)(o, h, target=target)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
         REQUIRE(df.contains("result#prediction"));
@@ -653,22 +740,22 @@ result = rolling_lightgbm_regressor(
 }
 
 // ============================================================================
-// TEST CASE: Rolling Logistic Regression (L1 and L2)
+// SECTION 8: ROLLING LOGISTIC REGRESSION TESTS (L1 AND L2)
 // ============================================================================
 
-TEST_CASE("Orchestrator - rolling_logistic variants", "[orchestrator][ml][supervised][logistic]") {
+TEST_CASE("ML Integration - Rolling Logistic Regression", "[orchestrator][ml][supervised][logistic]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
     const int NUM_ROWS = 200;
 
-    SECTION("rolling_logistic_l1 - sparse logistic regression") {
+    SECTION("rolling_logistic_l1 - L1-regularized") {
         auto code = R"(
 src = market_data_source(timeframe="1D")()
 o = src.o
 h = src.h
 c = src.c
 label = gte()(c, o)
-result = rolling_logistic_l1(window_size=60, min_training_samples=40, C=1.0)(o, h, label)
+result = rolling_logistic_l1(window_size=60, min_training_samples=40, C=1.0)(o, h, target=label)
 )";
         auto manager = CreateTransformManager(strategy::PythonSource{code, true});
         DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
@@ -676,25 +763,23 @@ result = rolling_logistic_l1(window_size=60, min_training_samples=40, C=1.0)(o, 
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify logistic classifier output columns
-        REQUIRE(df.contains("result#prediction"));
-        REQUIRE(df.contains("result#probability"));
-        REQUIRE(df.contains("result#decision_value"));
-
-        REQUIRE(df["result#prediction"].size() == NUM_ROWS);
+        // Logistic outputs: prediction, probability, decision_value
+        VerifyColumnsExist(df, {"result#prediction", "result#probability", "result#decision_value"});
+        VerifyOutputSize(df, "result#prediction", NUM_ROWS);
     }
 
-    SECTION("rolling_logistic_l2 - ridge logistic regression") {
+    SECTION("rolling_logistic_l2 - L2-regularized") {
         auto code = R"(
 src = market_data_source(timeframe="1D")()
 o = src.o
 h = src.h
 c = src.c
 label = gte()(c, o)
-result = rolling_logistic_l2(window_size=60, min_training_samples=40, C=0.5)(o, h, label)
+result = rolling_logistic_l2(window_size=60, min_training_samples=40, C=0.5)(o, h, target=label)
 )";
         auto manager = CreateTransformManager(strategy::PythonSource{code, true});
         DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
@@ -702,20 +787,40 @@ result = rolling_logistic_l2(window_size=60, min_training_samples=40, C=0.5)(o, 
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        VerifyColumnsExist(df, {"result#prediction", "result#probability", "result#decision_value"});
+    }
+
+    SECTION("rolling_logistic_l1 - strong regularization") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+c = src.c
+label = gte()(c, o)
+result = rolling_logistic_l1(window_size=60, min_training_samples=40, C=0.1)(o, target=label)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
         REQUIRE(df.contains("result#prediction"));
-        REQUIRE(df.contains("result#probability"));
-        REQUIRE(df.contains("result#decision_value"));
     }
 }
 
 // ============================================================================
-// TEST CASE: Rolling SVR (L1 and L2)
+// SECTION 9: ROLLING SVR TESTS (L1 AND L2)
 // ============================================================================
 
-TEST_CASE("Orchestrator - rolling_svr variants", "[orchestrator][ml][supervised][svr]") {
+TEST_CASE("ML Integration - Rolling SVR", "[orchestrator][ml][supervised][svr]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
     const int NUM_ROWS = 200;
@@ -727,7 +832,7 @@ o = src.o
 h = src.h
 l = src.l
 target = sub()(h, l)
-result = rolling_svr_l1(window_size=60, min_training_samples=40, C=1.0)(o, h, target)
+result = rolling_svr_l1(window_size=60, min_training_samples=40, C=1.0)(o, h, target=target)
 )";
         auto manager = CreateTransformManager(strategy::PythonSource{code, true});
         DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
@@ -735,12 +840,13 @@ result = rolling_svr_l1(window_size=60, min_training_samples=40, C=1.0)(o, h, ta
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify SVR output column
-        REQUIRE(df.contains("result#result"));
-        REQUIRE(df["result#result"].size() == NUM_ROWS);
+        // SVR output: prediction
+        REQUIRE(df.contains("result#prediction"));
+        VerifyOutputSize(df, "result#prediction", NUM_ROWS);
     }
 
     SECTION("rolling_svr_l2 - L2-loss SVR") {
@@ -750,7 +856,7 @@ o = src.o
 h = src.h
 l = src.l
 target = sub()(h, l)
-result = rolling_svr_l2(window_size=60, min_training_samples=40, C=0.5, eps=0.001)(o, h, target)
+result = rolling_svr_l2(window_size=60, min_training_samples=40, C=0.5, epsilon=0.001)(o, h, target=target)
 )";
         auto manager = CreateTransformManager(strategy::PythonSource{code, true});
         DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
@@ -758,18 +864,41 @@ result = rolling_svr_l2(window_size=60, min_training_samples=40, C=0.5, eps=0.00
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        REQUIRE(df.contains("result#result"));
+        REQUIRE(df.contains("result#prediction"));
+    }
+
+    SECTION("rolling_svr_l1 - strong regularization") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+c = src.c
+target = sub()(c, o)
+result = rolling_svr_l1(window_size=60, min_training_samples=40, C=0.1)(o, target=target)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        REQUIRE(df.contains("result#prediction"));
     }
 }
 
 // ============================================================================
-// TEST CASE: ML Preprocessing Transforms
+// SECTION 10: STATIC ML PREPROCESSING TESTS
+// Variants: ml_zscore_N, ml_minmax_N, ml_robust_N (N=2-6)
 // ============================================================================
 
-TEST_CASE("Orchestrator - ml_preprocessing transforms", "[orchestrator][ml][preprocessing]") {
+TEST_CASE("ML Integration - Static Preprocessing", "[orchestrator][ml][preprocessing][static]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
     const int NUM_ROWS = 100;
@@ -787,13 +916,33 @@ result = ml_zscore_2(split_ratio=0.7)(o, c)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify zscore output columns
-        REQUIRE(df.contains("result#scaled_0"));
-        REQUIRE(df.contains("result#scaled_1"));
-        REQUIRE(df["result#scaled_0"].size() == NUM_ROWS);
+        VerifyColumnsExist(df, {"result#scaled_0", "result#scaled_1"});
+        VerifyOutputSize(df, "result#scaled_0", NUM_ROWS);
+    }
+
+    SECTION("ml_zscore_3 - three features") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+l = src.l
+result = ml_zscore_3(split_ratio=0.7)(o, h, l)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        VerifyColumnsExist(df, {"result#scaled_0", "result#scaled_1", "result#scaled_2"});
     }
 
     SECTION("ml_minmax_3 - min-max scaling") {
@@ -810,13 +959,35 @@ result = ml_minmax_3(split_ratio=0.8)(o, h, l)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify minmax output columns
-        REQUIRE(df.contains("result#scaled_0"));
-        REQUIRE(df.contains("result#scaled_1"));
-        REQUIRE(df.contains("result#scaled_2"));
+        VerifyColumnsExist(df, {"result#scaled_0", "result#scaled_1", "result#scaled_2"});
+    }
+
+    SECTION("ml_minmax_4 - four features") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+l = src.l
+c = src.c
+result = ml_minmax_4(split_ratio=0.7)(o, h, l, c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        for (int i = 0; i < 4; ++i) {
+            REQUIRE(df.contains(fmt::format("result#scaled_{}", i)));
+        }
     }
 
     SECTION("ml_robust_4 - robust scaling with IQR") {
@@ -834,22 +1005,171 @@ result = ml_robust_4(split_ratio=0.7)(o, h, l, c)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify robust output columns
-        REQUIRE(df.contains("result#scaled_0"));
-        REQUIRE(df.contains("result#scaled_1"));
-        REQUIRE(df.contains("result#scaled_2"));
-        REQUIRE(df.contains("result#scaled_3"));
+        VerifyColumnsExist(df, {"result#scaled_0", "result#scaled_1", "result#scaled_2", "result#scaled_3"});
+    }
+
+    SECTION("ml_robust_5 - five features") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+l = src.l
+c = src.c
+v = src.v
+result = ml_robust_5(split_ratio=0.7)(o, h, l, c, v)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        for (int i = 0; i < 5; ++i) {
+            REQUIRE(df.contains(fmt::format("result#scaled_{}", i)));
+        }
     }
 }
 
 // ============================================================================
-// TEST CASE: Rolling ML Preprocessing
+// SECTION 10B: STATIC SUPERVISED ML TESTS
 // ============================================================================
 
-TEST_CASE("Orchestrator - rolling_ml_preprocessing", "[orchestrator][ml][preprocessing][rolling]") {
+TEST_CASE("ML Integration - Static LightGBM", "[orchestrator][ml][supervised][static][lightgbm]") {
+    const auto dailyTF = TestTimeFrames::Daily();
+    const std::string aapl = TestAssetConstants::AAPL;
+    const int NUM_ROWS = 100;
+
+    SECTION("lightgbm_regressor - basic regression") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+tgt = sub()(h, o)
+result = lightgbm_regressor(split_ratio=0.7, num_estimators=10)(o, target=tgt)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        REQUIRE(df.contains("result#prediction"));
+        VerifyOutputSize(df, "result#prediction", NUM_ROWS);
+    }
+}
+
+TEST_CASE("ML Integration - Static Linear Models", "[orchestrator][ml][supervised][static][linear]") {
+    const auto dailyTF = TestTimeFrames::Daily();
+    const std::string aapl = TestAssetConstants::AAPL;
+    const int NUM_ROWS = 100;
+
+    SECTION("logistic_l1 - L1 regularized classification") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+c = src.c
+label = gte()(c, o)
+result = logistic_l1(split_ratio=0.7, C=1.0, min_training_samples=50)(o, target=label)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        REQUIRE(df.contains("result#prediction"));
+        REQUIRE(df.contains("result#probability"));
+    }
+
+    SECTION("logistic_l2 - L2 regularized classification") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+c = src.c
+label = gte()(c, o)
+result = logistic_l2(split_ratio=0.7, C=0.5, min_training_samples=50)(o, target=label)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        REQUIRE(df.contains("result#prediction"));
+        REQUIRE(df.contains("result#probability"));
+    }
+
+    SECTION("svr_l1 - L1 support vector regression") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+tgt = sub()(h, o)
+result = svr_l1(split_ratio=0.7, C=1.0, min_training_samples=50)(o, target=tgt)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        REQUIRE(df.contains("result#result"));
+        VerifyOutputSize(df, "result#result", NUM_ROWS);
+    }
+
+    SECTION("svr_l2 - L2 support vector regression") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+l = src.l
+tgt = sub()(h, l)
+result = svr_l2(split_ratio=0.7, C=0.5, eps=0.01, min_training_samples=50)(o, target=tgt)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        REQUIRE(df.contains("result#result"));
+        VerifyOutputSize(df, "result#result", NUM_ROWS);
+    }
+}
+
+// ============================================================================
+// SECTION 11: ROLLING ML PREPROCESSING TESTS
+// ============================================================================
+
+TEST_CASE("ML Integration - Rolling Preprocessing", "[orchestrator][ml][preprocessing][rolling]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
     const int NUM_ROWS = 150;
@@ -867,12 +1187,12 @@ result = rolling_ml_zscore(window_size=60, min_training_samples=40)(o, c)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        // Verify output columns exist
-        REQUIRE(df.contains("result#scaled_0"));
-        REQUIRE(df.contains("result#scaled_1"));
+        VerifyColumnsExist(df, {"result#scaled_0", "result#scaled_1"});
+        VerifyOutputSize(df, "result#scaled_0", NUM_ROWS);
     }
 
     SECTION("rolling_ml_minmax - rolling min-max") {
@@ -889,12 +1209,11 @@ result = rolling_ml_minmax(window_size=60, min_training_samples=40)(o, h, l)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        REQUIRE(df.contains("result#scaled_0"));
-        REQUIRE(df.contains("result#scaled_1"));
-        REQUIRE(df.contains("result#scaled_2"));
+        VerifyColumnsExist(df, {"result#scaled_0", "result#scaled_1", "result#scaled_2"});
     }
 
     SECTION("rolling_ml_robust - rolling robust scaling") {
@@ -910,89 +1229,39 @@ result = rolling_ml_robust(window_size=60, min_training_samples=40)(o, h)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        VerifyColumnsExist(df, {"result#scaled_0", "result#scaled_1"});
+    }
+
+    SECTION("rolling_ml_zscore - with step_size") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+c = src.c
+result = rolling_ml_zscore(window_size=60, min_training_samples=40, step_size=5)(o, c)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
         REQUIRE(df.contains("result#scaled_0"));
-        REQUIRE(df.contains("result#scaled_1"));
     }
 }
 
 // ============================================================================
-// TEST CASE: ML Pipeline - Chained Transforms
+// SECTION 12: WINDOW TYPE OPTIONS TESTS
 // ============================================================================
 
-TEST_CASE("Orchestrator - ML pipeline chaining", "[orchestrator][ml][pipeline]") {
-    const auto dailyTF = TestTimeFrames::Daily();
-    const std::string aapl = TestAssetConstants::AAPL;
-    const int NUM_ROWS = 200;
-
-    SECTION("Preprocess -> Cluster -> Use cluster as feature") {
-        auto code = R"(
-src = market_data_source(timeframe="1D")()
-o = src.o
-c = src.c
-
-# Preprocess features
-scaled = ml_zscore_2(split_ratio=0.7)(o, c)
-
-# Cluster the scaled features
-clusters = rolling_kmeans_3(window_size=60, min_training_samples=40)(scaled.scaled_0, scaled.scaled_1)
-)";
-        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
-        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
-
-        auto results = orch.ExecutePipeline(std::move(inputData));
-        auto df = results[dailyTF.ToString()][aapl];
-
-        // Verify both preprocessing and clustering outputs
-        REQUIRE(df.contains("scaled#scaled_0"));
-        REQUIRE(df.contains("scaled#scaled_1"));
-        REQUIRE(df.contains("clusters#cluster_label"));
-    }
-
-    SECTION("PCA -> GMM regime detection") {
-        auto code = R"(
-src = market_data_source(timeframe="1D")()
-o = src.o
-h = src.h
-l = src.l
-c = src.c
-v = src.v
-
-# Reduce dimensions with PCA
-pca = rolling_pca_3(window_size=60, min_training_samples=40)(o, h, l, c, v)
-
-# Detect regimes with GMM on principal components
-regimes = rolling_gmm_2(window_size=60, min_training_samples=40)(pca.pc_0, pca.pc_1)
-)";
-        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
-        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
-
-        TimeFrameAssetDataFrameMap inputData;
-        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
-
-        auto results = orch.ExecutePipeline(std::move(inputData));
-        auto df = results[dailyTF.ToString()][aapl];
-
-        // Verify PCA outputs
-        REQUIRE(df.contains("pca#pc_0"));
-        REQUIRE(df.contains("pca#pc_1"));
-
-        // Verify GMM outputs
-        REQUIRE(df.contains("regimes#component"));
-        REQUIRE(df.contains("regimes#component_0_prob"));
-    }
-}
-
-// ============================================================================
-// TEST CASE: Window Type Options
-// ============================================================================
-
-TEST_CASE("Orchestrator - ML window type options", "[orchestrator][ml][options]") {
+TEST_CASE("ML Integration - Window Type Options", "[orchestrator][ml][options][window_type]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
     const int NUM_ROWS = 150;
@@ -1010,10 +1279,12 @@ result = rolling_kmeans_2(window_size=50, min_training_samples=40, window_type="
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
         REQUIRE(df.contains("result#cluster_label"));
+        VerifyOutputSize(df, "result#cluster_label", NUM_ROWS);
     }
 
     SECTION("expanding window type") {
@@ -1029,18 +1300,20 @@ result = rolling_kmeans_2(window_size=50, min_training_samples=40, window_type="
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
         REQUIRE(df.contains("result#cluster_label"));
     }
 
-    SECTION("step_size option") {
+    SECTION("step_size option affects retraining frequency") {
+        // Use rolling_kmeans_2 to test step_size (GMM was removed)
         auto code = R"(
 src = market_data_source(timeframe="1D")()
 c = src.c
 v = src.v
-result = rolling_gmm_2(window_size=50, min_training_samples=40, step_size=5)(c, v)
+result = rolling_kmeans_2(window_size=50, min_training_samples=40, step_size=10)(c, v)
 )";
         auto manager = CreateTransformManager(strategy::PythonSource{code, true});
         DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
@@ -1048,18 +1321,130 @@ result = rolling_gmm_2(window_size=50, min_training_samples=40, step_size=5)(c, 
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
         auto df = results[dailyTF.ToString()][aapl];
 
-        REQUIRE(df.contains("result#component"));
+        REQUIRE(df.contains("result#cluster_label"));
     }
 }
 
 // ============================================================================
-// TEST CASE: Multi-Asset ML Transforms
+// SECTION 13: ML PIPELINE CHAINING TESTS
 // ============================================================================
 
-TEST_CASE("Orchestrator - ML transforms multi-asset", "[orchestrator][ml][multi-asset]") {
+TEST_CASE("ML Integration - Pipeline Chaining", "[orchestrator][ml][pipeline]") {
+    const auto dailyTF = TestTimeFrames::Daily();
+    const std::string aapl = TestAssetConstants::AAPL;
+    const int NUM_ROWS = 200;
+
+    SECTION("Preprocess -> Cluster") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+c = src.c
+
+scaled = ml_zscore_2(split_ratio=0.7)(o, c)
+clusters = rolling_kmeans_3(window_size=60, min_training_samples=40)(scaled.scaled_0, scaled.scaled_1)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        // Verify preprocessing outputs
+        VerifyColumnsExist(df, {"scaled#scaled_0", "scaled#scaled_1"});
+        // Verify clustering outputs
+        REQUIRE(df.contains("clusters#cluster_label"));
+    }
+
+    SECTION("PCA -> HMM regime detection") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+l = src.l
+c = src.c
+v = src.v
+
+pca = rolling_pca_3(window_size=60, min_training_samples=40)(o, h, l, c, v)
+regimes = rolling_hmm_2(window_size=60, min_training_samples=40)(pca.pc_0, pca.pc_1)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        // Verify PCA outputs
+        VerifyColumnsExist(df, {"pca#pc_0", "pca#pc_1", "pca#pc_2"});
+        // Verify HMM outputs
+        VerifyColumnsExist(df, {"regimes#state", "regimes#state_0_prob"});
+    }
+
+    SECTION("Preprocessing -> Supervised ML") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+c = src.c
+
+scaled = ml_zscore_2(split_ratio=0.7)(o, h)
+label = gte()(c, o)
+classifier = rolling_logistic_l2(window_size=60, min_training_samples=40, C=1.0)(scaled.scaled_0, scaled.scaled_1, target=label)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        VerifyColumnsExist(df, {"scaled#scaled_0", "scaled#scaled_1"});
+        VerifyColumnsExist(df, {"classifier#prediction", "classifier#probability"});
+    }
+
+    SECTION("HMM -> Use state as feature") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+v = src.v
+
+hmm_states = rolling_hmm_2(window_size=60, min_training_samples=40)(c, v)
+clusters = rolling_kmeans_2(window_size=60, min_training_samples=40)(c, hmm_states.state_0_prob)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        VerifyColumnsExist(df, {"hmm_states#state", "hmm_states#state_0_prob"});
+        REQUIRE(df.contains("clusters#cluster_label"));
+    }
+}
+
+// ============================================================================
+// SECTION 14: MULTI-ASSET TESTS
+// ============================================================================
+
+TEST_CASE("ML Integration - Multi-Asset Execution", "[orchestrator][ml][multi-asset]") {
     const auto dailyTF = TestTimeFrames::Daily();
     const std::string aapl = TestAssetConstants::AAPL;
     const std::string msft = TestAssetConstants::MSFT;
@@ -1079,7 +1464,8 @@ clusters = rolling_kmeans_2(window_size=60, min_training_samples=40)(c, v)
         inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
         inputData[dailyTF.ToString()][msft] = CreateMLTestData(NUM_ROWS);
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         // Verify both assets have outputs
         REQUIRE(results[dailyTF.ToString()].contains(aapl));
@@ -1090,5 +1476,116 @@ clusters = rolling_kmeans_2(window_size=60, min_training_samples=40)(c, v)
 
         REQUIRE(aapl_df.contains("clusters#cluster_label"));
         REQUIRE(msft_df.contains("clusters#cluster_label"));
+    }
+
+    SECTION("Multiple ML transforms on multiple assets") {
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+v = src.v
+
+pca = rolling_pca_2(window_size=60, min_training_samples=40)(c, v)
+hmm = rolling_hmm_2(window_size=60, min_training_samples=40)(c, v)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl, msft}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+        inputData[dailyTF.ToString()][msft] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+
+        auto aapl_df = results[dailyTF.ToString()][aapl];
+        auto msft_df = results[dailyTF.ToString()][msft];
+
+        // Both assets should have both PCA and HMM outputs
+        REQUIRE(aapl_df.contains("pca#pc_0"));
+        REQUIRE(aapl_df.contains("hmm#state"));
+        REQUIRE(msft_df.contains("pca#pc_0"));
+        REQUIRE(msft_df.contains("hmm#state"));
+    }
+}
+
+// ============================================================================
+// SECTION 15: EDGE CASE TESTS
+// ============================================================================
+
+TEST_CASE("ML Integration - Edge Cases", "[orchestrator][ml][edge_cases]") {
+    const auto dailyTF = TestTimeFrames::Daily();
+    const std::string aapl = TestAssetConstants::AAPL;
+
+    SECTION("Minimum data for window size") {
+        // Test with exactly enough data for window_size + some prediction
+        const int NUM_ROWS = 70;  // window_size=60, min_training_samples=40
+
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+v = src.v
+result = rolling_kmeans_2(window_size=60, min_training_samples=40)(c, v)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        REQUIRE(df.contains("result#cluster_label"));
+        VerifyOutputSize(df, "result#cluster_label", NUM_ROWS);
+    }
+
+    SECTION("Two correlated features ML transform") {
+        const int NUM_ROWS = 150;
+
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+c = src.c
+v = src.v
+result = rolling_pca_2(window_size=60, min_training_samples=40)(c, v)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        // With 2 inputs, 2 PCs possible
+        REQUIRE(df.contains("result#pc_0"));
+        REQUIRE(df.contains("result#pc_1"));
+    }
+
+    SECTION("Many features ML transform") {
+        const int NUM_ROWS = 150;
+
+        auto code = R"(
+src = market_data_source(timeframe="1D")()
+o = src.o
+h = src.h
+l = src.l
+c = src.c
+v = src.v
+result = rolling_kmeans_2(window_size=60, min_training_samples=40)(o, h, l, c, v)
+)";
+        auto manager = CreateTransformManager(strategy::PythonSource{code, true});
+        DataFlowRuntimeOrchestrator orch({aapl}, std::move(manager));
+
+        TimeFrameAssetDataFrameMap inputData;
+        inputData[dailyTF.ToString()][aapl] = CreateMLTestData(NUM_ROWS);
+
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
+        auto df = results[dailyTF.ToString()][aapl];
+
+        REQUIRE(df.contains("result#cluster_label"));
     }
 }

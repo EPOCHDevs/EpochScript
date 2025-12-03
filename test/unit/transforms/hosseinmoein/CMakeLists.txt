@@ -1,6 +1,6 @@
 target_sources(epoch_script_test PRIVATE indicators_test.cpp volatility_test.cpp donchian_channel_test.cpp
  ichimoku_test.cpp
- # linear_fit_test.cpp
+ linear_fit_test.cpp
 zscore_test.cpp
 cointegration_test.cpp
 frac_diff_test.cpp

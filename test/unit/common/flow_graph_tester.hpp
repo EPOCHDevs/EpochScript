@@ -11,6 +11,7 @@
 #include <epoch_protos/tearsheet.pb.h>
 #include <runtime/orchestrator.h>
 #include <runtime/transform_manager/transform_manager.h>
+#include <epoch_data_sdk/events/all.h>
 
 #include <yaml-cpp/yaml.h>
 #include <memory>
@@ -260,7 +261,8 @@ private:
         epoch_flow::runtime::DataFlowRuntimeOrchestrator graph(assets, std::move(manager));
 
         // Transform data
-        auto outputDataframes = graph.ExecutePipeline(inputData);
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto outputDataframes = graph.ExecutePipeline(inputData, emitter);
 
         // Get reports
         auto outputReports = graph.GetGeneratedReports();

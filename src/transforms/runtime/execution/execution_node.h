@@ -16,7 +16,8 @@ using execution_context_t = const tbb::flow::continue_msg &;
 enum class ExecutionNodeType {
   Default,
   CrossSectional,
-  AssetRefPassthrough
+  AssetRefPassthrough,
+  IsAssetRef
 };
 
 // Apply a regular transform
@@ -33,6 +34,12 @@ void ApplyCrossSectionTransform(const epoch_script::transform::ITransformBase &t
 void ApplyAssetRefPassthroughTransform(const epoch_script::transform::ITransformBase &transformer,
                                         ExecutionContext &msg);
 
+// Apply an is_asset_ref transform
+// Returns boolean series: true for matching assets, false for non-matching
+// Outputs for ALL assets (scalar-optimized, no timeframe management)
+void ApplyIsAssetRefTransform(const epoch_script::transform::ITransformBase &transformer,
+                               ExecutionContext &msg);
+
 // Create a node function for a transform
 // Pass the transformer, assets, and message by reference to avoid dangling references
 template <ExecutionNodeType node_type>
@@ -45,6 +52,8 @@ MakeExecutionNode(const epoch_script::transform::ITransformBase &transformer,
       ApplyCrossSectionTransform(transformer, msg);
     } else if constexpr (node_type == ExecutionNodeType::AssetRefPassthrough) {
       ApplyAssetRefPassthroughTransform(transformer, msg);
+    } else if constexpr (node_type == ExecutionNodeType::IsAssetRef) {
+      ApplyIsAssetRefTransform(transformer, msg);
     } else {
       ApplyDefaultTransform(transformer, msg);
     }

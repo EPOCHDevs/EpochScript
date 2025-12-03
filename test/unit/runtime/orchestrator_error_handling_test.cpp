@@ -24,12 +24,21 @@
 #include <epoch_frame/factory/dataframe_factory.h>
 #include <epoch_frame/factory/index_factory.h>
 #include <epoch_frame/factory/array_factory.h>
+#include <epoch_data_sdk/events/all.h>
 #include <index/datetime_index.h>
 
 using namespace epoch_script::runtime;
 using namespace epoch_script::runtime;
 using namespace epoch_script::runtime::test;
 using namespace epoch_script;
+
+namespace {
+    // Helper to execute pipeline with no-op emitter
+    auto ExecuteWithEmitter(DataFlowRuntimeOrchestrator& orch, TimeFrameAssetDataFrameMap inputData) {
+        data_sdk::events::ScopedProgressEmitter emitter;
+        return orch.ExecutePipeline(std::move(inputData), emitter);
+    }
+}
 
 TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors][critical]") {
     const auto dailyTF = TestTimeFrames::Daily();
@@ -124,7 +133,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors
 
         // With valid input and transform that throws, pipeline should propagate the exception
         REQUIRE_THROWS_WITH(
-            orch.ExecutePipeline(std::move(inputData)),
+            ExecuteWithEmitter(orch, std::move(inputData)),
             Catch::Matchers::ContainsSubstring("Intentional transform failure")
         );
     }
@@ -164,7 +173,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors
         // When B throws, the exception propagates and the pipeline fails
         // C should not execute because B (its dependency) failed
         REQUIRE_THROWS_WITH(
-            orch.ExecutePipeline(std::move(inputData)),
+            ExecuteWithEmitter(orch, std::move(inputData)),
             Catch::Matchers::ContainsSubstring("B failed")
         );
     }
@@ -189,7 +198,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors
         inputData[dailyTF.ToString()][aapl] = createMinimalDataFrame();
 
         // Should throw - first exception (either A or B) propagates
-        REQUIRE_THROWS(orch.ExecutePipeline(std::move(inputData)));
+        REQUIRE_THROWS(ExecuteWithEmitter(orch, std::move(inputData)));
     }
 
     SECTION("Exception with detailed context information") {
@@ -209,7 +218,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors
 
         // Exception should propagate with detailed message
         REQUIRE_THROWS_WITH(
-            orch.ExecutePipeline(std::move(inputData)),
+            ExecuteWithEmitter(orch, std::move(inputData)),
             Catch::Matchers::ContainsSubstring(detailedMessage)
         );
     }
@@ -234,7 +243,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors
 
         // Exception during report caching should be caught and logged, not crash pipeline
         // This tests the try-catch in CacheReportFromTransform
-        REQUIRE_NOTHROW(orch.ExecutePipeline(std::move(inputData)));
+        REQUIRE_NOTHROW(ExecuteWithEmitter(orch, std::move(inputData)));
     }
 
     SECTION("Null pointer exception is properly propagated") {
@@ -253,7 +262,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors
 
         // Null pointer exception should be properly propagated
         REQUIRE_THROWS_WITH(
-            orch.ExecutePipeline(std::move(inputData)),
+            ExecuteWithEmitter(orch, std::move(inputData)),
             Catch::Matchers::ContainsSubstring("Null pointer access")
         );
     }
@@ -282,7 +291,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Error Handling", "[orchestrator][errors
 
         // Exception on second asset should propagate
         REQUIRE_THROWS_WITH(
-            orch.ExecutePipeline(std::move(inputData)),
+            ExecuteWithEmitter(orch, std::move(inputData)),
             Catch::Matchers::ContainsSubstring("Failed on second asset")
         );
     }

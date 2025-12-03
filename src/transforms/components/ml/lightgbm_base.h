@@ -52,19 +52,34 @@ public:
   }
 
   /**
-   * @brief Create dataset from dense matrix
+   * @brief Create dataset from dense matrix (row-major)
    * @param data Row-major data matrix (n_samples x n_features)
    * @param labels Target labels
    * @param params LightGBM parameters string
    */
   void Create(const std::vector<double>& data, int32_t nrow, int32_t ncol,
               const std::vector<float>& labels, const std::string& params) {
+    CreateFromPtr(data.data(), nrow, ncol, true, labels, params);
+  }
+
+  /**
+   * @brief Create dataset from dense matrix pointer (zero-copy for column-major)
+   * @param data Pointer to contiguous data (nrow x ncol elements)
+   * @param nrow Number of rows (samples)
+   * @param ncol Number of columns (features)
+   * @param is_row_major True if row-major layout, false if column-major (like arma::mat)
+   * @param labels Target labels
+   * @param params LightGBM parameters string
+   */
+  void CreateFromPtr(const double* data, int32_t nrow, int32_t ncol,
+                     bool is_row_major, const std::vector<float>& labels,
+                     const std::string& params) {
     CheckError(LGBM_DatasetCreateFromMat(
-        data.data(),
+        data,
         C_API_DTYPE_FLOAT64,
         nrow,
         ncol,
-        1,  // is_row_major
+        is_row_major ? 1 : 0,
         params.c_str(),
         nullptr,  // no reference dataset
         &handle_
@@ -147,7 +162,7 @@ public:
   }
 
   /**
-   * @brief Predict for dense matrix
+   * @brief Predict for dense matrix (row-major)
    * @param data Row-major data matrix
    * @param nrow Number of rows
    * @param ncol Number of columns
@@ -156,6 +171,21 @@ public:
    */
   std::vector<double> Predict(const std::vector<double>& data, int32_t nrow, int32_t ncol,
                                int predict_type = C_API_PREDICT_NORMAL) const {
+    return PredictFromPtr(data.data(), nrow, ncol, true, predict_type);
+  }
+
+  /**
+   * @brief Predict for dense matrix pointer (zero-copy for column-major)
+   * @param data Pointer to contiguous data (nrow x ncol elements)
+   * @param nrow Number of rows
+   * @param ncol Number of columns
+   * @param is_row_major True if row-major, false if column-major (like arma::mat)
+   * @param predict_type C_API_PREDICT_NORMAL or C_API_PREDICT_RAW_SCORE
+   * @return Predictions
+   */
+  std::vector<double> PredictFromPtr(const double* data, int32_t nrow, int32_t ncol,
+                                      bool is_row_major,
+                                      int predict_type = C_API_PREDICT_NORMAL) const {
     // Calculate output size
     int64_t out_len = 0;
     CheckError(LGBM_BoosterCalcNumPredict(handle_, nrow, predict_type, 0, -1, &out_len));
@@ -165,11 +195,11 @@ public:
 
     CheckError(LGBM_BoosterPredictForMat(
         handle_,
-        data.data(),
+        data,
         C_API_DTYPE_FLOAT64,
         nrow,
         ncol,
-        1,  // is_row_major
+        is_row_major ? 1 : 0,
         predict_type,
         0,   // start_iteration
         -1,  // num_iteration (all)

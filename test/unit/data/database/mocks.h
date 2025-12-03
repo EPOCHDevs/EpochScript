@@ -23,7 +23,7 @@ class MockDataloader final : public data_sdk::IDataLoader {
   using DataMap = data_sdk::asset::AssetHashMap<epoch_frame::DataFrame>;
 
 public:
-  MAKE_MOCK0(LoadData, void(), override);
+  MAKE_MOCK1(LoadData, void(data_sdk::events::ScopedProgressEmitter&), override);
   MAKE_CONST_MOCK0(GetStoredData, DataMap(), override);
   MAKE_CONST_MOCK0(GetDataCategory, data_sdk::DataCategory(), override);
   MAKE_CONST_MOCK0(GetAssets, data_sdk::asset::AssetHashSet(), override);
@@ -83,8 +83,10 @@ public:
 
 class MockTransformGraph final : public epoch_script::runtime::IDataFlowOrchestrator {
 public:
-  MAKE_MOCK1(ExecutePipeline,
-             epoch_script::runtime::TimeFrameAssetDataFrameMap(epoch_script::runtime::TimeFrameAssetDataFrameMap), override);
+  MAKE_MOCK2(ExecutePipeline,
+             epoch_script::runtime::TimeFrameAssetDataFrameMap(
+                 epoch_script::runtime::TimeFrameAssetDataFrameMap,
+                 data_sdk::events::ScopedProgressEmitter&), override);
   MAKE_CONST_MOCK0(GetGeneratedReports, epoch_script::runtime::AssetReportMap(), override);
   MAKE_CONST_MOCK0(GetGeneratedEventMarkers, epoch_script::runtime::AssetEventMarkerMap(), override);
 };
@@ -100,7 +102,7 @@ public:
   using T = std::vector<
       std::tuple<epoch_script::TimeFrameNotation,
                  data_sdk::asset::Asset, epoch_frame::DataFrame>>;
-  MAKE_CONST_MOCK1(Build, T(AssetDataFrameMap const &), override);
+  MAKE_CONST_MOCK2(Build, T(AssetDataFrameMap const &, data_sdk::events::ScopedProgressEmitter&), override);
 };
 
 class MockWebSocketManager final : public IWebSocketManager {
@@ -119,12 +121,12 @@ using TearSheetMap = std::unordered_map<std::string, epoch_proto::TearSheet> ;
 
 class MockDatabaseImpl final : public IDatabaseImpl {
 public:
-  MAKE_MOCK0(RunPipeline, void(), override);
+  MAKE_MOCK1(RunPipeline, void(data_sdk::events::ScopedProgressEmitter&), override);
   MAKE_CONST_MOCK0(GetBenchmark, OptionalSeries(), override);
   MAKE_CONST_MOCK0(GetGeneratedReports, TearSheetMap(), override);
   MAKE_CONST_MOCK0(GetGeneratedEventMarkers, epoch_script::runtime::AssetEventMarkerMap(), override);
 
-  MAKE_MOCK0(RefreshPipeline, void(), override);
+  MAKE_MOCK1(RefreshPipeline, void(data_sdk::events::ScopedProgressEmitter&), override);
   MAKE_CONST_MOCK0(GetIndexer, DatabaseIndexerConstRef(), override);
   MAKE_CONST_MOCK0(GetTransformedData, TransformedDataTypeConstRef(), override);
   MAKE_CONST_MOCK0(GetTimestampIndex, (const TimestampIndex&()), override);

@@ -3,6 +3,7 @@
 #include <epoch_script/data/aliases.h>
 #include "epoch_frame/dataframe.h"
 #include "epoch_script/core/time_frame.h"
+#include <epoch_data_sdk/events/all.h>
 #include <vector>
 
 namespace epoch_script::data {
@@ -13,7 +14,8 @@ namespace epoch_script::data {
 
         virtual std::vector<
             std::tuple<TimeFrameNotation, asset::Asset, epoch_frame::DataFrame>>
-        Build(AssetDataFrameMap const &) const = 0;
+        Build(AssetDataFrameMap const &,
+              data_sdk::events::ScopedProgressEmitter& emitter) const = 0;
     };
 
     using IResamplerPtr = std::unique_ptr<IResampler>;
@@ -33,7 +35,8 @@ namespace epoch_script::data {
 
         std::vector<
             std::tuple<TimeFrameNotation, asset::Asset, epoch_frame::DataFrame>>
-        Build(AssetDataFrameMap const &) const override;
+        Build(AssetDataFrameMap const &,
+              data_sdk::events::ScopedProgressEmitter& emitter) const override;
 
     private:
         std::vector<epoch_script::TimeFrame> m_timeFrames;

@@ -99,10 +99,26 @@ public:
                                       MetaDataOptionDefinition{0.0}).GetDecimal();
     m_lambda_l2 = cfg.GetOptionValue("lambda_l2",
                                       MetaDataOptionDefinition{0.0}).GetDecimal();
+
+    // Pre-build base params at construction time (everything except objective/num_class)
+    lightgbm_utils::ParamsBuilder base_builder;
+    base_builder
+        .SetVerbosity(-1)
+        .SetBoostingType(m_boosting_type)
+        .SetLearningRate(m_learning_rate)
+        .SetNumLeaves(m_num_leaves)
+        .SetMaxDepth(m_max_depth)
+        .SetMinDataInLeaf(m_min_data_in_leaf)
+        .SetLambdaL1(m_lambda_l1)
+        .SetLambdaL2(m_lambda_l2);
+    m_base_params = base_builder.Build();
   }
 
   /**
    * @brief Train LightGBM classifier on training window
+   *
+   * Uses zero-copy column-major data passing - arma::mat is column-major
+   * and LightGBM supports is_row_major=0 for direct pointer access.
    */
   [[nodiscard]] LightGBMModel TrainModel(const arma::mat& X, const arma::vec& y) const {
     // Determine number of classes
@@ -112,43 +128,31 @@ public:
     }
     int num_classes = static_cast<int>(unique_classes.size());
 
-    // Convert to row-major vector
-    std::vector<double> data_vec(X.n_rows * X.n_cols);
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      for (size_t j = 0; j < X.n_cols; ++j) {
-        data_vec[i * X.n_cols + j] = X(i, j);
-      }
+    // Must have at least 2 classes to train a classifier
+    if (num_classes < 2) {
+      throw std::runtime_error(
+        "Cannot train classifier: training window contains only " +
+        std::to_string(num_classes) + " unique class(es). Need at least 2 classes.");
     }
 
+    // Convert labels to float (small copy, unavoidable)
     std::vector<float> labels(y.begin(), y.end());
 
-    // Build parameters
-    lightgbm_utils::ParamsBuilder params_builder;
-    params_builder
-        .SetVerbosity(-1)
-        .SetBoostingType(m_boosting_type)
-        .SetLearningRate(m_learning_rate)
-        .SetNumLeaves(m_num_leaves)
-        .SetMaxDepth(m_max_depth)
-        .SetMinDataInLeaf(m_min_data_in_leaf)
-        .SetLambdaL1(m_lambda_l1)
-        .SetLambdaL2(m_lambda_l2);
-
+    // Append objective params at runtime (num_classes is data-dependent)
+    std::string params = m_base_params;
     if (num_classes == 2) {
-      params_builder.SetObjective("binary");
+      params += " objective=binary";
     } else {
-      params_builder.SetObjective("multiclass");
-      params_builder.SetNumClass(num_classes);
+      params += " objective=multiclass num_class=" + std::to_string(num_classes);
     }
-
-    std::string params = params_builder.Build();
 
     LightGBMModel model;
     model.num_classes = num_classes;
     model.num_features = static_cast<int>(X.n_cols);
 
-    model.dataset.Create(data_vec, static_cast<int32_t>(X.n_rows),
-                         static_cast<int32_t>(X.n_cols), labels, params);
+    // Zero-copy: pass arma::mat memptr directly (column-major)
+    model.dataset.CreateFromPtr(X.memptr(), static_cast<int32_t>(X.n_rows),
+                                static_cast<int32_t>(X.n_cols), false, labels, params);
     model.booster.Create(model.dataset, params);
     model.booster.Train(m_num_estimators);
 
@@ -157,22 +161,17 @@ public:
 
   /**
    * @brief Predict using trained classifier
+   *
+   * Uses zero-copy column-major data passing.
    */
   void Predict(const LightGBMModel& model,
                const arma::mat& X,
                [[maybe_unused]] const ml_utils::WindowSpec& window,
                OutputVectors& outputs,
                size_t output_offset) const {
-    // Convert to row-major vector
-    std::vector<double> data_vec(X.n_rows * X.n_cols);
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      for (size_t j = 0; j < X.n_cols; ++j) {
-        data_vec[i * X.n_cols + j] = X(i, j);
-      }
-    }
-
-    auto preds = model.booster.Predict(data_vec, static_cast<int32_t>(X.n_rows),
-                                        static_cast<int32_t>(X.n_cols));
+    // Zero-copy: pass arma::mat memptr directly (column-major)
+    auto preds = model.booster.PredictFromPtr(X.memptr(), static_cast<int32_t>(X.n_rows),
+                                               static_cast<int32_t>(X.n_cols), false);
 
     for (size_t i = 0; i < X.n_rows; ++i) {
       const size_t idx = output_offset + i;
@@ -227,6 +226,7 @@ private:
   std::string m_boosting_type{"gbdt"};
   double m_lambda_l1{0.0};
   double m_lambda_l2{0.0};
+  std::string m_base_params;  // Pre-built at construction time
 };
 
 /**
@@ -274,23 +274,8 @@ public:
                                       MetaDataOptionDefinition{0.0}).GetDecimal();
     m_lambda_l2 = cfg.GetOptionValue("lambda_l2",
                                       MetaDataOptionDefinition{0.0}).GetDecimal();
-  }
 
-  /**
-   * @brief Train LightGBM regressor on training window
-   */
-  [[nodiscard]] LightGBMModel TrainModel(const arma::mat& X, const arma::vec& y) const {
-    // Convert to row-major vector
-    std::vector<double> data_vec(X.n_rows * X.n_cols);
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      for (size_t j = 0; j < X.n_cols; ++j) {
-        data_vec[i * X.n_cols + j] = X(i, j);
-      }
-    }
-
-    std::vector<float> labels(y.begin(), y.end());
-
-    // Build parameters
+    // Fully pre-build params at construction time (objective is always regression)
     lightgbm_utils::ParamsBuilder params_builder;
     params_builder
         .SetVerbosity(-1)
@@ -302,16 +287,27 @@ public:
         .SetMinDataInLeaf(m_min_data_in_leaf)
         .SetLambdaL1(m_lambda_l1)
         .SetLambdaL2(m_lambda_l2);
+    m_params = params_builder.Build();
+  }
 
-    std::string params = params_builder.Build();
+  /**
+   * @brief Train LightGBM regressor on training window
+   *
+   * Uses zero-copy column-major data passing - arma::mat is column-major
+   * and LightGBM supports is_row_major=0 for direct pointer access.
+   */
+  [[nodiscard]] LightGBMModel TrainModel(const arma::mat& X, const arma::vec& y) const {
+    // Convert labels to float (small copy, unavoidable)
+    std::vector<float> labels(y.begin(), y.end());
 
     LightGBMModel model;
     model.num_classes = 0;  // Regression
     model.num_features = static_cast<int>(X.n_cols);
 
-    model.dataset.Create(data_vec, static_cast<int32_t>(X.n_rows),
-                         static_cast<int32_t>(X.n_cols), labels, params);
-    model.booster.Create(model.dataset, params);
+    // Zero-copy: pass arma::mat memptr directly (column-major)
+    model.dataset.CreateFromPtr(X.memptr(), static_cast<int32_t>(X.n_rows),
+                                static_cast<int32_t>(X.n_cols), false, labels, m_params);
+    model.booster.Create(model.dataset, m_params);
     model.booster.Train(m_num_estimators);
 
     return model;
@@ -319,22 +315,17 @@ public:
 
   /**
    * @brief Predict using trained regressor
+   *
+   * Uses zero-copy column-major data passing.
    */
   void Predict(const LightGBMModel& model,
                const arma::mat& X,
                [[maybe_unused]] const ml_utils::WindowSpec& window,
                OutputVectors& outputs,
                size_t output_offset) const {
-    // Convert to row-major vector
-    std::vector<double> data_vec(X.n_rows * X.n_cols);
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      for (size_t j = 0; j < X.n_cols; ++j) {
-        data_vec[i * X.n_cols + j] = X(i, j);
-      }
-    }
-
-    auto preds = model.booster.Predict(data_vec, static_cast<int32_t>(X.n_rows),
-                                        static_cast<int32_t>(X.n_cols));
+    // Zero-copy: pass arma::mat memptr directly (column-major)
+    auto preds = model.booster.PredictFromPtr(X.memptr(), static_cast<int32_t>(X.n_rows),
+                                               static_cast<int32_t>(X.n_cols), false);
 
     for (size_t i = 0; i < X.n_rows; ++i) {
       outputs.prediction[output_offset + i] = preds[i];
@@ -367,6 +358,7 @@ private:
   std::string m_boosting_type{"gbdt"};
   double m_lambda_l1{0.0};
   double m_lambda_l2{0.0};
+  std::string m_params;  // Fully pre-built at construction time
 };
 
 } // namespace epoch_script::transform

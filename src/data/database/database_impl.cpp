@@ -28,6 +28,7 @@
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/global_control.h>
 #include <vector>
+#include <epoch_data_sdk/events/event_ids.h>
 
 namespace epoch_script::data {
   struct BarArrayBuilder {
@@ -174,14 +175,20 @@ namespace epoch_script::data {
     return std::nullopt;
   }
 
-  void DatabaseImpl::RunPipeline() {
-    LoadData();
-    CompletePipeline();
+  void DatabaseImpl::RunPipeline(data_sdk::events::ScopedProgressEmitter& emitter) {
+    using namespace data_sdk::events;
+    // Stage 1: Data Loading
+    auto loadEmitter = emitter.ChildScope(ScopeType::Stage, std::string(StageName::DataLoading));
+    loadEmitter.EmitStarted(std::string(OperationType::Stage), std::string(StageName::DataLoading));
+    LoadData(loadEmitter);
+    loadEmitter.EmitCompleted(std::string(OperationType::Stage), std::string(StageName::DataLoading));
+
+    CompletePipeline(emitter);
   }
 
-  void DatabaseImpl::RefreshPipeline() {
+  void DatabaseImpl::RefreshPipeline(data_sdk::events::ScopedProgressEmitter& emitter) {
     UpdateData();
-    CompletePipeline();
+    CompletePipeline(emitter);
   }
 
   void DatabaseImpl::AppendFuturesContinuations() {
@@ -216,11 +223,11 @@ namespace epoch_script::data {
     }
   }
 
-  StringAssetDataFrameMap DatabaseImpl::ResampleBarData() {
+  StringAssetDataFrameMap DatabaseImpl::ResampleBarData(data_sdk::events::ScopedProgressEmitter& emitter) {
     StringAssetDataFrameMap result{{m_baseTimeframe, m_loadedBarData}};
     if (m_resampler) {
       SPDLOG_DEBUG("Starting Resampling stage.");
-      auto resampledData = m_resampler->Build(m_loadedBarData);
+      auto resampledData = m_resampler->Build(m_loadedBarData, emitter);
       for (auto const &[timeframe, asset, dataframe] : resampledData) {
         result[timeframe].insert_or_assign(asset, dataframe);
       }
@@ -231,12 +238,24 @@ namespace epoch_script::data {
     return result;
   }
 
-  void DatabaseImpl::CompletePipeline() {
+  void DatabaseImpl::CompletePipeline(data_sdk::events::ScopedProgressEmitter& emitter) {
+    using namespace data_sdk::events;
     if (m_futuresContinuationConstructor) {
+      // TODO: Deserves an emitter as well
       AppendFuturesContinuations();
     }
 
-    m_transformedData = TransformBarData(ResampleBarData());
+    // Stage 2: Resampling
+    auto resampleEmitter = emitter.ChildScope(ScopeType::Stage, std::string(StageName::Resampling));
+    resampleEmitter.EmitStarted(std::string(OperationType::Stage), std::string(StageName::Resampling));
+    auto resampledData = ResampleBarData(resampleEmitter);
+    resampleEmitter.EmitCompleted(std::string(OperationType::Stage), std::string(StageName::Resampling));
+
+    // Stage 3: Transform
+    auto transformEmitter = emitter.ChildScope(ScopeType::Stage, std::string(StageName::Transformation));
+    transformEmitter.EmitStarted(std::string(OperationType::Stage), std::string(StageName::Transformation));
+    m_transformedData = TransformBarData(std::move(resampledData), transformEmitter);
+    transformEmitter.EmitCompleted(std::string(OperationType::Stage), std::string(StageName::Transformation));
 
     SPDLOG_DEBUG("Transformed Data:");
 
@@ -296,11 +315,11 @@ namespace epoch_script::data {
     SPDLOG_DEBUG("Timestamp index built with {} unique timestamps", m_timestampIndex.size());
   }
 
-  void DatabaseImpl::LoadData() {
+  void DatabaseImpl::LoadData(data_sdk::events::ScopedProgressEmitter& emitter) {
     try {
       SPDLOG_DEBUG("Starting Data loading stage.");
       SPDLOG_DEBUG("DatabaseImpl: About to call m_dataloader->LoadData()");
-      m_dataloader->LoadData();
+      m_dataloader->LoadData(emitter);
       SPDLOG_DEBUG("DatabaseImpl: m_dataloader->LoadData() completed successfully");
     } catch (const std::exception& e) {
       SPDLOG_ERROR("Data loading stage failed with exception: {}", e.what());
@@ -315,7 +334,8 @@ namespace epoch_script::data {
   }
 
   TransformedDataType
-  DatabaseImpl::TransformBarData(StringAssetDataFrameMap dataFrameMap) {
+  DatabaseImpl::TransformBarData(StringAssetDataFrameMap dataFrameMap,
+                                 data_sdk::events::ScopedProgressEmitter& emitter) {
     TransformedDataType result;
     if (m_dataTransform) {
       SPDLOG_DEBUG("Starting Data Transformation stage.");
@@ -346,8 +366,8 @@ namespace epoch_script::data {
         }
       }
 
-      // Execute pipeline with string-keyed map
-      auto transformedStringMap = m_dataTransform->ExecutePipeline(stringKeyedMap);
+      // Execute pipeline with string-keyed map, passing emitter for progress events
+      auto transformedStringMap = m_dataTransform->ExecutePipeline(stringKeyedMap, emitter);
 
       // Convert back to Asset-keyed map
       dataFrameMap.clear();

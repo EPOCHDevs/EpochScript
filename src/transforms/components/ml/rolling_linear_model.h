@@ -17,6 +17,8 @@
 #include "../statistics/dataframe_armadillo_utils.h"
 #include <epoch_frame/factory/array_factory.h>
 #include <epoch_frame/factory/dataframe_factory.h>
+#include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/blocked_range.h>
 
 #include <armadillo>
 
@@ -64,7 +66,7 @@ public:
     m_C = cfg.GetOptionValue("C", MetaDataOptionDefinition{1.0}).GetDecimal();
     m_eps = cfg.GetOptionValue("eps", MetaDataOptionDefinition{0.01}).GetDecimal();
     m_bias = cfg.GetOptionValue("bias", MetaDataOptionDefinition{1.0}).GetDecimal();
-    liblinear_utils::SuppressOutput();
+    liblinear_utils::SetupLogging();
   }
 
   [[nodiscard]] LinearModelWrapper TrainModel(const arma::mat& X, const arma::vec& y) const {
@@ -136,20 +138,31 @@ private:
   void PredictClassifier(const LinearModelWrapper& wrapper, const arma::mat& X,
                           RollingLinearClassifierOutputs& outputs, size_t offset) const {
     const model* mdl = wrapper.model.get();
-    std::vector<double> prob_estimates(wrapper.nr_class);
-    std::vector<double> dec_values(std::max(1, wrapper.nr_class * (wrapper.nr_class - 1) / 2));
+    const int nr_class = wrapper.nr_class;
+    const double bias = wrapper.bias;
+    const size_t n_cols = X.n_cols;
+    const size_t dec_size = static_cast<size_t>(std::max(1, nr_class * (nr_class - 1) / 2));
 
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      std::vector<double> row(X.n_cols);
-      for (size_t j = 0; j < X.n_cols; ++j) row[j] = X(i, j);
-      liblinear_utils::PredictionSample sample(row, wrapper.bias);
+    // Parallel prediction - each row is independent
+    oneapi::tbb::parallel_for(
+        oneapi::tbb::blocked_range<size_t>(0, X.n_rows),
+        [&, mdl, nr_class, bias, n_cols, dec_size, offset](const oneapi::tbb::blocked_range<size_t>& range) {
+          // Thread-local buffers
+          std::vector<double> prob_estimates(nr_class);
+          std::vector<double> dec_values(dec_size);
+          std::vector<double> row(n_cols);
 
-      outputs.prediction[offset + i] = static_cast<int64_t>(
-          predict_probability(mdl, sample.Get(), prob_estimates.data()));
-      outputs.probability[offset + i] = (wrapper.nr_class >= 2) ? prob_estimates[1] : prob_estimates[0];
-      predict_values(mdl, sample.Get(), dec_values.data());
-      outputs.decision_value[offset + i] = dec_values[0];
-    }
+          for (size_t i = range.begin(); i < range.end(); ++i) {
+            for (size_t j = 0; j < n_cols; ++j) row[j] = X(i, j);
+            liblinear_utils::PredictionSample sample(row, bias);
+
+            outputs.prediction[offset + i] = static_cast<int64_t>(
+                predict_probability(mdl, sample.Get(), prob_estimates.data()));
+            outputs.probability[offset + i] = (nr_class >= 2) ? prob_estimates[1] : prob_estimates[0];
+            predict_values(mdl, sample.Get(), dec_values.data());
+            outputs.decision_value[offset + i] = dec_values[0];
+          }
+        });
   }
 };
 
@@ -167,7 +180,7 @@ public:
     m_C = cfg.GetOptionValue("C", MetaDataOptionDefinition{1.0}).GetDecimal();
     m_eps = cfg.GetOptionValue("eps", MetaDataOptionDefinition{0.01}).GetDecimal();
     m_bias = cfg.GetOptionValue("bias", MetaDataOptionDefinition{1.0}).GetDecimal();
-    liblinear_utils::SuppressOutput();
+    liblinear_utils::SetupLogging();
   }
 
   [[nodiscard]] LinearModelWrapper TrainModel(const arma::mat& X, const arma::vec& y) const {
@@ -239,20 +252,31 @@ private:
   void PredictClassifier(const LinearModelWrapper& wrapper, const arma::mat& X,
                           RollingLinearClassifierOutputs& outputs, size_t offset) const {
     const model* mdl = wrapper.model.get();
-    std::vector<double> prob_estimates(wrapper.nr_class);
-    std::vector<double> dec_values(std::max(1, wrapper.nr_class * (wrapper.nr_class - 1) / 2));
+    const int nr_class = wrapper.nr_class;
+    const double bias = wrapper.bias;
+    const size_t n_cols = X.n_cols;
+    const size_t dec_size = static_cast<size_t>(std::max(1, nr_class * (nr_class - 1) / 2));
 
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      std::vector<double> row(X.n_cols);
-      for (size_t j = 0; j < X.n_cols; ++j) row[j] = X(i, j);
-      liblinear_utils::PredictionSample sample(row, wrapper.bias);
+    // Parallel prediction - each row is independent
+    oneapi::tbb::parallel_for(
+        oneapi::tbb::blocked_range<size_t>(0, X.n_rows),
+        [&, mdl, nr_class, bias, n_cols, dec_size, offset](const oneapi::tbb::blocked_range<size_t>& range) {
+          // Thread-local buffers
+          std::vector<double> prob_estimates(nr_class);
+          std::vector<double> dec_values(dec_size);
+          std::vector<double> row(n_cols);
 
-      outputs.prediction[offset + i] = static_cast<int64_t>(
-          predict_probability(mdl, sample.Get(), prob_estimates.data()));
-      outputs.probability[offset + i] = (wrapper.nr_class >= 2) ? prob_estimates[1] : prob_estimates[0];
-      predict_values(mdl, sample.Get(), dec_values.data());
-      outputs.decision_value[offset + i] = dec_values[0];
-    }
+          for (size_t i = range.begin(); i < range.end(); ++i) {
+            for (size_t j = 0; j < n_cols; ++j) row[j] = X(i, j);
+            liblinear_utils::PredictionSample sample(row, bias);
+
+            outputs.prediction[offset + i] = static_cast<int64_t>(
+                predict_probability(mdl, sample.Get(), prob_estimates.data()));
+            outputs.probability[offset + i] = (nr_class >= 2) ? prob_estimates[1] : prob_estimates[0];
+            predict_values(mdl, sample.Get(), dec_values.data());
+            outputs.decision_value[offset + i] = dec_values[0];
+          }
+        });
   }
 };
 
@@ -270,7 +294,7 @@ public:
     m_C = cfg.GetOptionValue("C", MetaDataOptionDefinition{1.0}).GetDecimal();
     m_eps = cfg.GetOptionValue("eps", MetaDataOptionDefinition{0.01}).GetDecimal();
     m_bias = cfg.GetOptionValue("bias", MetaDataOptionDefinition{1.0}).GetDecimal();
-    liblinear_utils::SuppressOutput();
+    liblinear_utils::SetupLogging();
   }
 
   [[nodiscard]] LinearModelWrapper TrainModel(const arma::mat& X, const arma::vec& y) const {
@@ -338,12 +362,22 @@ private:
   void PredictRegressor(const LinearModelWrapper& wrapper, const arma::mat& X,
                          RollingLinearRegressorOutputs& outputs, size_t offset) const {
     const model* mdl = wrapper.model.get();
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      std::vector<double> row(X.n_cols);
-      for (size_t j = 0; j < X.n_cols; ++j) row[j] = X(i, j);
-      liblinear_utils::PredictionSample sample(row, wrapper.bias);
-      outputs.prediction[offset + i] = predict(mdl, sample.Get());
-    }
+    const double bias = wrapper.bias;
+    const size_t n_cols = X.n_cols;
+
+    // Parallel prediction - each row is independent
+    oneapi::tbb::parallel_for(
+        oneapi::tbb::blocked_range<size_t>(0, X.n_rows),
+        [&, mdl, bias, n_cols, offset](const oneapi::tbb::blocked_range<size_t>& range) {
+          // Thread-local buffer
+          std::vector<double> row(n_cols);
+
+          for (size_t i = range.begin(); i < range.end(); ++i) {
+            for (size_t j = 0; j < n_cols; ++j) row[j] = X(i, j);
+            liblinear_utils::PredictionSample sample(row, bias);
+            outputs.prediction[offset + i] = predict(mdl, sample.Get());
+          }
+        });
   }
 };
 
@@ -361,7 +395,7 @@ public:
     m_C = cfg.GetOptionValue("C", MetaDataOptionDefinition{1.0}).GetDecimal();
     m_eps = cfg.GetOptionValue("eps", MetaDataOptionDefinition{0.01}).GetDecimal();
     m_bias = cfg.GetOptionValue("bias", MetaDataOptionDefinition{1.0}).GetDecimal();
-    liblinear_utils::SuppressOutput();
+    liblinear_utils::SetupLogging();
   }
 
   [[nodiscard]] LinearModelWrapper TrainModel(const arma::mat& X, const arma::vec& y) const {
@@ -429,12 +463,22 @@ private:
   void PredictRegressor(const LinearModelWrapper& wrapper, const arma::mat& X,
                          RollingLinearRegressorOutputs& outputs, size_t offset) const {
     const model* mdl = wrapper.model.get();
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      std::vector<double> row(X.n_cols);
-      for (size_t j = 0; j < X.n_cols; ++j) row[j] = X(i, j);
-      liblinear_utils::PredictionSample sample(row, wrapper.bias);
-      outputs.prediction[offset + i] = predict(mdl, sample.Get());
-    }
+    const double bias = wrapper.bias;
+    const size_t n_cols = X.n_cols;
+
+    // Parallel prediction - each row is independent
+    oneapi::tbb::parallel_for(
+        oneapi::tbb::blocked_range<size_t>(0, X.n_rows),
+        [&, mdl, bias, n_cols, offset](const oneapi::tbb::blocked_range<size_t>& range) {
+          // Thread-local buffer
+          std::vector<double> row(n_cols);
+
+          for (size_t i = range.begin(); i < range.end(); ++i) {
+            for (size_t j = 0; j < n_cols; ++j) row[j] = X(i, j);
+            liblinear_utils::PredictionSample sample(row, bias);
+            outputs.prediction[offset + i] = predict(mdl, sample.Get());
+          }
+        });
   }
 };
 

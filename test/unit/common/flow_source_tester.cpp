@@ -9,6 +9,7 @@
 #include "tearsheet_comparator.h"
 #include "runtime/orchestrator.h"
 #include <runtime/transform_manager/transform_manager.h>
+#include <epoch_data_sdk/events/all.h>
 
 namespace epoch_script::runtime::test {
 
@@ -256,8 +257,9 @@ FlowSourceTestRunner::TestOutputs FlowSourceTestRunner::ExecuteTest(
     );
 
     // Execute pipeline and collect outputs
+    data_sdk::events::ScopedProgressEmitter emitter;
     TestOutputs outputs;
-    outputs.dataframes = orchestrator->ExecutePipeline(inputData);
+    outputs.dataframes = orchestrator->ExecutePipeline(inputData, emitter);
     outputs.tearsheets = orchestrator->GetGeneratedReports();
     outputs.selectors = orchestrator->GetGeneratedEventMarkers();
 

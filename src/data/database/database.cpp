@@ -7,7 +7,7 @@ namespace epoch_script::data {
 
 Database::Database(IDatabaseImplPtr impl) : m_impl(std::move(impl)) {}
 
-void Database::RunPipeline() { m_impl->RunPipeline(); }
+void Database::RunPipeline(data_sdk::events::ScopedProgressEmitter& emitter) { m_impl->RunPipeline(emitter); }
 
 void Database::HandleData(const DataHandler &dataHandler,
                           const epoch_frame::DateTime &t) const {

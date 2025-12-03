@@ -626,6 +626,44 @@ TimeFrameAssetDataFrameMap IntermediateResultStorage::BuildFinalOutput() {
     }
   }
 
+  // Third, broadcast asset-specific scalars (like is_asset_ref) to all timeframes
+  // These are per-asset values that are the same across all timeframes
+  if (!m_assetScalarCache.empty()) {
+    std::shared_lock scalarReadLock(m_scalarCacheMutex);  // Re-acquire for asset scalar broadcasting
+
+    for (auto &[timeframe, assetMap] : result) {
+      for (auto &[asset_id, dataFrame] : assetMap) {
+        auto index = dataFrame.index();
+        std::vector<epoch_frame::FrameOrSeries> assetScalarSeries;
+
+        // Broadcast each asset scalar to this (timeframe, asset) combination
+        for (const auto &[outputId, assetValues] : m_assetScalarCache) {
+          auto assetIt = assetValues.find(asset_id);
+          if (assetIt == assetValues.end()) {
+            continue;  // This asset doesn't have this scalar (normal for is_asset_ref)
+          }
+          const auto& scalarValue = assetIt->second;
+          auto broadcastedArray = BroadcastScalar(scalarValue, index->size());
+
+          epoch_frame::Series series(index, broadcastedArray, outputId);
+          assetScalarSeries.emplace_back(std::move(series));
+        }
+
+        // Concatenate asset scalars with existing data
+        if (!assetScalarSeries.empty()) {
+          assetScalarSeries.emplace_back(dataFrame);
+          result[timeframe][asset_id] = epoch_frame::concat({
+              .frames = assetScalarSeries,
+              .joinType = epoch_frame::JoinType::Outer,
+              .axis = epoch_frame::AxisType::Column
+          });
+          SPDLOG_DEBUG("Broadcasted {} asset-scalars to asset: {}, timeframe {}",
+                       assetScalarSeries.size() - 1, asset_id, timeframe);
+        }
+      }
+    }
+  }
+
   return result;
 }
 

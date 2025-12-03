@@ -124,6 +124,39 @@ template class TypedZeroIndexSelect<5, NumberType>;
 template class TypedZeroIndexSelect<5, BooleanType>;
 template class TypedZeroIndexSelect<5, TimestampType>;
 
+// Varargs TypedSwitch implementation - supports any number of inputs
+template <typename TypeTag>
+epoch_frame::DataFrame TypedSwitch<TypeTag>::TransformData(
+    epoch_frame::DataFrame const &bars) const {
+
+  // Get the index (selector) input
+  auto indices = bars[GetInputId("index")].array();
+
+  // Get all input IDs - first is "index", rest are SLOT inputs
+  auto all_input_ids = GetInputIds();
+  AssertFromStream(all_input_ids.size() >= 3,
+                   "switch requires at least index + 2 slot inputs");
+
+  // Collect all SLOT arrays (skip the first one which is "index")
+  std::vector<arrow::Datum> slot_arrays;
+  slot_arrays.push_back(indices);  // First arg to "choose" is the index
+  for (size_t i = 1; i < all_input_ids.size(); ++i) {
+    slot_arrays.push_back(bars[all_input_ids[i]].array());
+  }
+
+  // Call Arrow's choose function with dynamic number of inputs
+  auto maybe_result = arrow::compute::CallFunction("choose", slot_arrays);
+  auto result = epoch_frame::AssertArrayResultIsOk(std::move(maybe_result));
+
+  return epoch_frame::make_dataframe(bars.index(), {result}, {GetOutputId()});
+}
+
+// Explicit template instantiations for TypedSwitch
+template class TypedSwitch<StringType>;
+template class TypedSwitch<NumberType>;
+template class TypedSwitch<BooleanType>;
+template class TypedSwitch<TimestampType>;
+
 // FirstNonNull (Coalesce) implementation
 epoch_frame::DataFrame FirstNonNullTransform::TransformData(
     epoch_frame::DataFrame const &bars) const {

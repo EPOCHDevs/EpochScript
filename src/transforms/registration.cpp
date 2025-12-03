@@ -4,7 +4,6 @@
 #include <epoch_script/transforms/core/registration.h>
 #include "../core/doc_deserialization_helper.h"
 #include <epoch_script/transforms/core/registry.h>
-#include "components/sql/sql_query_metadata.h"
 #include "components/operators/validation_metadata.h"
 #include "components/operators/static_cast_metadata.h"
 #include "components/operators/stringify_metadata.h"
@@ -27,14 +26,13 @@
 #include "components/indicators/intraday_returns.h"
 #include "components/indicators/ffill.h"
 #include "components/statistics/winsorize.h"
-#include "components/statistics/gmm_metadata.h"
 #include "components/statistics/clustering_metadata.h"
 #include "components/ml/liblinear_metadata.h"
 #include "components/ml/lightgbm_metadata.h"
-#include "components/cross_sectional/cs_winsorize.h"
-#include "components/cross_sectional/rank.h"
+// cross_sectional includes moved to cross_sectional/register.h
 #include "components/datetime/datetime_metadata.h"
 #include "components/ml/sagemaker_sentiment_metadata.h"
+#include "components/timeseries/timeseries_metadata.h"
 
 namespace epoch_script::transforms {
 void RegisterStrategyMetaData(const std::string &name,
@@ -57,8 +55,7 @@ void RegisterTransformMetadata(FileLoaderInterface const &loader) {
   metaDataList.emplace_back(epoch_script::transform::MakeIntradayReturnsMetaData());
   metaDataList.emplace_back(epoch_script::transform::MakeFfillMetaData());
   metaDataList.emplace_back(epoch_script::transform::MakeWinsorizeMetaData());
-  metaDataList.emplace_back(epoch_script::transform::MakeCSWinsorizeMetaData());
-  metaDataList.emplace_back(epoch_script::transform::MakeCSRankMetaData());
+  // cs_winsorize and cs_rank metadata moved to cross_sectional/register.h
   metaDataList.emplace_back(MakeChartFormationMetaData());
   metaDataList.emplace_back(MakeCalendarEffectMetaData());
   metaDataList.emplace_back(MakeStringTransformMetaData());
@@ -85,14 +82,14 @@ void RegisterTransformMetadata(FileLoaderInterface const &loader) {
   metaDataList.emplace_back(epoch_script::transform::MakeShortVolumeDataSource());
   metaDataList.emplace_back(epoch_script::transform::MakeDatetimeTransforms());
   metaDataList.emplace_back(epoch_script::transform::MakeSageMakerSentimentTransforms());
-  metaDataList.emplace_back(epoch_script::transform::MakeGMMMetaData());
   metaDataList.emplace_back(epoch_script::transform::MakeKMeansMetaData());
   metaDataList.emplace_back(epoch_script::transform::MakeDBSCANMetaData());
   metaDataList.emplace_back(epoch_script::transform::MakePCAMetaData());
-  metaDataList.emplace_back(epoch_script::transform::MakeICAMetaData());
   metaDataList.emplace_back(epoch_script::transform::MakeLiblinearMetaData());
   metaDataList.emplace_back(epoch_script::transform::MakeLightGBMMetaData());
-  // Aggregation nodes are loaded from the transforms.yaml file
+  metaDataList.emplace_back(epoch_script::transform::MakeGARCHMetaData());
+  metaDataList.emplace_back(epoch_script::transform::MakeARIMAMetaData());
+  // Aggregation nodes now registered via aggregation/register.h (modular registration)
 
   for (auto &&indicator : std::views::join(metaDataList)) {
     if (!indicator.requiredDataSources.empty()) {

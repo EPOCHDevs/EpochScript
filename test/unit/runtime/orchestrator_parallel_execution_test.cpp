@@ -25,6 +25,7 @@
 #include <trompeloeil.hpp>
 #include <epoch_frame/factory/index_factory.h>
 #include <epoch_frame/factory/dataframe_factory.h>
+#include <epoch_data_sdk/events/all.h>
 #include <chrono>
 #include <thread>
 #include <atomic>
@@ -37,6 +38,12 @@ using namespace std::chrono_literals;
 
 namespace {
     using namespace epoch_frame::factory::index;
+
+    // Helper to execute pipeline with no-op emitter
+    auto ExecuteWithEmitter(DataFlowRuntimeOrchestrator& orch, TimeFrameAssetDataFrameMap inputData) {
+        data_sdk::events::ScopedProgressEmitter emitter;
+        return orch.ExecutePipeline(std::move(inputData), emitter);
+    }
 
     // Helper to create test DataFrame with actual data (non-empty)
     epoch_frame::DataFrame CreateTestDataFrame(int numRows = 3, int numCols = 1) {
@@ -103,7 +110,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Parallel Execution", "[parallel][critic
         inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame();
 
         auto start = std::chrono::steady_clock::now();
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
         auto end = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
@@ -156,7 +163,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Parallel Execution", "[parallel][critic
         inputData[dailyTF.ToString()][TestAssetConstants::AMZN] = CreateTestDataFrame();
 
         // This should not crash or produce corrupted data despite parallel access
-        REQUIRE_NOTHROW(orch.ExecutePipeline(std::move(inputData)));
+        REQUIRE_NOTHROW(ExecuteWithEmitter(orch, std::move(inputData)));
 
         // The key test is that it completes without crashes or data corruption
         // Since mocks return nullopt for GetDashboard, no reports are generated
@@ -196,7 +203,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Parallel Execution", "[parallel][critic
 
         // Should throw with the error message
         REQUIRE_THROWS_WITH(
-            orch.ExecutePipeline(std::move(inputData)),
+            ExecuteWithEmitter(orch, std::move(inputData)),
             Catch::Matchers::ContainsSubstring("Parallel execution failure")
         );
     }
@@ -244,7 +251,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Parallel Execution", "[parallel][critic
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         // Verify dependency order was respected
         REQUIRE_FALSE(cStartedTooEarly);
@@ -286,7 +293,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Parallel Execution", "[parallel][critic
         inputData[dailyTF.ToString()][TestAssetConstants::TSLA] = CreateTestDataFrame();
         inputData[dailyTF.ToString()][TestAssetConstants::AMZN] = CreateTestDataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         // In parallel mode: at least 2 assets processed concurrently
         // In serial mode: maxConcurrent will be 1
@@ -351,7 +358,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Parallel Execution", "[parallel][critic
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame();
 
-        orch.ExecutePipeline(std::move(inputData));
+        ExecuteWithEmitter(orch, std::move(inputData));
 
         // Verify dependency constraints:
         // A and B can be parallel (order can vary)
@@ -387,7 +394,7 @@ TEST_CASE("DataFlowRuntimeOrchestrator - Parallel Execution", "[parallel][critic
         inputData[dailyTF.ToString()][aapl] = CreateTestDataFrame();
 
         auto start = std::chrono::steady_clock::now();
-        REQUIRE_NOTHROW(orch.ExecutePipeline(std::move(inputData)));
+        REQUIRE_NOTHROW(ExecuteWithEmitter(orch, std::move(inputData)));
         auto end = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 

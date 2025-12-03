@@ -4,6 +4,7 @@
 
 #include "transform_manager.h"
 #include <epoch_script/transforms/core/transform_registry.h>
+#include "../components/utility/asset_ref_passthrough_metadata.h"
 
 namespace epoch_script::runtime {
   ITransformManagerPtr CreateTransformManager() {
@@ -24,10 +25,13 @@ namespace epoch_script::runtime {
       bool isScalar = metadata.has_value() &&
                       metadata->get().category == epoch_core::TransformCategory::Scalar;
 
+      // is_asset_ref is a runtime scalar (value depends on asset) - also timeframe-agnostic
+      bool isAssetRef = epoch_script::transform::IsAssetRefType(algorithm.type);
+
       // Assert timeframe is present (compiler should have resolved it)
-      // EXCEPT for scalar types which are timeframe-agnostic
+      // EXCEPT for scalar types and is_asset_ref which are timeframe-agnostic
       AssertFromFormat(
-          algorithm.timeframe.has_value() || isScalar,
+          algorithm.timeframe.has_value() || isScalar || isAssetRef,
           "TransformManager received node '{}' (type: '{}') without timeframe. "
           "This indicates a compiler bug - all non-scalar nodes must have timeframes "
           "resolved during compilation (see ast_compiler.cpp::resolveTimeframes).",

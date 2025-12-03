@@ -306,14 +306,35 @@ namespace epoch_script
         const auto& comp_meta = context_.GetComponentMetadata(component_name);
 
         // Extract input IDs and types from component metadata
-        std::vector<std::string> input_ids;
+        // Positional args map to inputs in metadata order (no special SLOT handling)
+        std::vector<std::string> input_ids;        // All input IDs in metadata order
         std::unordered_map<std::string, DataType> input_types;
         const auto& inputs = comp_meta.inputs;
-        for (const auto& input : inputs)
+
+        // Find variadic input index (-1 if none)
+        // Variadic (allowMultipleConnections=true) can appear anywhere, but there should be only one
+        int variadic_index = -1;
+        for (size_t idx = 0; idx < inputs.size(); ++idx)
         {
+            if (inputs[idx].allowMultipleConnections)
+            {
+                if (variadic_index != -1)
+                {
+                    ThrowError("Component '" + component_name + "' has invalid metadata: "
+                              "multiple inputs with allowMultipleConnections=true (indices " +
+                              std::to_string(variadic_index) + " and " + std::to_string(idx) + ").");
+                }
+                variadic_index = static_cast<int>(idx);
+            }
+        }
+
+        for (size_t idx = 0; idx < inputs.size(); ++idx)
+        {
+            const auto& input = inputs[idx];
             std::string input_id = input.id;
 
             // Handle SLOT naming convention (* -> SLOT, *0 -> SLOT0, etc.)
+            // This only affects the internal wiring name, not positional arg mapping
             if (!input_id.empty() && input_id[0] == '*')
             {
                 std::string suffix = input_id.substr(1);
@@ -400,19 +421,15 @@ namespace epoch_script
             }
         }
 
-        // Check if last input allows multiple connections (variadic inputs)
-        bool last_input_allows_multi = false;
-        if (!inputs.empty())
-        {
-            last_input_allows_multi = inputs.back().allowMultipleConnections;
-        }
-
-        // Wire positional arguments to inputs map
+        // Wire positional arguments to inputs in metadata order
+        // Variadic input (allowMultipleConnections=true) can be at any position.
+        // All args up to variadic go 1:1, all args from variadic onwards go to variadic.
+        // Inputs AFTER variadic must be supplied via kwargs.
         if (!args.empty())
         {
             if (input_ids.empty())
             {
-                // Component with 0 inputs but user passed args - this is a compile error
+                // Component has no inputs at all
                 ThrowError("Component '" + component_name + "' does not accept any inputs, but " +
                           std::to_string(args.size()) + " argument(s) were provided. " +
                           "This transform fetches its own data internally based on 'requiredDataSources'. " +
@@ -420,8 +437,8 @@ namespace epoch_script
                           component_name + "(timeframe=\"1D\")()");
             }
 
-            // Validate positional args count (allow multiple args if last input is variadic)
-            if (args.size() > input_ids.size() && !last_input_allows_multi)
+            // Validate: if no variadic and too many args, it's an error
+            if (variadic_index < 0 && args.size() > input_ids.size())
             {
                 ThrowError(error_formatting::ArgumentCountError(
                     target_node_id, component_name,
@@ -433,8 +450,26 @@ namespace epoch_script
             for (size_t i = 0; i < args.size(); ++i)
             {
                 const auto& handle = args[i];
-                // For variadic inputs, all extra args go to the last input slot
-                std::string dst_handle = (i < input_ids.size()) ? input_ids[i] : input_ids.back();
+
+                // Determine destination input:
+                // - Args before variadic_index go to their respective input
+                // - Args at variadic_index and beyond go to the variadic input
+                std::string dst_handle;
+                if (variadic_index < 0)
+                {
+                    // No variadic - simple 1:1 mapping
+                    dst_handle = input_ids[i];
+                }
+                else if (i < static_cast<size_t>(variadic_index))
+                {
+                    // Before variadic - 1:1 mapping
+                    dst_handle = input_ids[i];
+                }
+                else
+                {
+                    // At or after variadic - all go to variadic input
+                    dst_handle = input_ids[static_cast<size_t>(variadic_index)];
+                }
 
                 // Type checking: get source and target types
                 DataType source_type = type_checker_.GetNodeOutputType(handle);

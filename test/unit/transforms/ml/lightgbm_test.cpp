@@ -45,8 +45,7 @@ TEST_CASE("LightGBM classifier basic functionality", "[lightgbm]") {
        {"target", {input_ref("src", "target")}}},
       {{"num_estimators", MetaDataOptionDefinition{100.0}},
        {"learning_rate", MetaDataOptionDefinition{0.1}},
-              {"min_training_samples", MetaDataOptionDefinition{100.0}},
-       {"lookback_window", MetaDataOptionDefinition{0.0}}},
+       {"min_training_samples", MetaDataOptionDefinition{100.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -112,8 +111,7 @@ TEST_CASE("LightGBM regressor basic functionality", "[lightgbm]") {
        {"target", {input_ref("src", "target")}}},
       {{"num_estimators", MetaDataOptionDefinition{100.0}},
        {"learning_rate", MetaDataOptionDefinition{0.1}},
-              {"min_training_samples", MetaDataOptionDefinition{100.0}},
-       {"lookback_window", MetaDataOptionDefinition{0.0}}},
+       {"min_training_samples", MetaDataOptionDefinition{100.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -135,16 +133,19 @@ TEST_CASE("LightGBM regressor basic functionality", "[lightgbm]") {
 }
 
 TEST_CASE("LightGBM classifier with lookback window", "[lightgbm]") {
+  // Note: Static LightGBM transforms use split_ratio
+  // When split_ratio < 1.0, they output only predictions for the test portion
   const auto tf = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   auto df = read_ml_input("classification_input.csv");
   REQUIRE(df.num_rows() >= 400);
 
+  // Use split_ratio to train on 60% of data, test on 40%
   auto cfg = run_op("lightgbm_classifier", "lgb_lb",
       {{epoch_script::ARG, {input_ref("src", "momentum"),
                             input_ref("src", "volatility")}},
        {"target", {input_ref("src", "target")}}},
-      {{"lookback_window", MetaDataOptionDefinition{300.0}},
+      {{"split_ratio", MetaDataOptionDefinition{0.6}},
        {"min_training_samples", MetaDataOptionDefinition{100.0}}},
       tf);
 
@@ -153,8 +154,10 @@ TEST_CASE("LightGBM classifier with lookback window", "[lightgbm]") {
 
   auto out = t->TransformData(df);
 
-  // Output should be prediction rows only
-  REQUIRE(out.num_rows() == df.num_rows() - 300);
+  // Static transforms output test portion only when split_ratio < 1.0
+  // Expected: 40% of rows (test portion)
+  size_t expected_rows = static_cast<size_t>(df.num_rows() * 0.4);
+  REQUIRE(out.num_rows() == expected_rows);
 
   // Predictions should still be valid
   auto pred_col = out[cfg.GetOutputId("prediction").GetColumnName()]
@@ -166,16 +169,19 @@ TEST_CASE("LightGBM classifier with lookback window", "[lightgbm]") {
 }
 
 TEST_CASE("LightGBM regressor with lookback window", "[lightgbm]") {
+  // Note: Static LightGBM transforms use split_ratio
+  // When split_ratio < 1.0, they output only predictions for the test portion
   const auto tf = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   auto df = read_ml_input("regression_input.csv");
   REQUIRE(df.num_rows() >= 400);
 
+  // Use split_ratio to train on 60% of data, test on 40%
   auto cfg = run_op("lightgbm_regressor", "lgb_reg_lb",
       {{epoch_script::ARG, {input_ref("src", "signal_1"),
                             input_ref("src", "signal_2")}},
        {"target", {input_ref("src", "target")}}},
-      {{"lookback_window", MetaDataOptionDefinition{300.0}},
+      {{"split_ratio", MetaDataOptionDefinition{0.6}},
        {"min_training_samples", MetaDataOptionDefinition{100.0}}},
       tf);
 
@@ -183,7 +189,10 @@ TEST_CASE("LightGBM regressor with lookback window", "[lightgbm]") {
   auto t = dynamic_cast<ITransform *>(tbase.get());
 
   auto out = t->TransformData(df);
-  REQUIRE(out.num_rows() == df.num_rows() - 300);
+  // Static transforms output test portion only when split_ratio < 1.0
+  // Expected: 40% of rows (test portion)
+  size_t expected_rows = static_cast<size_t>(df.num_rows() * 0.4);
+  REQUIRE(out.num_rows() == expected_rows);
 }
 
 TEST_CASE("LightGBM classifier insufficient samples throws", "[lightgbm]") {

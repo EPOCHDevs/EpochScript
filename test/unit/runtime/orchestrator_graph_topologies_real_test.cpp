@@ -28,6 +28,7 @@
 #include <epoch_script/transforms/core/transform_definition.h>
 #include <epoch_frame/factory/dataframe_factory.h>
 #include <epoch_frame/factory/index_factory.h>
+#include <epoch_data_sdk/events/all.h>
 #include <cmath>
 
 #include "epoch_script/core/bar_attribute.h"
@@ -64,7 +65,8 @@ result = mul()(b, 2)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 200.0, 300.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         REQUIRE(results.contains(dailyTF.ToString()));
         REQUIRE(results[dailyTF.ToString()].contains(aapl));
@@ -102,7 +104,8 @@ d = add()(b, c)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 50.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto df = results[dailyTF.ToString()][aapl];
         REQUIRE(df.contains("b#result"));
@@ -135,7 +138,8 @@ c = add()(close, 3)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 200.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto df = results[dailyTF.ToString()][aapl];
         REQUIRE(df.contains("a#result"));
@@ -169,7 +173,8 @@ e = add()(c, 5)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto df = results[dailyTF.ToString()][aapl];
 
@@ -205,7 +210,8 @@ scaled = mul()(z, 10)
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0});
         inputData[dailyTF.ToString()][googl] = CreateOHLCVData({300.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         // Verify all 3 assets have output
         REQUIRE(results[dailyTF.ToString()].contains(aapl));
@@ -256,7 +262,8 @@ z2 = cs_zscore()(offset)
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0});
         inputData[dailyTF.ToString()][googl] = CreateOHLCVData({300.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto aapl_df = results[dailyTF.ToString()][aapl];
         auto msft_df = results[dailyTF.ToString()][msft];
@@ -311,7 +318,8 @@ out3 = add()(z, 3)
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0});
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto aapl_df = results[dailyTF.ToString()][aapl];
         auto msft_df = results[dailyTF.ToString()][msft];
@@ -359,7 +367,8 @@ signal = gte()(z, 0)
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 204.0});
         inputData[dailyTF.ToString()][googl] = CreateOHLCVData({300.0, 306.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto aapl_df = results[dailyTF.ToString()][aapl];
         auto msft_df = results[dailyTF.ToString()][msft];
@@ -406,7 +415,8 @@ doubled = mul()(close, 2)
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({20.0, 21.0, 22.0});
         inputData[dailyTF.ToString()][googl] = CreateOHLCVData({30.0, 31.0, 32.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        auto results = orch.ExecutePipeline(std::move(inputData), emitter);
 
         // Verify AAPL values are 2x its input (not contaminated by MSFT/GOOGL)
         auto aapl_df = results[dailyTF.ToString()][aapl];

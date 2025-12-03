@@ -7,6 +7,7 @@
 // avoiding virtual dispatch overhead in the hot loop.
 //
 #include <epoch_script/transforms/core/itransform.h>
+#include "../../runtime/events/transform_progress_emitter.h"
 #include "rolling_window_iterator.h"
 #include "../statistics/dataframe_armadillo_utils.h"
 #include <epoch_frame/factory/array_factory.h>
@@ -44,7 +45,7 @@ struct RollingMLConfig {
  *
  * Template Parameters:
  *   Derived - The derived class (CRTP pattern)
- *   ModelType - The type of trained model (e.g., arma::mat for centroids, mlpack::GMM)
+ *   ModelType - The type of trained model (e.g., arma::mat for centroids, mlpack::HMM)
  */
 template<typename Derived, typename ModelType>
 class RollingMLBaseUnsupervised : public ITransform {
@@ -61,7 +62,7 @@ public:
                          MetaDataOptionDefinition{1.0}).GetInteger());
 
     auto window_type_str = cfg.GetOptionValue(
-      "window_type", MetaDataOptionDefinition{std::string("rolling")}).GetString();
+      "window_type", MetaDataOptionDefinition{std::string("rolling")}).GetSelectOption();
     m_config.window_type = ml_utils::ParseWindowType(window_type_str);
 
     m_config.min_training_samples = static_cast<size_t>(
@@ -79,8 +80,9 @@ public:
       throw std::runtime_error("Rolling ML requires at least one input column");
     }
 
-    // Convert to armadillo matrix
-    arma::mat X = utils::MatFromDataFrame(bars, cols);
+    // Convert to ArmaTensor (zero-copy Armadillo view)
+    auto X_tensor = utils::ArmaTensorFromDataFrame(bars, cols);
+    const arma::mat& X = X_tensor.mat();  // Zero-copy view
     const size_t n_rows = X.n_rows;
 
     // Validate minimum data
@@ -117,10 +119,21 @@ public:
     // Track which output rows have been filled
     size_t output_offset = 0;
 
+    // Get total number of windows for progress reporting
+    const size_t total_windows = iterator.TotalWindows();
+    size_t current_window = 0;
+    auto emitter = this->GetProgressEmitter();
+
     // Main rolling loop
     iterator.ForEach([&](const ml_utils::WindowSpec& window) {
       // Extract training data
       arma::mat train_X = X.rows(window.train_start, window.train_end - 1);
+
+      // Emit progress for training phase
+      if (emitter) {
+        emitter->EmitIteration(current_window + 1, total_windows,
+            "Training window " + std::to_string(current_window + 1) + "/" + std::to_string(total_windows));
+      }
 
       // Train model (calls derived class)
       ModelType model = derived.TrainModel(train_X);
@@ -135,6 +148,8 @@ public:
 
         output_offset += predict_X.n_rows;
       }
+
+      ++current_window;
     });
 
     // Build output DataFrame
@@ -180,7 +195,7 @@ public:
                          MetaDataOptionDefinition{1.0}).GetInteger());
 
     auto window_type_str = cfg.GetOptionValue(
-      "window_type", MetaDataOptionDefinition{std::string("rolling")}).GetString();
+      "window_type", MetaDataOptionDefinition{std::string("rolling")}).GetSelectOption();
     m_config.window_type = ml_utils::ParseWindowType(window_type_str);
 
     m_config.min_training_samples = static_cast<size_t>(
@@ -201,8 +216,11 @@ public:
     // Get target column
     const auto target_col = GetInputId("target");
 
-    // Convert to armadillo
-    arma::mat X = utils::MatFromDataFrame(bars, feature_cols);
+    // Convert to ArmaTensor (zero-copy Armadillo view)
+    auto X_tensor = utils::ArmaTensorFromDataFrame(bars, feature_cols);
+    const arma::mat& X = X_tensor.mat();  // Zero-copy view
+
+    // For y, use the legacy copy approach (single column, less overhead)
     arma::vec y = utils::VecFromDataFrame(bars, target_col);
     const size_t n_rows = X.n_rows;
 
@@ -234,11 +252,22 @@ public:
     // Track which output rows have been filled
     size_t output_offset = 0;
 
+    // Get total number of windows for progress reporting
+    const size_t total_windows = iterator.TotalWindows();
+    size_t current_window = 0;
+    auto emitter = this->GetProgressEmitter();
+
     // Main rolling loop
     iterator.ForEach([&](const ml_utils::WindowSpec& window) {
       // Extract training data
       arma::mat train_X = X.rows(window.train_start, window.train_end - 1);
       arma::vec train_y = y.subvec(window.train_start, window.train_end - 1);
+
+      // Emit progress for training phase
+      if (emitter) {
+        emitter->EmitIteration(current_window + 1, total_windows,
+            "Training window " + std::to_string(current_window + 1) + "/" + std::to_string(total_windows));
+      }
 
       // Train model (calls derived class)
       ModelType model = derived.TrainModel(train_X, train_y);
@@ -253,6 +282,8 @@ public:
 
         output_offset += predict_X.n_rows;
       }
+
+      ++current_window;
     });
 
     // Build output DataFrame

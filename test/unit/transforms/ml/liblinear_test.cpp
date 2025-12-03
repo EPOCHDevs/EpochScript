@@ -43,8 +43,7 @@ TEST_CASE("Logistic L2 classifier basic functionality", "[liblinear]") {
                             input_ref("src", "noise")}},
        {"target", {input_ref("src", "target")}}},
       {{"C", MetaDataOptionDefinition{1.0}},
-              {"min_training_samples", MetaDataOptionDefinition{100.0}},
-       {"lookback_window", MetaDataOptionDefinition{0.0}}},
+       {"min_training_samples", MetaDataOptionDefinition{100.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -162,7 +161,7 @@ TEST_CASE("SVR L2 regressor basic functionality", "[liblinear]") {
   REQUIRE(out.num_cols() == 1);
 
   // Verify predictions are finite
-  auto pred_col = out[cfg.GetOutputId("prediction").GetColumnName()]
+  auto pred_col = out[cfg.GetOutputId("result").GetColumnName()]
                       .contiguous_array()
                       .to_vector<double>();
   for (auto p : pred_col) {
@@ -192,7 +191,7 @@ TEST_CASE("SVR L1 regressor basic functionality", "[liblinear]") {
   REQUIRE(out.num_cols() == 1);
 
   // Verify predictions are finite
-  auto pred_col = out[cfg.GetOutputId("prediction").GetColumnName()]
+  auto pred_col = out[cfg.GetOutputId("result").GetColumnName()]
                       .contiguous_array()
                       .to_vector<double>();
   for (auto p : pred_col) {
@@ -201,15 +200,18 @@ TEST_CASE("SVR L1 regressor basic functionality", "[liblinear]") {
 }
 
 TEST_CASE("LIBLINEAR logistic with lookback window", "[liblinear]") {
+  // Note: Static LIBLINEAR transforms use split_ratio
+  // When split_ratio < 1.0, they output only predictions for the test portion
   const auto tf = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   auto df = read_ml_input("classification_input.csv");
   REQUIRE(df.num_rows() >= 400);
 
+  // Use split_ratio to train on 60% of data, test on 40%
   auto cfg = run_op("logistic_l2", "log_lb",
       {{epoch_script::ARG, {input_ref("src", "momentum")}},
        {"target", {input_ref("src", "target")}}},
-      {{"lookback_window", MetaDataOptionDefinition{300.0}},
+      {{"split_ratio", MetaDataOptionDefinition{0.6}},
        {"min_training_samples", MetaDataOptionDefinition{100.0}}},
       tf);
 
@@ -217,7 +219,10 @@ TEST_CASE("LIBLINEAR logistic with lookback window", "[liblinear]") {
   auto t = dynamic_cast<ITransform *>(tbase.get());
 
   auto out = t->TransformData(df);
-  REQUIRE(out.num_rows() == df.num_rows() - 300);
+  // Static transforms output test portion only when split_ratio < 1.0
+  // Expected: 40% of rows (test portion)
+  size_t expected_rows = static_cast<size_t>(df.num_rows() * 0.4);
+  REQUIRE(out.num_rows() == expected_rows);
 
   // Verify predictions are still valid
   auto pred_col = out[cfg.GetOutputId("prediction").GetColumnName()]
@@ -229,15 +234,18 @@ TEST_CASE("LIBLINEAR logistic with lookback window", "[liblinear]") {
 }
 
 TEST_CASE("LIBLINEAR SVR with lookback window", "[liblinear]") {
+  // Note: Static LIBLINEAR transforms use split_ratio
+  // When split_ratio < 1.0, they output only predictions for the test portion
   const auto tf = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
 
   auto df = read_ml_input("regression_input.csv");
   REQUIRE(df.num_rows() >= 400);
 
+  // Use split_ratio to train on 60% of data, test on 40%
   auto cfg = run_op("svr_l2", "svr_lb",
       {{epoch_script::ARG, {input_ref("src", "signal_1")}},
        {"target", {input_ref("src", "target")}}},
-      {{"lookback_window", MetaDataOptionDefinition{300.0}},
+      {{"split_ratio", MetaDataOptionDefinition{0.6}},
        {"min_training_samples", MetaDataOptionDefinition{100.0}}},
       tf);
 
@@ -245,7 +253,10 @@ TEST_CASE("LIBLINEAR SVR with lookback window", "[liblinear]") {
   auto t = dynamic_cast<ITransform *>(tbase.get());
 
   auto out = t->TransformData(df);
-  REQUIRE(out.num_rows() == df.num_rows() - 300);
+  // Static transforms output test portion only when split_ratio < 1.0
+  // Expected: 40% of rows (test portion)
+  size_t expected_rows = static_cast<size_t>(df.num_rows() * 0.4);
+  REQUIRE(out.num_rows() == expected_rows);
 }
 
 TEST_CASE("LIBLINEAR logistic insufficient samples throws", "[liblinear]") {

@@ -17,18 +17,20 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeStaticCastM
     .name = "Static Cast To Integer",
     .options = {},
     .isCrossSectional = false,
-    .desc = "Internal compiler-inserted transform to materialize resolved Integer types. Not intended for direct use in scripts.",
+    .desc = "Compiler-inserted type materializer for Integer types.",
     .inputs = {IOMetaDataConstants::ANY_INPUT_METADATA},
     .outputs = {IOMetaDataConstants::INTEGER_OUTPUT_METADATA},
     .atLeastOneInputRequired = false,
     .tags = {"internal", "compiler", "type-system"},
     .requiresTimeFrame = false,
     .allowNullInputs = true,
+    .internalUse = true,
+    .alias = "static_cast",
     .strategyTypes = {},
     .relatedTransforms = {},
     .assetRequirements = {"single-asset"},
-    .usageContext = "Automatically inserted by compiler during type resolution. Not for direct use.",
-    .limitations = "Internal use only. Should not appear in user-written scripts."
+    .usageContext = "Automatically inserted by compiler during type resolution.",
+    .limitations = "Internal use only."
   });
 
   // StaticCastToDecimal - compiler-inserted Decimal type materializer
@@ -38,18 +40,20 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeStaticCastM
     .name = "Static Cast To Decimal",
     .options = {},
     .isCrossSectional = false,
-    .desc = "Internal compiler-inserted transform to materialize resolved Decimal types. Not intended for direct use in scripts.",
+    .desc = "Compiler-inserted type materializer for Decimal types.",
     .inputs = {IOMetaDataConstants::ANY_INPUT_METADATA},
     .outputs = {IOMetaDataConstants::NUMBER_OUTPUT_METADATA},
     .atLeastOneInputRequired = false,
     .tags = {"internal", "compiler", "type-system"},
     .requiresTimeFrame = false,
     .allowNullInputs = true,
+    .internalUse = true,
+    .alias = "static_cast",
     .strategyTypes = {},
     .relatedTransforms = {},
     .assetRequirements = {"single-asset"},
-    .usageContext = "Automatically inserted by compiler during type resolution. Not for direct use.",
-    .limitations = "Internal use only. Should not appear in user-written scripts."
+    .usageContext = "Automatically inserted by compiler during type resolution.",
+    .limitations = "Internal use only."
   });
 
   // StaticCastToBoolean - compiler-inserted Boolean type materializer
@@ -59,18 +63,20 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeStaticCastM
     .name = "Static Cast To Boolean",
     .options = {},
     .isCrossSectional = false,
-    .desc = "Internal compiler-inserted transform to materialize resolved Boolean types. Not intended for direct use in scripts.",
+    .desc = "Compiler-inserted type materializer for Boolean types.",
     .inputs = {IOMetaDataConstants::ANY_INPUT_METADATA},
     .outputs = {IOMetaDataConstants::BOOLEAN_OUTPUT_METADATA},
     .atLeastOneInputRequired = false,
     .tags = {"internal", "compiler", "type-system"},
     .requiresTimeFrame = false,
     .allowNullInputs = true,
+    .internalUse = true,
+    .alias = "static_cast",
     .strategyTypes = {},
     .relatedTransforms = {},
     .assetRequirements = {"single-asset"},
-    .usageContext = "Automatically inserted by compiler during type resolution. Not for direct use.",
-    .limitations = "Internal use only. Should not appear in user-written scripts."
+    .usageContext = "Automatically inserted by compiler during type resolution.",
+    .limitations = "Internal use only."
   });
 
   // StaticCastToString - compiler-inserted String type materializer
@@ -80,18 +86,20 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeStaticCastM
     .name = "Static Cast To String",
     .options = {},
     .isCrossSectional = false,
-    .desc = "Internal compiler-inserted transform to materialize resolved String types. Not intended for direct use in scripts.",
+    .desc = "Compiler-inserted type materializer for String types.",
     .inputs = {IOMetaDataConstants::ANY_INPUT_METADATA},
     .outputs = {IOMetaDataConstants::STRING_OUTPUT_METADATA},
     .atLeastOneInputRequired = false,
     .tags = {"internal", "compiler", "type-system"},
     .requiresTimeFrame = false,
     .allowNullInputs = true,
+    .internalUse = true,
+    .alias = "static_cast",
     .strategyTypes = {},
     .relatedTransforms = {},
     .assetRequirements = {"single-asset"},
-    .usageContext = "Automatically inserted by compiler during type resolution. Not for direct use.",
-    .limitations = "Internal use only. Should not appear in user-written scripts."
+    .usageContext = "Automatically inserted by compiler during type resolution.",
+    .limitations = "Internal use only."
   });
 
   // StaticCastToTimestamp - compiler-inserted Timestamp type materializer
@@ -101,18 +109,20 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeStaticCastM
     .name = "Static Cast To Timestamp",
     .options = {},
     .isCrossSectional = false,
-    .desc = "Internal compiler-inserted transform to materialize resolved Timestamp types. Not intended for direct use in scripts.",
+    .desc = "Compiler-inserted type materializer for Timestamp types.",
     .inputs = {IOMetaDataConstants::ANY_INPUT_METADATA},
     .outputs = {IOMetaData{epoch_core::IODataType::Timestamp, "result", ""}},
     .atLeastOneInputRequired = false,
     .tags = {"internal", "compiler", "type-system"},
     .requiresTimeFrame = false,
     .allowNullInputs = true,
+    .internalUse = true,
+    .alias = "static_cast",
     .strategyTypes = {},
     .relatedTransforms = {},
     .assetRequirements = {"single-asset"},
-    .usageContext = "Automatically inserted by compiler during type resolution. Not for direct use.",
-    .limitations = "Internal use only. Should not appear in user-written scripts."
+    .usageContext = "Automatically inserted by compiler during type resolution.",
+    .limitations = "Internal use only."
   });
 
   return metadataList;

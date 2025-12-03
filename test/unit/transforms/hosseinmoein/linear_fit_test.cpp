@@ -12,7 +12,7 @@
 #include <epoch_script/core/constants.h>
 #include <epoch_script/transforms/core/config_helper.h>
 
-#include "transforms/src/hosseinmoein/statistics/linear_fit.h"
+#include "transforms/components/hosseinmoein/statistics/linear_fit.h"
 
 using namespace epoch_frame;
 using namespace epoch_script::transform;
@@ -28,19 +28,21 @@ TEST_CASE("LinearFit rolling (slope/intercept/residual)",
       {{"window", epoch_script::MetaDataOptionDefinition{static_cast<double>(window)}}},
       tf);
 
-  // Build synthetic x, y
+  // Build synthetic x, y with UTC datetime index (required by LinearFit)
   const size_t N = 200;
+  constexpr int64_t BASE_NS = 1577836800000000000LL; // 2020-01-01 UTC in nanoseconds
+  constexpr int64_t DAY_NS = 86400000000000LL;
   std::vector<int64_t> ticks(N);
-  std::iota(ticks.begin(), ticks.end(), 0);
-  auto idx_arr = epoch_frame::factory::array::make_contiguous_array(ticks);
-  auto index =
-      factory::index::make_index(idx_arr, MonotonicDirection::Increasing, "i");
+  for (size_t i = 0; i < N; ++i) {
+    ticks[i] = BASE_NS + static_cast<int64_t>(i) * DAY_NS;
+  }
+  auto index = factory::index::make_datetime_index(ticks, "i", "UTC");
   std::vector<double> xvec(N), yvec(N);
   for (size_t i = 0; i < N; ++i) {
     xvec[i] = static_cast<double>(i);
     yvec[i] = 2.0 * xvec[i] + 3.0;
   }
-  auto df_xy = make_dataframe<double>(index, {xvec, yvec}, {"x", "y"});
+  auto df_xy = make_dataframe<double>(index, {xvec, yvec}, {"#x", "#y"});
 
   LinearFit lin{cfg};
   auto out = lin.TransformData(df_xy);
@@ -68,10 +70,10 @@ TEST_CASE("LinearFit rolling (slope/intercept/residual)",
     residual_exp[i] = v.get_residual();
   }
 
-  CHECK(out[cfg.GetOutputId("slope")].contiguous_array().is_equal(
+  CHECK(out[cfg.GetOutputId("slope").GetColumnName()].contiguous_array().is_equal(
       Array{factory::array::make_contiguous_array(slope_exp)}));
-  CHECK(out[cfg.GetOutputId("intercept")].contiguous_array().is_equal(
+  CHECK(out[cfg.GetOutputId("intercept").GetColumnName()].contiguous_array().is_equal(
       Array{factory::array::make_contiguous_array(intercept_exp)}));
-  CHECK(out[cfg.GetOutputId("residual")].contiguous_array().is_equal(
+  CHECK(out[cfg.GetOutputId("residual").GetColumnName()].contiguous_array().is_equal(
       Array{factory::array::make_contiguous_array(residual_exp)}));
 }

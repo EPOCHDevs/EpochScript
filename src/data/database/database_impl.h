@@ -80,8 +80,8 @@ public:
     return m_dataloader->GetBenchmark();
   }
 
-  void RunPipeline() final;
-  void RefreshPipeline() final;
+  void RunPipeline(data_sdk::events::ScopedProgressEmitter& emitter) final;
+  void RefreshPipeline(data_sdk::events::ScopedProgressEmitter& emitter) final;
 
   std::optional<std::string>
   GetFrontContract(const asset::Asset &asset,
@@ -126,16 +126,17 @@ private:
   epoch_script::runtime::AssetReportMap m_reports;
   epoch_script::runtime::AssetEventMarkerMap m_eventMarkers;
 
-  void LoadData();
+  void LoadData(data_sdk::events::ScopedProgressEmitter& emitter);
 
-  TransformedDataType TransformBarData(StringAssetDataFrameMap);
+  TransformedDataType TransformBarData(StringAssetDataFrameMap,
+                                       data_sdk::events::ScopedProgressEmitter& emitter);
 
-  StringAssetDataFrameMap ResampleBarData();
+  StringAssetDataFrameMap ResampleBarData(data_sdk::events::ScopedProgressEmitter& emitter);
 
   void AppendFuturesContinuations();
 
   void UpdateData();
 
-  void CompletePipeline();
+  void CompletePipeline(data_sdk::events::ScopedProgressEmitter& emitter);
 };
 } // namespace epoch_script::data

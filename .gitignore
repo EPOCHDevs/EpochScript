@@ -36,3 +36,6 @@ slim.report.json# Generated reports\nreports/
 *.venv
 
 bin
+
+PyPortfolioOpt
+Riskfolio-Lib

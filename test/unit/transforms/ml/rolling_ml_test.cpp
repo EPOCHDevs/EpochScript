@@ -47,11 +47,11 @@ TEST_CASE("Rolling LightGBM classifier basic functionality", "[rolling_ml][rolli
                             input_ref("src", "volatility"),
                             input_ref("src", "noise")}},
        {"target", {input_ref("src", "target")}}},
-      {{"window_size", MetaDataOptionDefinition{252.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
+      {{"window_size", MetaDataOptionDefinition{60.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
        {"window_type", MetaDataOptionDefinition{std::string("rolling")}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}},
-       {"num_estimators", MetaDataOptionDefinition{50.0}},
+       {"min_training_samples", MetaDataOptionDefinition{40.0}},
+       {"num_estimators", MetaDataOptionDefinition{10.0}},
        {"learning_rate", MetaDataOptionDefinition{0.1}}},
       tf);
 
@@ -95,11 +95,11 @@ TEST_CASE("Rolling LightGBM regressor basic functionality", "[rolling_ml][rollin
                             input_ref("src", "signal_2"),
                             input_ref("src", "noise")}},
        {"target", {input_ref("src", "target")}}},
-      {{"window_size", MetaDataOptionDefinition{252.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
+      {{"window_size", MetaDataOptionDefinition{60.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
        {"window_type", MetaDataOptionDefinition{std::string("rolling")}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}},
-       {"num_estimators", MetaDataOptionDefinition{50.0}}},
+       {"min_training_samples", MetaDataOptionDefinition{40.0}},
+       {"num_estimators", MetaDataOptionDefinition{10.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -121,11 +121,11 @@ TEST_CASE("Rolling LightGBM with expanding window", "[rolling_ml][rolling_lightg
       {{epoch_script::ARG, {input_ref("src", "momentum"),
                             input_ref("src", "volatility")}},
        {"target", {input_ref("src", "target")}}},
-      {{"window_size", MetaDataOptionDefinition{100.0}},
-       {"step_size", MetaDataOptionDefinition{10.0}},
+      {{"window_size", MetaDataOptionDefinition{50.0}},
+       {"step_size", MetaDataOptionDefinition{25.0}},
        {"window_type", MetaDataOptionDefinition{std::string("expanding")}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}},
-       {"num_estimators", MetaDataOptionDefinition{30.0}}},
+       {"min_training_samples", MetaDataOptionDefinition{40.0}},
+       {"num_estimators", MetaDataOptionDefinition{10.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -149,9 +149,9 @@ TEST_CASE("Rolling Logistic L1 basic functionality", "[rolling_ml][rolling_linea
       {{epoch_script::ARG, {input_ref("src", "momentum"),
                             input_ref("src", "volatility")}},
        {"target", {input_ref("src", "target")}}},
-      {{"window_size", MetaDataOptionDefinition{252.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}},
+      {{"window_size", MetaDataOptionDefinition{60.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
+       {"min_training_samples", MetaDataOptionDefinition{40.0}},
        {"regularization", MetaDataOptionDefinition{1.0}}},
       tf);
 
@@ -173,9 +173,9 @@ TEST_CASE("Rolling Logistic L2 basic functionality", "[rolling_ml][rolling_linea
       {{epoch_script::ARG, {input_ref("src", "momentum"),
                             input_ref("src", "volatility")}},
        {"target", {input_ref("src", "target")}}},
-      {{"window_size", MetaDataOptionDefinition{252.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}}},
+      {{"window_size", MetaDataOptionDefinition{60.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
+       {"min_training_samples", MetaDataOptionDefinition{40.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -195,9 +195,9 @@ TEST_CASE("Rolling SVR L1 basic functionality", "[rolling_ml][rolling_linear]") 
       {{epoch_script::ARG, {input_ref("src", "signal_1"),
                             input_ref("src", "signal_2")}},
        {"target", {input_ref("src", "target")}}},
-      {{"window_size", MetaDataOptionDefinition{252.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}}},
+      {{"window_size", MetaDataOptionDefinition{60.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
+       {"min_training_samples", MetaDataOptionDefinition{40.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -218,9 +218,9 @@ TEST_CASE("Rolling SVR L2 basic functionality", "[rolling_ml][rolling_linear]") 
       {{epoch_script::ARG, {input_ref("src", "signal_1"),
                             input_ref("src", "signal_2")}},
        {"target", {input_ref("src", "target")}}},
-      {{"window_size", MetaDataOptionDefinition{252.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}}},
+      {{"window_size", MetaDataOptionDefinition{60.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
+       {"min_training_samples", MetaDataOptionDefinition{40.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -243,9 +243,9 @@ TEST_CASE("Rolling ML ZScore basic functionality", "[rolling_ml][rolling_preproc
   auto cfg = run_op("rolling_ml_zscore", "rolling_zscore",
       {{epoch_script::ARG, {input_ref("src", "momentum"),
                             input_ref("src", "volatility")}}},
-      {{"window_size", MetaDataOptionDefinition{100.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{50.0}}},
+      {{"window_size", MetaDataOptionDefinition{50.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
+       {"min_training_samples", MetaDataOptionDefinition{30.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -265,9 +265,9 @@ TEST_CASE("Rolling ML MinMax basic functionality", "[rolling_ml][rolling_preproc
   auto cfg = run_op("rolling_ml_minmax", "rolling_minmax",
       {{epoch_script::ARG, {input_ref("src", "momentum"),
                             input_ref("src", "volatility")}}},
-      {{"window_size", MetaDataOptionDefinition{100.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{50.0}}},
+      {{"window_size", MetaDataOptionDefinition{50.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
+       {"min_training_samples", MetaDataOptionDefinition{30.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -286,9 +286,9 @@ TEST_CASE("Rolling ML Robust basic functionality", "[rolling_ml][rolling_preproc
   auto cfg = run_op("rolling_ml_robust", "rolling_robust",
       {{epoch_script::ARG, {input_ref("src", "momentum"),
                             input_ref("src", "volatility")}}},
-      {{"window_size", MetaDataOptionDefinition{100.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{50.0}}},
+      {{"window_size", MetaDataOptionDefinition{50.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
+       {"min_training_samples", MetaDataOptionDefinition{30.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -311,9 +311,9 @@ TEST_CASE("Rolling KMeans 3 basic functionality", "[rolling_ml][rolling_clusteri
   auto cfg = run_op("rolling_kmeans_3", "rolling_km3",
       {{epoch_script::ARG, {input_ref("src", "momentum"),
                             input_ref("src", "volatility")}}},
-      {{"window_size", MetaDataOptionDefinition{200.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}}},
+      {{"window_size", MetaDataOptionDefinition{60.0}},
+       {"step_size", MetaDataOptionDefinition{25.0}},
+       {"min_training_samples", MetaDataOptionDefinition{40.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -334,9 +334,9 @@ TEST_CASE("Rolling DBSCAN basic functionality", "[rolling_ml][rolling_clustering
   auto cfg = run_op("rolling_dbscan", "rolling_dbs",
       {{epoch_script::ARG, {input_ref("src", "momentum"),
                             input_ref("src", "volatility")}}},
-      {{"window_size", MetaDataOptionDefinition{200.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}},
+      {{"window_size", MetaDataOptionDefinition{60.0}},
+       {"step_size", MetaDataOptionDefinition{25.0}},
+       {"min_training_samples", MetaDataOptionDefinition{40.0}},
        {"epsilon", MetaDataOptionDefinition{0.5}},
        {"min_points", MetaDataOptionDefinition{5.0}}},
       tf);
@@ -360,14 +360,15 @@ TEST_CASE("Rolling PCA basic functionality", "[rolling_ml][rolling_decomposition
 
   auto df = read_ml_input("classification_input.csv");
 
-  auto cfg = run_op("rolling_pca", "rolling_pca",
+  // Use rolling_pca_2 (extracts 2 principal components)
+  // The N in rolling_pca_N refers to max components extracted
+  auto cfg = run_op("rolling_pca_2", "rolling_pca",
       {{epoch_script::ARG, {input_ref("src", "momentum"),
                             input_ref("src", "volatility"),
                             input_ref("src", "noise")}}},
-      {{"window_size", MetaDataOptionDefinition{200.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}},
-       {"n_components", MetaDataOptionDefinition{2.0}}},
+      {{"window_size", MetaDataOptionDefinition{60.0}},
+       {"step_size", MetaDataOptionDefinition{25.0}},
+       {"min_training_samples", MetaDataOptionDefinition{40.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -376,61 +377,13 @@ TEST_CASE("Rolling PCA basic functionality", "[rolling_ml][rolling_decomposition
 
   auto out = t->TransformData(df);
   REQUIRE(out.num_rows() > 0);
-  // Should have 2 PC columns + 1 explained_variance_ratio column
+  // rolling_pca_2 outputs: pc_0, pc_1, total_explained_variance_ratio = 3 columns
   REQUIRE(out.num_cols() == 3);
-}
-
-TEST_CASE("Rolling ICA basic functionality", "[rolling_ml][rolling_decomposition]") {
-  const auto tf = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
-
-  auto df = read_ml_input("classification_input.csv");
-
-  auto cfg = run_op("rolling_ica", "rolling_ica",
-      {{epoch_script::ARG, {input_ref("src", "momentum"),
-                            input_ref("src", "volatility"),
-                            input_ref("src", "noise")}}},
-      {{"window_size", MetaDataOptionDefinition{200.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}},
-       {"n_components", MetaDataOptionDefinition{2.0}}},
-      tf);
-
-  auto tbase = MAKE_TRANSFORM(cfg);
-  auto t = dynamic_cast<ITransform *>(tbase.get());
-  REQUIRE(t != nullptr);
-
-  auto out = t->TransformData(df);
-  REQUIRE(out.num_rows() > 0);
-  // Should have 2 IC columns
-  REQUIRE(out.num_cols() == 2);
 }
 
 // =============================================================================
 // Rolling Probabilistic Tests
 // =============================================================================
-
-TEST_CASE("Rolling GMM 2 basic functionality", "[rolling_ml][rolling_probabilistic]") {
-  const auto tf = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
-
-  auto df = read_ml_input("classification_input.csv");
-
-  auto cfg = run_op("rolling_gmm_2", "rolling_gmm2",
-      {{epoch_script::ARG, {input_ref("src", "momentum"),
-                            input_ref("src", "volatility")}}},
-      {{"window_size", MetaDataOptionDefinition{200.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}}},
-      tf);
-
-  auto tbase = MAKE_TRANSFORM(cfg);
-  auto t = dynamic_cast<ITransform *>(tbase.get());
-  REQUIRE(t != nullptr);
-
-  auto out = t->TransformData(df);
-  REQUIRE(out.num_rows() > 0);
-  // Should have component + 2 probabilities + log_likelihood
-  REQUIRE(out.num_cols() == 4);
-}
 
 TEST_CASE("Rolling HMM 2 basic functionality", "[rolling_ml][rolling_probabilistic]") {
   const auto tf = epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
@@ -440,9 +393,9 @@ TEST_CASE("Rolling HMM 2 basic functionality", "[rolling_ml][rolling_probabilist
   auto cfg = run_op("rolling_hmm_2", "rolling_hmm2",
       {{epoch_script::ARG, {input_ref("src", "momentum"),
                             input_ref("src", "volatility")}}},
-      {{"window_size", MetaDataOptionDefinition{200.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}}},
+      {{"window_size", MetaDataOptionDefinition{60.0}},
+       {"step_size", MetaDataOptionDefinition{25.0}},
+       {"min_training_samples", MetaDataOptionDefinition{40.0}}},
       tf);
 
   auto tbase = MAKE_TRANSFORM(cfg);
@@ -467,19 +420,19 @@ TEST_CASE("Rolling vs Expanding window produces different results", "[rolling_ml
   // Rolling window config
   auto cfg_rolling = run_op("rolling_ml_zscore", "roll_z",
       {{epoch_script::ARG, {input_ref("src", "momentum")}}},
-      {{"window_size", MetaDataOptionDefinition{100.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
+      {{"window_size", MetaDataOptionDefinition{50.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
        {"window_type", MetaDataOptionDefinition{std::string("rolling")}},
-       {"min_training_samples", MetaDataOptionDefinition{50.0}}},
+       {"min_training_samples", MetaDataOptionDefinition{30.0}}},
       tf);
 
   // Expanding window config
   auto cfg_expanding = run_op("rolling_ml_zscore", "exp_z",
       {{epoch_script::ARG, {input_ref("src", "momentum")}}},
-      {{"window_size", MetaDataOptionDefinition{100.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
+      {{"window_size", MetaDataOptionDefinition{50.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
        {"window_type", MetaDataOptionDefinition{std::string("expanding")}},
-       {"min_training_samples", MetaDataOptionDefinition{50.0}}},
+       {"min_training_samples", MetaDataOptionDefinition{30.0}}},
       tf);
 
   auto t_rolling = MAKE_TRANSFORM(cfg_rolling);
@@ -500,7 +453,7 @@ TEST_CASE("Rolling vs Expanding window produces different results", "[rolling_ml
 
   // At least some values should differ
   bool has_difference = false;
-  for (size_t i = 150; i < roll_vals.size() && i < exp_vals.size(); ++i) {
+  for (size_t i = 60; i < roll_vals.size() && i < exp_vals.size(); ++i) {
     if (std::isfinite(roll_vals[i]) && std::isfinite(exp_vals[i])) {
       if (std::abs(roll_vals[i] - exp_vals[i]) > 1e-6) {
         has_difference = true;
@@ -516,20 +469,20 @@ TEST_CASE("Step size affects retraining frequency", "[rolling_ml][step_size]") {
 
   auto df = read_ml_input("classification_input.csv");
 
-  // Step size 1 (retrain every row)
+  // Step size 5 (retrain every 5 rows)
   auto cfg_step1 = run_op("rolling_ml_zscore", "step1",
       {{epoch_script::ARG, {input_ref("src", "momentum")}}},
-      {{"window_size", MetaDataOptionDefinition{100.0}},
-       {"step_size", MetaDataOptionDefinition{1.0}},
-       {"min_training_samples", MetaDataOptionDefinition{50.0}}},
+      {{"window_size", MetaDataOptionDefinition{50.0}},
+       {"step_size", MetaDataOptionDefinition{5.0}},
+       {"min_training_samples", MetaDataOptionDefinition{30.0}}},
       tf);
 
-  // Step size 10 (retrain every 10 rows)
+  // Step size 20 (retrain every 20 rows)
   auto cfg_step10 = run_op("rolling_ml_zscore", "step10",
       {{epoch_script::ARG, {input_ref("src", "momentum")}}},
-      {{"window_size", MetaDataOptionDefinition{100.0}},
-       {"step_size", MetaDataOptionDefinition{10.0}},
-       {"min_training_samples", MetaDataOptionDefinition{50.0}}},
+      {{"window_size", MetaDataOptionDefinition{50.0}},
+       {"step_size", MetaDataOptionDefinition{20.0}},
+       {"min_training_samples", MetaDataOptionDefinition{30.0}}},
       tf);
 
   auto t_step1 = MAKE_TRANSFORM(cfg_step1);

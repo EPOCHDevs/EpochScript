@@ -82,7 +82,8 @@ TEST_CASE("Resampler::Build correctly resamples data for multiple timeframes "
     Resampler resampler(timeframes, true);
 
     // Build the resampled data
-    auto result = resampler.Build(assetData);
+      data_sdk::events::ScopedProgressEmitter emitter;
+    auto result = resampler.Build(assetData, emitter);
 
     // We should have 2 assets * 1 timeframe = 2 results
     REQUIRE(result.size() == 2);
@@ -131,7 +132,8 @@ TEST_CASE("Resampler::Build correctly resamples data for multiple timeframes "
     Resampler resampler(timeframes, true);
 
     // Build the resampled data
-    auto result = resampler.Build(assetData);
+      data_sdk::events::ScopedProgressEmitter emitter;
+    auto result = resampler.Build(assetData, emitter);
 
     // We should have 2 assets * 2 timeframes = 4 results
     REQUIRE(result.size() == 4);
@@ -179,7 +181,8 @@ TEST_CASE("Resampler::Build correctly resamples data for multiple timeframes "
     Resampler resampler(timeframes, true);
 
     // Build the resampled data
-    auto result = resampler.Build(assetData);
+      data_sdk::events::ScopedProgressEmitter emitter;
+    auto result = resampler.Build(assetData, emitter);
 
     // We should have 2 assets * 1 timeframe = 2 results
     REQUIRE(result.size() == 2);
@@ -214,7 +217,8 @@ TEST_CASE("Resampler handles edge cases correctly") {
     Resampler resampler(timeframes, true);
 
     // Build the resampled data
-    auto result = resampler.Build(emptyData);
+      data_sdk::events::ScopedProgressEmitter emitter;
+    auto result = resampler.Build(emptyData, emitter);
 
     // Should return empty result
     REQUIRE(result.empty());
@@ -239,7 +243,8 @@ TEST_CASE("Resampler handles edge cases correctly") {
     Resampler resampler(timeframes, true);
 
     // Build the resampled data
-    auto result = resampler.Build(assetData);
+      data_sdk::events::ScopedProgressEmitter emitter;
+    auto result = resampler.Build(assetData, emitter);
 
     // Should have 1 result
     REQUIRE(result.size() == 1);
@@ -306,7 +311,8 @@ TEST_CASE("Resampler handles edge cases correctly") {
       Resampler resampler(timeframes, true);
 
       // Build the resampled data - should throw because only UTC is supported
-      REQUIRE_THROWS(resampler.Build(assetData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+      REQUIRE_THROWS(resampler.Build(assetData, emitter));
     }
   }
 }
@@ -395,9 +401,10 @@ TEST_CASE("Resampling to Calendar Offsets") {
 
     auto dataFrame = createTestOHLCVData(intraday);
 
+      data_sdk::events::ScopedProgressEmitter emitter;
     auto result = Resampler(timeframes, isIntraday)
                       .Build({{EpochScriptAssetConstants::instance().AAPL,
-                               dataFrame}});
+                               dataFrame}}, emitter);
 
     SECTION(isIntraday ? "Intraday" : "Daily") {
       REQUIRE(result.size() == timeframes.size());
@@ -491,7 +498,8 @@ TEST_CASE("Generic Resampler handles different column types correctly", "[Resamp
         epoch_script::TimeFrame(factory::offset::minutes(5))};
 
     Resampler resampler(timeframes, true);
-    auto result = resampler.Build(assetData);
+      data_sdk::events::ScopedProgressEmitter emitter;
+    auto result = resampler.Build(assetData, emitter);
 
     REQUIRE(result.size() == 1);
     auto [timeframe, resultAsset, resultDf] = result[0];
@@ -617,7 +625,8 @@ TEST_CASE("Generic Resampler takes last non-null value for sparse data", "[Resam
         epoch_script::TimeFrame(factory::offset::minutes(5))};
 
     Resampler resampler(timeframes, true);
-    auto result = resampler.Build(assetData);
+      data_sdk::events::ScopedProgressEmitter emitter;
+    auto result = resampler.Build(assetData, emitter);
 
     REQUIRE(result.size() == 1);
     auto [timeframe, resultAsset, resultDf] = result[0];
@@ -659,7 +668,7 @@ TEST_CASE("Generic Resampler takes last non-null value for sparse data", "[Resam
     std::vector<std::optional<double>> all_null_data(10, std::nullopt);
 
     arrow::DoubleBuilder all_null_builder;
-    for (const auto& val : all_null_data) {
+    for (const auto& val [[maybe_unused]] : all_null_data) {
       REQUIRE(all_null_builder.AppendNull().ok());
     }
     std::shared_ptr<arrow::Array> all_null_array;
@@ -693,13 +702,14 @@ TEST_CASE("Generic Resampler takes last non-null value for sparse data", "[Resam
         epoch_script::TimeFrame(factory::offset::minutes(5))};
 
     Resampler resampler(timeframes, true);
-    auto result = resampler.Build(assetData);
+      data_sdk::events::ScopedProgressEmitter emitter;
+    auto result = resampler.Build(assetData, emitter);
 
     REQUIRE(result.size() == 1);
     auto [timeframe, resultAsset, resultDf] = result[0];
 
     // All values should still be null
-    for (int64_t i = 0; i < resultDf.num_rows(); i++) {
+    for (size_t i = 0; i < resultDf.num_rows(); i++) {
       auto val = resultDf["all_null_col"].iloc(i);
       INFO("Row " << i << " should be null");
       REQUIRE(val.is_null());

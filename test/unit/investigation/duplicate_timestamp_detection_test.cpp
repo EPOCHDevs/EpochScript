@@ -174,7 +174,8 @@ div = dividends(timeframe="1D")()
     auto database = factory.CreateDatabase();
 
     std::cout << "[INFO] Running pipeline...\n";
-    database->RunPipeline();
+    data_sdk::events::ScopedProgressEmitter emitter;
+    database->RunPipeline(emitter);
     std::cout << "[INFO] Pipeline complete\n\n";
 
     // Check database for duplicates

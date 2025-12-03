@@ -7,6 +7,7 @@
 #include "epoch_frame/common.h"
 #include <epoch_script/data/common/frame_utils.h>
 #include <epoch_script/data/common/constants.h>
+#include <epoch_data_sdk/events/all.h>
 
 using namespace epoch_script::data;
 using namespace epoch_script;
@@ -115,13 +116,14 @@ TEST_CASE("LoadData: single/multi asset, multi asset class, daily/minute",
     auto mock_loader = std::make_unique<MockDataloader>();
     REQUIRE_CALL(*mock_loader, GetDataCategory()).RETURN(cases.category);
     REQUIRE_CALL(*mock_loader, GetStoredData()).RETURN(input);
-    REQUIRE_CALL(*mock_loader, LoadData()).TIMES(1);
+    REQUIRE_CALL(*mock_loader, LoadData(trompeloeil::_)).TIMES(1);
 
     DatabaseImplOptions opts;
     opts.dataloader = std::move(mock_loader);
 
     auto db = DatabaseImpl(std::move(opts));
-    db.RunPipeline();
+    data_sdk::events::ScopedProgressEmitter emitter;
+    db.RunPipeline(emitter);
 
     for (const auto &asset : cases.assets | std::views::keys) {
       auto data = db.GetCurrentData(cases.expected_timeframe, asset);
@@ -187,13 +189,13 @@ TEST_CASE("LoadData + Resampler: happy path for Minute and Daily",
     auto mock_loader = std::make_unique<MockDataloader>();
     REQUIRE_CALL(*mock_loader, GetDataCategory()).RETURN(cases.category);
     REQUIRE_CALL(*mock_loader, GetStoredData()).RETURN(input);
-    REQUIRE_CALL(*mock_loader, LoadData()).TIMES(1);
+    REQUIRE_CALL(*mock_loader, LoadData(trompeloeil::_)).TIMES(1);
 
     // Mock resampler with input check
     auto mock_resampler = std::make_unique<MockResampler>();
     MockResampler::T resampled_vec = {
         std::make_tuple(cases.resampled_timeframe, AAPL, resampled_df)};
-    REQUIRE_CALL(*mock_resampler, Build(trompeloeil::_))
+    REQUIRE_CALL(*mock_resampler, Build(trompeloeil::_, trompeloeil::_))
         .TIMES(1)
         .RETURN(resampled_vec);
 
@@ -202,7 +204,8 @@ TEST_CASE("LoadData + Resampler: happy path for Minute and Daily",
     opts.resampler = std::move(mock_resampler);
 
     auto db = DatabaseImpl(std::move(opts));
-    db.RunPipeline();
+    data_sdk::events::ScopedProgressEmitter emitter;
+    db.RunPipeline(emitter);
 
     // Check base timeframe
     auto base_data = db.GetCurrentData(cases.base_timeframe, AAPL);
@@ -266,19 +269,19 @@ TEST_CASE("LoadData + Resampler + Transform: transform base only",
   auto mock_loader = std::make_unique<MockDataloader>();
   REQUIRE_CALL(*mock_loader, GetDataCategory()).RETURN(category);
   REQUIRE_CALL(*mock_loader, GetStoredData()).RETURN(input);
-  REQUIRE_CALL(*mock_loader, LoadData()).TIMES(1);
+  REQUIRE_CALL(*mock_loader, LoadData(trompeloeil::_)).TIMES(1);
 
   // Mock resampler with input check
   auto mock_resampler = std::make_unique<MockResampler>();
   MockResampler::T resampled_vec = {
       std::make_tuple(resampled_timeframe, AAPL, resampled_df)};
-  REQUIRE_CALL(*mock_resampler, Build(trompeloeil::_))
+  REQUIRE_CALL(*mock_resampler, Build(trompeloeil::_, trompeloeil::_))
       .TIMES(1)
       .RETURN(resampled_vec);
 
   // Mock transform: only base gets vwap (static)
   auto mock_transform = std::make_unique<MockTransformGraph>();
-  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_))
+  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_, trompeloeil::_))
       .RETURN(transform_result);
     REQUIRE_CALL(*mock_transform, GetGeneratedReports())
     .TIMES(AT_LEAST(0))
@@ -293,7 +296,8 @@ TEST_CASE("LoadData + Resampler + Transform: transform base only",
   opts.dataTransform = std::move(mock_transform);
 
   auto db = DatabaseImpl(std::move(opts));
-  db.RunPipeline();
+  data_sdk::events::ScopedProgressEmitter emitter;
+  db.RunPipeline(emitter);
 
   {
     // Check base timeframe
@@ -352,19 +356,19 @@ TEST_CASE("LoadData + Resampler + Transform: transform resampled only",
   auto mock_loader = std::make_unique<MockDataloader>();
   REQUIRE_CALL(*mock_loader, GetDataCategory()).RETURN(category);
   REQUIRE_CALL(*mock_loader, GetStoredData()).RETURN(input);
-  REQUIRE_CALL(*mock_loader, LoadData()).TIMES(1);
+  REQUIRE_CALL(*mock_loader, LoadData(trompeloeil::_)).TIMES(1);
 
   // Mock resampler with input check
   auto mock_resampler = std::make_unique<MockResampler>();
   MockResampler::T resampled_vec = {
       std::make_tuple(resampled_timeframe, AAPL, resampled_df)};
-  REQUIRE_CALL(*mock_resampler, Build(trompeloeil::_))
+  REQUIRE_CALL(*mock_resampler, Build(trompeloeil::_, trompeloeil::_))
       .TIMES(1)
       .RETURN(resampled_vec);
 
   // Mock transform: only resampled gets vwap (static)
   auto mock_transform = std::make_unique<MockTransformGraph>();
-  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_))
+  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_, trompeloeil::_))
       .RETURN(transform_result);
   REQUIRE_CALL(*mock_transform, GetGeneratedReports())
     .TIMES(AT_LEAST(0))
@@ -379,7 +383,8 @@ TEST_CASE("LoadData + Resampler + Transform: transform resampled only",
   opts.dataTransform = std::move(mock_transform);
 
   auto db = DatabaseImpl(std::move(opts));
-  db.RunPipeline();
+  data_sdk::events::ScopedProgressEmitter emitter;
+  db.RunPipeline(emitter);
 
   // Check base timeframe
   auto base_data = db.GetCurrentData(base_timeframe, AAPL);
@@ -433,19 +438,19 @@ TEST_CASE("LoadData + Resampler + Transform: transform both",
   auto mock_loader = std::make_unique<MockDataloader>();
   REQUIRE_CALL(*mock_loader, GetDataCategory()).RETURN(category);
   REQUIRE_CALL(*mock_loader, GetStoredData()).RETURN(input);
-  REQUIRE_CALL(*mock_loader, LoadData()).TIMES(1);
+  REQUIRE_CALL(*mock_loader, LoadData(trompeloeil::_)).TIMES(1);
 
   // Mock resampler with input check
   auto mock_resampler = std::make_unique<MockResampler>();
   MockResampler::T resampled_vec = {
       std::make_tuple(resampled_timeframe, AAPL, resampled_df)};
-  REQUIRE_CALL(*mock_resampler, Build(trompeloeil::_))
+  REQUIRE_CALL(*mock_resampler, Build(trompeloeil::_, trompeloeil::_))
       .TIMES(1)
       .RETURN(resampled_vec);
 
   // Mock transform: both get vwap (static)
   auto mock_transform = std::make_unique<MockTransformGraph>();
-  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_))
+  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_, trompeloeil::_))
       .RETURN(transform_result);
   REQUIRE_CALL(*mock_transform, GetGeneratedReports())
     .TIMES(AT_LEAST(0))
@@ -460,7 +465,8 @@ TEST_CASE("LoadData + Resampler + Transform: transform both",
   opts.dataTransform = std::move(mock_transform);
 
   auto db = DatabaseImpl(std::move(opts));
-  db.RunPipeline();
+  data_sdk::events::ScopedProgressEmitter emitter;
+  db.RunPipeline(emitter);
 
   // Check base timeframe
   auto base_data = db.GetCurrentData(base_timeframe, AAPL);
@@ -518,13 +524,13 @@ TEST_CASE("LoadData + Resampler + Transform: unique transforms per timeframe",
   auto mock_loader = std::make_unique<MockDataloader>();
   REQUIRE_CALL(*mock_loader, GetDataCategory()).RETURN(category);
   REQUIRE_CALL(*mock_loader, GetStoredData()).RETURN(input);
-  REQUIRE_CALL(*mock_loader, LoadData()).TIMES(1);
+  REQUIRE_CALL(*mock_loader, LoadData(trompeloeil::_)).TIMES(1);
 
   // Mock resampler with input check
   auto mock_resampler = std::make_unique<MockResampler>();
   MockResampler::T resampled_vec = {
       std::make_tuple(resampled_timeframe, AAPL, resampled_df)};
-  REQUIRE_CALL(*mock_resampler, Build(trompeloeil::_))
+  REQUIRE_CALL(*mock_resampler, Build(trompeloeil::_, trompeloeil::_))
       .TIMES(1)
       .RETURN(resampled_vec);
 
@@ -539,7 +545,7 @@ TEST_CASE("LoadData + Resampler + Transform: unique transforms per timeframe",
   epoch_script::runtime::TimeFrameAssetDataFrameMap transform_result_static;
   transform_result_static[base_timeframe][AAPL.GetID()] = expected_base;
   transform_result_static[resampled_timeframe][AAPL.GetID()] = expected_resampled;
-  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_))
+  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_, trompeloeil::_))
       .RETURN(transform_result_static);
 
   DatabaseImplOptions opts;
@@ -548,7 +554,8 @@ TEST_CASE("LoadData + Resampler + Transform: unique transforms per timeframe",
   opts.dataTransform = std::move(mock_transform);
 
   auto db = DatabaseImpl(std::move(opts));
-  db.RunPipeline();
+  data_sdk::events::ScopedProgressEmitter emitter;
+  db.RunPipeline(emitter);
 
   // Check base timeframe
   auto base_data = db.GetCurrentData(base_timeframe, AAPL);
@@ -612,7 +619,7 @@ TEST_CASE("LoadData + FuturesContinuation: creates continuous contracts",
   auto mock_loader = std::make_unique<MockDataloader>();
   REQUIRE_CALL(*mock_loader, GetDataCategory()).RETURN(category);
   REQUIRE_CALL(*mock_loader, GetStoredData()).RETURN(input);
-  REQUIRE_CALL(*mock_loader, LoadData()).TIMES(1);
+  REQUIRE_CALL(*mock_loader, LoadData(trompeloeil::_)).TIMES(1);
 
   // Mock futures continuation constructor
   auto mock_continuation = std::make_unique<MockFuturesContinuation>();
@@ -627,7 +634,8 @@ TEST_CASE("LoadData + FuturesContinuation: creates continuous contracts",
   opts.futuresContinuationConstructor = std::move(mock_continuation);
 
   auto db = DatabaseImpl(std::move(opts));
-  db.RunPipeline();
+  data_sdk::events::ScopedProgressEmitter emitter;
+  db.RunPipeline(emitter);
 
   // Check continuous contract exists
   auto continuous_data = db.GetCurrentData(base_timeframe, ES_F);
@@ -707,7 +715,7 @@ TEST_CASE("RefreshPipeline: updates with websocket data",
   auto mock_loader = std::make_unique<MockDataloader>();
   REQUIRE_CALL(*mock_loader, GetDataCategory()).RETURN(category);
   REQUIRE_CALL(*mock_loader, GetStoredData()).RETURN(initial_data);
-  REQUIRE_CALL(*mock_loader, LoadData()).TIMES(1);
+  REQUIRE_CALL(*mock_loader, LoadData(trompeloeil::_)).TIMES(1);
 
   // Mock websocket manager
   auto mock_ws_manager = std::make_unique<MockWebSocketManager>();
@@ -726,7 +734,8 @@ TEST_CASE("RefreshPipeline: updates with websocket data",
 
   // Create the database and run initial pipeline
   auto db = DatabaseImpl(std::move(opts));
-  db.RunPipeline();
+  data_sdk::events::ScopedProgressEmitter emitter;
+  db.RunPipeline(emitter);
 
   // Initial data should match what we loaded
   auto initial_db_data = db.GetCurrentData(base_timeframe, BTC_USD);
@@ -734,7 +743,7 @@ TEST_CASE("RefreshPipeline: updates with websocket data",
   REQUIRE(initial_db_data.equals(initial_data[BTC_USD]));
 
   // Now refresh the pipeline to process websocket updates
-  db.RefreshPipeline();
+  db.RefreshPipeline(emitter);
 
   // Check that the data was updated correctly
   auto updated_db_data = db.GetCurrentData(base_timeframe, BTC_USD);
@@ -844,7 +853,7 @@ TEST_CASE("RefreshPipeline: updates with websocket data and transformations",
   auto mock_loader = std::make_unique<MockDataloader>();
   REQUIRE_CALL(*mock_loader, GetDataCategory()).RETURN(category);
   REQUIRE_CALL(*mock_loader, GetStoredData()).RETURN(initial_data);
-  REQUIRE_CALL(*mock_loader, LoadData()).TIMES(1);
+  REQUIRE_CALL(*mock_loader, LoadData(trompeloeil::_)).TIMES(1);
 
   // Mock websocket manager
   auto mock_ws_manager = std::make_unique<MockWebSocketManager>();
@@ -874,13 +883,13 @@ TEST_CASE("RefreshPipeline: updates with websocket data and transformations",
 
   // First transform call happens during initial RunPipeline
   trompeloeil::sequence seq;
-  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_))
+  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_, trompeloeil::_))
       .TIMES(1)
       .IN_SEQUENCE(seq)
       .RETURN(initial_transform_result_static);
 
   // Second transform call happens during RefreshPipeline
-  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_))
+  REQUIRE_CALL(*mock_transform, ExecutePipeline(trompeloeil::_, trompeloeil::_))
       .TIMES(1)
       .IN_SEQUENCE(seq)
       .RETURN(updated_transform_result_static);
@@ -904,7 +913,8 @@ TEST_CASE("RefreshPipeline: updates with websocket data and transformations",
 
   // Create the database and run initial pipeline
   auto db = DatabaseImpl(std::move(opts));
-  db.RunPipeline();
+  data_sdk::events::ScopedProgressEmitter emitter;
+  db.RunPipeline(emitter);
 
   // Initial data should include the VWAP column
   auto initial_db_data = db.GetCurrentData(base_timeframe, BTC_USD);
@@ -912,7 +922,7 @@ TEST_CASE("RefreshPipeline: updates with websocket data and transformations",
   REQUIRE(initial_db_data.contains("vwap"));
 
   // Now refresh the pipeline to process websocket updates
-  db.RefreshPipeline();
+  db.RefreshPipeline(emitter);
 
   // Check that the data was updated correctly and transformed
   auto updated_db_data = db.GetCurrentData(base_timeframe, BTC_USD);

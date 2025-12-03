@@ -17,6 +17,7 @@
 #include <epoch_script/core/constants.h>
 #include <epoch_core/catch_defs.h>
 #include <catch2/catch_test_macros.hpp>
+#include <epoch_data_sdk/events/all.h>
 
 using namespace epoch_script::runtime;
 using namespace epoch_script::runtime::test;
@@ -28,6 +29,11 @@ namespace {
 std::unique_ptr<TransformManager> CompileSource(const std::string& sourceCode) {
     auto pythonSource = epoch_script::strategy::PythonSource(sourceCode);
     return std::make_unique<TransformManager>(pythonSource);
+}
+
+auto ExecuteWithEmitter(DataFlowRuntimeOrchestrator& orch, TimeFrameAssetDataFrameMap inputData) {
+    data_sdk::events::ScopedProgressEmitter emitter;
+    return orch.ExecutePipeline(std::move(inputData), emitter);
 }
 
 } // anonymous namespace
@@ -64,7 +70,8 @@ event_marker(
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto eventMarkers = orch.GetGeneratedEventMarkers();
 
@@ -125,7 +132,8 @@ event_marker(
         inputData[dailyTF.ToString()][msft] = ohlcv;
         inputData[dailyTF.ToString()][googl] = ohlcv;
 
-        orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto eventMarkers = orch.GetGeneratedEventMarkers();
 
@@ -184,7 +192,8 @@ event_marker(
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 95.0, 90.0, 95.0, 100.0, 105.0});
 
-        orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto eventMarkers = orch.GetGeneratedEventMarkers();
 
@@ -238,7 +247,8 @@ event_marker(
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0, 80.0});
 
-        orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto eventMarkers = orch.GetGeneratedEventMarkers();
 
@@ -294,7 +304,8 @@ event_marker(
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto eventMarkers = orch.GetGeneratedEventMarkers();
 
@@ -339,7 +350,8 @@ event_marker(
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto eventMarkers = orch.GetGeneratedEventMarkers();
 
@@ -385,7 +397,8 @@ event_marker(
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
+        data_sdk::events::ScopedProgressEmitter emitter;
+        orch.ExecutePipeline(std::move(inputData), emitter);
 
         auto eventMarkers = orch.GetGeneratedEventMarkers();
 
@@ -445,8 +458,8 @@ event_marker(
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        orch.ExecutePipeline(std::move(inputData), emitter);
         auto eventMarkers = orch.GetGeneratedEventMarkers();
 
         REQUIRE(eventMarkers.contains(aapl));
@@ -504,8 +517,8 @@ event_marker(
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({90.0, 110.0, 95.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+        data_sdk::events::ScopedProgressEmitter emitter;
+        orch.ExecutePipeline(std::move(inputData), emitter);
         auto eventMarkers = orch.GetGeneratedEventMarkers();
 
         REQUIRE(eventMarkers.contains(aapl));

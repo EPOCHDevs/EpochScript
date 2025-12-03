@@ -95,12 +95,21 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeLightGBMMet
         .desc = "L2 regularization term (Ridge)"
       },
       MetaDataOption{
-        .id = "lookback_window",
-        .name = "Lookback Window",
+        .id = "split_ratio",
+        .name = "Training Split Ratio",
+        .type = epoch_core::MetaDataOptionType::Decimal,
+        .defaultValue = MetaDataOptionDefinition(1.0),
+        .min = 0.1,
+        .max = 1.0,
+        .desc = "Ratio of data to use for training (1.0 = all data for research mode)"
+      },
+      MetaDataOption{
+        .id = "split_gap",
+        .name = "Purge Gap",
         .type = epoch_core::MetaDataOptionType::Integer,
         .defaultValue = MetaDataOptionDefinition(0.0),
         .min = 0,
-        .desc = "Number of bars for training (0 = use all data for research mode)"
+        .desc = "Gap between training and test data (Marcos López de Prado purging)"
       },
       MetaDataOption{
         .id = "min_training_samples",

@@ -3,8 +3,11 @@
 //
 
 #include <epoch_script/transforms/core/registration.h>
-#include "agg.h"
 #include "data_source.h"
+
+// Module-based registration
+#include "aggregation/register.h"
+#include "cross_sectional/register.h"
 #include <epoch_script/transforms/core/registry.h>
 #include <epoch_script/transforms/core/trade_executors.h>
 #include <epoch_script/transforms/core/transform_registry.h>
@@ -27,6 +30,7 @@
 #include "hosseinmoein/statistics/beta.h"
 #include "hosseinmoein/statistics/ewm_corr.h"
 #include "hosseinmoein/statistics/ewm_cov.h"
+#include "hosseinmoein/statistics/linear_fit.h"
 
 // Fractional Differentiation
 #include "hosseinmoein/statistics/frac_diff.h"
@@ -39,9 +43,7 @@
 #include "hosseinmoein/statistics/johansen.h"
 #include "hosseinmoein/statistics/cointegration_metadata.h"
 
-// GMM Transforms
-#include "statistics/gmm.h"
-#include "statistics/gmm_metadata.h"
+// Clustering Transforms Metadata
 #include "statistics/clustering_metadata.h"
 
 // ML Metadata
@@ -54,7 +56,6 @@
 #include "statistics/kmeans.h"
 #include "statistics/dbscan.h"
 #include "statistics/pca.h"
-#include "statistics/ica.h"
 
 // LIBLINEAR Transforms
 #include "ml/linear_model.h"
@@ -68,13 +69,16 @@
 // Rolling ML Transforms
 #include "ml/rolling_kmeans.h"
 #include "ml/rolling_dbscan.h"
-#include "ml/rolling_gmm.h"
 #include "ml/rolling_hmm.h"
 #include "ml/rolling_pca.h"
-#include "ml/rolling_ica.h"
 #include "ml/rolling_lightgbm.h"
 #include "ml/rolling_linear_model.h"
 #include "ml/rolling_ml_preprocess.h"
+
+// Time Series Transforms - Rolling GARCH and ARIMA only (static variants removed - see EXTENSION_PLAN.md)
+#include "timeseries/rolling/rolling_garch.h"
+#include "timeseries/rolling/rolling_arima.h"
+#include "timeseries/timeseries_metadata.h"
 
 // Chart Formation Pattern Transforms
 #include "price_actions/infrastructure/flexible_pivot_detector.h"
@@ -96,9 +100,9 @@
 #include "datetime/timestamp_scalar.h"
 #include "datetime/datetime_diff.h"
 
-// Utility Transforms
-#include "utility/asset_ref.h"
-#include "utility/asset_ref_metadata.h"
+// Utility Transforms - Asset Reference Passthrough
+#include "utility/asset_ref_passthrough.h"
+#include "utility/asset_ref_passthrough_metadata.h"
 
 // String Operations
 #include "string/string_operations.h"
@@ -126,9 +130,7 @@
 // EventMarker includes
 #include <epoch_script/transforms/components/event_markers/event_marker.h>
 
-// SQL and Report includes
-#include "sql/sql_query_transform.h"
-#include "sql/sql_query_metadata.h"
+// Report includes
 #include "operators/validation_metadata.h"
 #include "operators/static_cast_metadata.h"
 #include "operators/stringify_metadata.h"
@@ -172,11 +174,15 @@
 #include "reports/xrange_chart_report.h"
 #include "reports/cs_xrange_chart_report.h"
 
-#include "cross_sectional/rank.h"
-#include "cross_sectional/returns.h"
-#include "cross_sectional/cs_zscore.h"
-#include "cross_sectional/cs_winsorize.h"
-#include "cummulative/cum_op.h"
+// cross_sectional includes moved to cross_sectional/register.h
+// Cumulative transforms (module-based registration)
+#include "cummulative/register.h"
+
+// Operators (module-based registration)
+#include "operators/register.h"
+
+// Portfolio Optimization (module-based registration)
+#include "portfolio/register.h"
 
 #include "hosseinmoein/hosseinmoein.h"
 
@@ -317,6 +323,12 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(switch5_boolean, Switch5Boolean);
   REGISTER_TRANSFORM(switch5_timestamp, Switch5Timestamp);
 
+  // Varargs Switch transforms (supports any number of inputs)
+  REGISTER_TRANSFORM(switch_string, SwitchString);
+  REGISTER_TRANSFORM(switch_number, SwitchNumber);
+  REGISTER_TRANSFORM(switch_boolean, SwitchBoolean);
+  REGISTER_TRANSFORM(switch_timestamp, SwitchTimestamp);
+
   // Typed FirstNonNull transforms
   REGISTER_TRANSFORM(first_non_null_string, FirstNonNullString);
   REGISTER_TRANSFORM(first_non_null_number, FirstNonNullNumber);
@@ -361,19 +373,17 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(boolean_branch, BooleanBranch);
   REGISTER_TRANSFORM(ratio_branch, RatioBranch);
 
-  REGISTER_TRANSFORM(cum_prod, CumProdOperation);
-  REGISTER_TRANSFORM(cs_momentum, CrossSectionalMomentumOperation);
-  REGISTER_TRANSFORM(top_k, CrossSectionalTopKOperation);
-  REGISTER_TRANSFORM(bottom_k, CrossSectionalBottomKOperation);
-  REGISTER_TRANSFORM(top_k_percent, CrossSectionalTopKPercentileOperation);
-  REGISTER_TRANSFORM(bottom_k_percent,
-                     CrossSectionalBottomKPercentileOperation);
+  // Cumulative transforms (module-based registration)
+  cummulative::Register();
 
-  // Cross-Sectional Statistical Transforms
-  REGISTER_TRANSFORM(cs_zscore, CSZScore);
-  REGISTER_TRANSFORM(cs_winsorize, CSWinsorize);
-  REGISTER_TRANSFORM(cs_rank, CSRank);
-  REGISTER_TRANSFORM(cs_rank_quantile, CSRankQuantile);
+  // Operators (module-based registration)
+  operators::Register();
+
+  // Cross-Sectional transforms (module-based registration)
+  cross_sectional::Register();
+
+  // Portfolio Optimization transforms (module-based registration)
+  portfolio::Register();
 
   REGISTER_TRANSFORM(bband_percent, BollingerBandsPercent);
   REGISTER_TRANSFORM(bband_width, BollingerBandsWidth);
@@ -430,16 +440,8 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(pennant, Pennant);
   REGISTER_TRANSFORM(consolidation_box, ConsolidationBox);
 
-  // Aggregate Transforms
-  REGISTER_TRANSFORM(agg_sum, SumAggregateTransform);
-  REGISTER_TRANSFORM(agg_mean, AverageAggregateTransform);
-  REGISTER_TRANSFORM(agg_min, MinAggregateTransform);
-  REGISTER_TRANSFORM(agg_max, MaxAggregateTransform);
-  REGISTER_TRANSFORM(agg_all_of, AllOfAggregateTransform);
-  REGISTER_TRANSFORM(agg_any_of, AnyOfAggregateTransform);
-  REGISTER_TRANSFORM(agg_none_of, NoneOfAggregateTransform);
-  REGISTER_TRANSFORM(agg_all_equal, AllEqualAggregateTransform);
-  REGISTER_TRANSFORM(agg_all_unique, AllUniqueAggregateTransform);
+  // Aggregate Transforms (modular registration)
+  aggregation::Register();
 
   // GroupBy Aggregate Transforms
   REGISTER_TRANSFORM(groupby_numeric_agg, GroupByNumericAggTransform);
@@ -489,6 +491,7 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(rolling_corr, RollingCorr);
   REGISTER_TRANSFORM(rolling_cov, RollingCov);
   REGISTER_TRANSFORM(beta, Beta);
+  REGISTER_TRANSFORM(linear_fit, LinearFit);
   REGISTER_TRANSFORM(ewm_corr, EWMCorr);
   REGISTER_TRANSFORM(ewm_cov, EWMCov);
   REGISTER_TRANSFORM(frac_diff, FracDiff);
@@ -503,12 +506,6 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(hmm_4, HMM4Transform);
   REGISTER_TRANSFORM(hmm_5, HMM5Transform);
 
-  // Statistics Transforms - GMM specializations for 2-5 components
-  REGISTER_TRANSFORM(gmm_2, GMM2Transform);
-  REGISTER_TRANSFORM(gmm_3, GMM3Transform);
-  REGISTER_TRANSFORM(gmm_4, GMM4Transform);
-  REGISTER_TRANSFORM(gmm_5, GMM5Transform);
-
   // Statistics Transforms - K-Means specializations for 2-5 clusters
   REGISTER_TRANSFORM(kmeans_2, KMeans2Transform);
   REGISTER_TRANSFORM(kmeans_3, KMeans3Transform);
@@ -520,9 +517,6 @@ void InitializeTransforms(
 
   // Statistics Transforms - PCA dimensionality reduction
   REGISTER_TRANSFORM(pca, PCATransform);
-
-  // Statistics Transforms - ICA (Independent Component Analysis)
-  REGISTER_TRANSFORM(ica, ICATransform);
 
   // LIBLINEAR Transforms - Linear Models for Classification and Regression
   REGISTER_TRANSFORM(logistic_l1, LogisticL1Transform);
@@ -541,19 +535,18 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(rolling_kmeans_5, RollingKMeans5Transform);
   REGISTER_TRANSFORM(rolling_dbscan, RollingDBSCANTransform);
 
-  // Rolling ML Transforms - Probabilistic Models
-  REGISTER_TRANSFORM(rolling_gmm_2, RollingGMM2Transform);
-  REGISTER_TRANSFORM(rolling_gmm_3, RollingGMM3Transform);
-  REGISTER_TRANSFORM(rolling_gmm_4, RollingGMM4Transform);
-  REGISTER_TRANSFORM(rolling_gmm_5, RollingGMM5Transform);
+  // Rolling ML Transforms - Probabilistic Models (HMM only - GMM removed as redundant)
   REGISTER_TRANSFORM(rolling_hmm_2, RollingHMM2Transform);
   REGISTER_TRANSFORM(rolling_hmm_3, RollingHMM3Transform);
   REGISTER_TRANSFORM(rolling_hmm_4, RollingHMM4Transform);
   REGISTER_TRANSFORM(rolling_hmm_5, RollingHMM5Transform);
 
-  // Rolling ML Transforms - Decomposition
-  REGISTER_TRANSFORM(rolling_pca, RollingPCATransform);
-  REGISTER_TRANSFORM(rolling_ica, RollingICATransform);
+  // Rolling ML Transforms - Decomposition (N-component PCA variants) - ICA removed as redundant
+  REGISTER_TRANSFORM(rolling_pca_2, RollingPCA2Transform);
+  REGISTER_TRANSFORM(rolling_pca_3, RollingPCA3Transform);
+  REGISTER_TRANSFORM(rolling_pca_4, RollingPCA4Transform);
+  REGISTER_TRANSFORM(rolling_pca_5, RollingPCA5Transform);
+  REGISTER_TRANSFORM(rolling_pca_6, RollingPCA6Transform);
 
   // Rolling ML Transforms - Supervised Learning
   REGISTER_TRANSFORM(rolling_lightgbm_classifier, RollingLightGBMClassifier);
@@ -568,10 +561,22 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(rolling_ml_minmax, RollingMLMinMax);
   REGISTER_TRANSFORM(rolling_ml_robust, RollingMLRobust);
 
-  // ML Preprocessing Transforms
-  REGISTER_TRANSFORM(ml_zscore, MLZScore);
-  REGISTER_TRANSFORM(ml_minmax, MLMinMax);
-  REGISTER_TRANSFORM(ml_robust, MLRobust);
+  // ML Preprocessing Transforms - N->N variants for 2-6 features
+  REGISTER_TRANSFORM(ml_zscore_2, MLZScore);
+  REGISTER_TRANSFORM(ml_zscore_3, MLZScore);
+  REGISTER_TRANSFORM(ml_zscore_4, MLZScore);
+  REGISTER_TRANSFORM(ml_zscore_5, MLZScore);
+  REGISTER_TRANSFORM(ml_zscore_6, MLZScore);
+  REGISTER_TRANSFORM(ml_minmax_2, MLMinMax);
+  REGISTER_TRANSFORM(ml_minmax_3, MLMinMax);
+  REGISTER_TRANSFORM(ml_minmax_4, MLMinMax);
+  REGISTER_TRANSFORM(ml_minmax_5, MLMinMax);
+  REGISTER_TRANSFORM(ml_minmax_6, MLMinMax);
+  REGISTER_TRANSFORM(ml_robust_2, MLRobust);
+  REGISTER_TRANSFORM(ml_robust_3, MLRobust);
+  REGISTER_TRANSFORM(ml_robust_4, MLRobust);
+  REGISTER_TRANSFORM(ml_robust_5, MLRobust);
+  REGISTER_TRANSFORM(ml_robust_6, MLRobust);
 
   // Cointegration Transforms
   REGISTER_TRANSFORM(half_life_ar1, HalfLifeAR1);
@@ -581,6 +586,20 @@ void InitializeTransforms(
   REGISTER_TRANSFORM(johansen_3, Johansen3Transform);
   REGISTER_TRANSFORM(johansen_4, Johansen4Transform);
   REGISTER_TRANSFORM(johansen_5, Johansen5Transform);
+
+  // Time Series Transforms - Rolling GARCH (Static variants removed - see EXTENSION_PLAN.md)
+  REGISTER_TRANSFORM(rolling_garch, RollingGARCHTransform);
+
+  // Time Series Transforms - Rolling ARIMA
+  REGISTER_TRANSFORM(rolling_arima, RollingARIMATransform);
+
+  // Register GARCH and ARIMA metadata
+  for (const auto& metadata : MakeGARCHMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
+  for (const auto& metadata : MakeARIMAMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
 
   // Register cointegration metadata
   for (const auto& metadata : MakeCointegrationMetaData()) {
@@ -607,12 +626,7 @@ void InitializeTransforms(
     transforms::ITransformRegistry::GetInstance().Register(metadata);
   }
 
-  // Register GMM metadata
-  for (const auto& metadata : MakeGMMMetaData()) {
-    transforms::ITransformRegistry::GetInstance().Register(metadata);
-  }
-
-  // Register clustering metadata (KMeans, DBSCAN, PCA, ICA)
+  // Register clustering metadata (KMeans, DBSCAN, PCA) - ICA and GMM removed as redundant
   for (const auto& metadata : MakeKMeansMetaData()) {
     transforms::ITransformRegistry::GetInstance().Register(metadata);
   }
@@ -622,19 +636,25 @@ void InitializeTransforms(
   for (const auto& metadata : MakePCAMetaData()) {
     transforms::ITransformRegistry::GetInstance().Register(metadata);
   }
-  for (const auto& metadata : MakeICAMetaData()) {
-    transforms::ITransformRegistry::GetInstance().Register(metadata);
-  }
 
   // Register ALL rolling ML metadata (lightgbm, liblinear, preprocess, clustering, decomposition, probabilistic)
   for (const auto& metadata : MakeAllRollingMLMetaData()) {
     transforms::ITransformRegistry::GetInstance().Register(metadata);
   }
 
-  // Utility Transforms
-  REGISTER_TRANSFORM(asset_ref, AssetRef);
-  transforms::ITransformRegistry::GetInstance().Register(
-    AssetRefMetadata::Get());
+  // Utility Transforms - Asset Reference Passthrough
+  REGISTER_TRANSFORM(asset_ref_passthrough, AssetRefPassthroughNumber);
+  REGISTER_TRANSFORM(asset_ref_passthrough_bool, AssetRefPassthroughBoolean);
+  REGISTER_TRANSFORM(asset_ref_passthrough_string, AssetRefPassthroughString);
+  REGISTER_TRANSFORM(asset_ref_passthrough_timestamp, AssetRefPassthroughTimestamp);
+
+  // Utility Transforms - Is Asset Reference (scalar boolean)
+  REGISTER_TRANSFORM(is_asset_ref, IsAssetRef);
+
+  // Register asset_ref_passthrough and is_asset_ref metadata
+  for (const auto& metadata : MakeAssetRefPassthroughMetaData()) {
+    transforms::ITransformRegistry::GetInstance().Register(metadata);
+  }
 
   // Calendar Effects Transforms
   REGISTER_TRANSFORM(turn_of_month, TurnOfMonthEffect);

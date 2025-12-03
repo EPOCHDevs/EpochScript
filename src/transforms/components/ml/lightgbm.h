@@ -60,9 +60,11 @@ public:
     m_lambda_l1 = cfg.GetOptionValue("lambda_l1", MetaDataOptionDefinition{0.0}).GetDecimal();
     m_lambda_l2 = cfg.GetOptionValue("lambda_l2", MetaDataOptionDefinition{0.0}).GetDecimal();
 
-    // Training parameters
-    m_lookback_window = static_cast<size_t>(
-        cfg.GetOptionValue("lookback_window", MetaDataOptionDefinition{0.0}).GetInteger());
+    // Training split parameters
+    m_split_ratio = cfg.GetOptionValue(
+        "split_ratio", MetaDataOptionDefinition{1.0}).GetDecimal();  // Default: use all data
+    m_split_gap = static_cast<size_t>(
+        cfg.GetOptionValue("split_gap", MetaDataOptionDefinition{0.0}).GetInteger());  // Purge gap
 
     m_min_training_samples = static_cast<size_t>(
         cfg.GetOptionValue("min_training_samples", MetaDataOptionDefinition{100.0}).GetInteger());
@@ -94,12 +96,15 @@ public:
     arma::mat prediction_X;
     epoch_frame::IndexPtr prediction_index;
 
-    if (m_lookback_window > 0 && X.n_rows > m_lookback_window) {
-      training_X = X.rows(0, m_lookback_window - 1);
-      training_y = y.subvec(0, m_lookback_window - 1);
-      prediction_X = X.rows(m_lookback_window, X.n_rows - 1);
+    size_t train_size = ComputeTrainSize(X.n_rows);
+    size_t pred_start = train_size + m_split_gap;  // Purge gap
+
+    if (train_size < X.n_rows && pred_start < X.n_rows) {
+      training_X = X.rows(0, train_size - 1);
+      training_y = y.subvec(0, train_size - 1);
+      prediction_X = X.rows(pred_start, X.n_rows - 1);
       prediction_index = bars.index()->iloc(
-          {static_cast<int64_t>(m_lookback_window),
+          {static_cast<int64_t>(pred_start),
            static_cast<int64_t>(X.n_rows)});
     } else {
       training_X = X;
@@ -131,19 +136,23 @@ private:
   std::string m_boosting_type{"gbdt"};
   double m_lambda_l1{0.0};
   double m_lambda_l2{0.0};
-  size_t m_lookback_window{0};
+  double m_split_ratio{1.0};      ///< Training split ratio (1.0 = use all data)
+  size_t m_split_gap{0};          ///< Purge gap between train and test
   size_t m_min_training_samples{100};
+
+  /**
+   * @brief Compute training size from split_ratio
+   */
+  [[nodiscard]] size_t ComputeTrainSize(size_t n_rows) const {
+    if (m_split_ratio >= 1.0) {
+      return n_rows;  // Use all data
+    }
+    return static_cast<size_t>(std::ceil(n_rows * m_split_ratio));
+  }
 
   std::pair<lightgbm_utils::DatasetWrapper, lightgbm_utils::BoosterWrapper>
   TrainModel(const arma::mat &X, const arma::vec &y, int num_classes) const {
-    // Convert to row-major vector
-    std::vector<double> data_vec(X.n_rows * X.n_cols);
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      for (size_t j = 0; j < X.n_cols; ++j) {
-        data_vec[i * X.n_cols + j] = X(i, j);
-      }
-    }
-
+    // Convert labels to float (small copy, unavoidable)
     std::vector<float> labels(y.begin(), y.end());
 
     // Build parameters
@@ -167,10 +176,10 @@ private:
 
     std::string params = params_builder.Build();
 
-    // Create dataset
+    // Create dataset - zero-copy using column-major pointer
     lightgbm_utils::DatasetWrapper dataset;
-    dataset.Create(data_vec, static_cast<int32_t>(X.n_rows),
-                   static_cast<int32_t>(X.n_cols), labels, params);
+    dataset.CreateFromPtr(X.memptr(), static_cast<int32_t>(X.n_rows),
+                          static_cast<int32_t>(X.n_cols), false, labels, params);
 
     // Create and train booster
     lightgbm_utils::BoosterWrapper booster;
@@ -186,17 +195,9 @@ private:
       const arma::mat &X,
       int num_classes) const {
 
-    // Convert to row-major vector
-    std::vector<double> data_vec(X.n_rows * X.n_cols);
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      for (size_t j = 0; j < X.n_cols; ++j) {
-        data_vec[i * X.n_cols + j] = X(i, j);
-      }
-    }
-
-    // Get predictions
-    auto preds = booster.Predict(data_vec, static_cast<int32_t>(X.n_rows),
-                                  static_cast<int32_t>(X.n_cols));
+    // Get predictions - zero-copy using column-major pointer
+    auto preds = booster.PredictFromPtr(X.memptr(), static_cast<int32_t>(X.n_rows),
+                                         static_cast<int32_t>(X.n_cols), false);
 
     std::vector<std::string> output_columns;
     std::vector<arrow::ChunkedArrayPtr> output_arrays;
@@ -275,8 +276,11 @@ public:
     m_lambda_l1 = cfg.GetOptionValue("lambda_l1", MetaDataOptionDefinition{0.0}).GetDecimal();
     m_lambda_l2 = cfg.GetOptionValue("lambda_l2", MetaDataOptionDefinition{0.0}).GetDecimal();
 
-    m_lookback_window = static_cast<size_t>(
-        cfg.GetOptionValue("lookback_window", MetaDataOptionDefinition{0.0}).GetInteger());
+    // Training split parameters
+    m_split_ratio = cfg.GetOptionValue(
+        "split_ratio", MetaDataOptionDefinition{1.0}).GetDecimal();  // Default: use all data
+    m_split_gap = static_cast<size_t>(
+        cfg.GetOptionValue("split_gap", MetaDataOptionDefinition{0.0}).GetInteger());  // Purge gap
 
     m_min_training_samples = static_cast<size_t>(
         cfg.GetOptionValue("min_training_samples", MetaDataOptionDefinition{100.0}).GetInteger());
@@ -305,12 +309,15 @@ public:
     arma::mat prediction_X;
     epoch_frame::IndexPtr prediction_index;
 
-    if (m_lookback_window > 0 && X.n_rows > m_lookback_window) {
-      training_X = X.rows(0, m_lookback_window - 1);
-      training_y = y.subvec(0, m_lookback_window - 1);
-      prediction_X = X.rows(m_lookback_window, X.n_rows - 1);
+    size_t train_size = ComputeTrainSize(X.n_rows);
+    size_t pred_start = train_size + m_split_gap;  // Purge gap
+
+    if (train_size < X.n_rows && pred_start < X.n_rows) {
+      training_X = X.rows(0, train_size - 1);
+      training_y = y.subvec(0, train_size - 1);
+      prediction_X = X.rows(pred_start, X.n_rows - 1);
       prediction_index = bars.index()->iloc(
-          {static_cast<int64_t>(m_lookback_window),
+          {static_cast<int64_t>(pred_start),
            static_cast<int64_t>(X.n_rows)});
     } else {
       training_X = X;
@@ -333,18 +340,23 @@ private:
   std::string m_boosting_type{"gbdt"};
   double m_lambda_l1{0.0};
   double m_lambda_l2{0.0};
-  size_t m_lookback_window{0};
+  double m_split_ratio{1.0};      ///< Training split ratio (1.0 = use all data)
+  size_t m_split_gap{0};          ///< Purge gap between train and test
   size_t m_min_training_samples{100};
+
+  /**
+   * @brief Compute training size from split_ratio
+   */
+  [[nodiscard]] size_t ComputeTrainSize(size_t n_rows) const {
+    if (m_split_ratio >= 1.0) {
+      return n_rows;  // Use all data
+    }
+    return static_cast<size_t>(std::ceil(n_rows * m_split_ratio));
+  }
 
   std::pair<lightgbm_utils::DatasetWrapper, lightgbm_utils::BoosterWrapper>
   TrainModel(const arma::mat &X, const arma::vec &y) const {
-    std::vector<double> data_vec(X.n_rows * X.n_cols);
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      for (size_t j = 0; j < X.n_cols; ++j) {
-        data_vec[i * X.n_cols + j] = X(i, j);
-      }
-    }
-
+    // Convert labels to float (small copy, unavoidable)
     std::vector<float> labels(y.begin(), y.end());
 
     lightgbm_utils::ParamsBuilder params_builder;
@@ -361,9 +373,10 @@ private:
 
     std::string params = params_builder.Build();
 
+    // Create dataset - zero-copy using column-major pointer
     lightgbm_utils::DatasetWrapper dataset;
-    dataset.Create(data_vec, static_cast<int32_t>(X.n_rows),
-                   static_cast<int32_t>(X.n_cols), labels, params);
+    dataset.CreateFromPtr(X.memptr(), static_cast<int32_t>(X.n_rows),
+                          static_cast<int32_t>(X.n_cols), false, labels, params);
 
     lightgbm_utils::BoosterWrapper booster;
     booster.Create(dataset, params);
@@ -377,15 +390,9 @@ private:
       const lightgbm_utils::BoosterWrapper &booster,
       const arma::mat &X) const {
 
-    std::vector<double> data_vec(X.n_rows * X.n_cols);
-    for (size_t i = 0; i < X.n_rows; ++i) {
-      for (size_t j = 0; j < X.n_cols; ++j) {
-        data_vec[i * X.n_cols + j] = X(i, j);
-      }
-    }
-
-    auto preds = booster.Predict(data_vec, static_cast<int32_t>(X.n_rows),
-                                  static_cast<int32_t>(X.n_cols));
+    // Get predictions - zero-copy using column-major pointer
+    auto preds = booster.PredictFromPtr(X.memptr(), static_cast<int32_t>(X.n_rows),
+                                         static_cast<int32_t>(X.n_cols), false);
 
     std::vector<std::string> output_columns;
     std::vector<arrow::ChunkedArrayPtr> output_arrays;

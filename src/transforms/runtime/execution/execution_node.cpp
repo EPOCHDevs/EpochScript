@@ -110,13 +110,16 @@ void ApplyDefaultTransform(
     msg.onNodeStarted(nodeId);
   }
 
-  // Emit node started event
+  // Emit to external emitter (ConsoleEventViewer) - returns execution sequence
+  size_t execSeq = msg.EmitNodeStarted(nodeId, transformName, false, asset_ids_ref.size());
+
+  // Emit node started event (internal)
   msg.EmitEvent(events::NodeStartedEvent{
       .timestamp = startTime,
       .node_id = nodeId,
       .transform_name = transformName,
       .is_cross_sectional = false,
-      .node_index = 0,  // TODO: Could track this
+      .node_index = execSeq,  // TBB execution order
       .total_nodes = msg.totalNodes,
       .asset_count = asset_ids_ref.size()
   });
@@ -126,17 +129,21 @@ void ApplyDefaultTransform(
     const auto meta =
         transformer.GetConfiguration().GetTransformDefinition().GetMetadata();
     if (meta.intradayOnly && !IsIntradayString(timeframe)) {
-      SPDLOG_WARN("Transform {} marked intradayOnly but timeframe {} is not "
-                  "intraday. Skipping.",
-                  name, timeframe);
+      // Emit warning via event system for client visibility
+      msg.EmitNodeWarning(nodeId,
+          std::format("Transform {} marked intradayOnly but timeframe {} is not intraday. Skipping.",
+                      name, timeframe));
 
-      // Emit skipped event
+      // Emit skipped event (internal)
       msg.EmitEvent(events::NodeSkippedEvent{
           .timestamp = events::Now(),
           .node_id = nodeId,
           .transform_name = transformName,
           .reason = "intradayOnly but timeframe is not intraday"
       });
+
+      // Emit to external emitter (ConsoleEventViewer)
+      msg.EmitNodeSkipped(nodeId, "intradayOnly but timeframe is not intraday");
 
       if (msg.nodesSkipped) {
         msg.nodesSkipped->fetch_add(1);
@@ -174,9 +181,10 @@ void ApplyDefaultTransform(
 
       // Validate inputs before gathering - if any input is missing, return empty DataFrame
       if (!msg.cache->ValidateInputsAvailable(asset_id, transformer)) {
-        SPDLOG_WARN(
-            "Asset({}): Inputs not available for {}. Returning empty DataFrame with correct schema.",
-            asset_id, name);
+        // Emit warning via event system for client visibility
+        msg.EmitNodeWarning(nodeId,
+            std::format("Asset({}): Inputs not available for {}. Returning empty DataFrame with correct schema.",
+                        asset_id, name));
         auto empty_result = CreateEmptyOutputDataFrame(transformer);
         msg.cache->StoreTransformOutput(asset_id, transformer, empty_result);
         assetsProcessed++;
@@ -211,9 +219,9 @@ void ApplyDefaultTransform(
         if (sessionRange) {
           result = SliceBySession(result, *sessionRange);
         } else {
-          SPDLOG_WARN(
-              "Transform {} requiresSession but no session range was resolved.",
-              name);
+          // Emit warning via event system for client visibility
+          msg.EmitNodeWarning(nodeId,
+              std::format("Transform {} requiresSession but no session range was resolved.", name));
         }
       }
 
@@ -234,8 +242,10 @@ void ApplyDefaultTransform(
               }
             }
           } catch (const std::exception& e) {
-            SPDLOG_WARN("Failed to capture report from {} for asset {}: {}",
-                        transformer.GetId(), asset_id, e.what());
+            // Emit warning via event system for client visibility
+            msg.EmitNodeWarning(nodeId,
+                std::format("Failed to capture report from {} for asset {}: {}",
+                            transformer.GetId(), asset_id, e.what()));
           }
         }
 
@@ -245,18 +255,23 @@ void ApplyDefaultTransform(
             auto eventMarkerOpt = transformer.GetEventMarkers(result);
             if (eventMarkerOpt.has_value()) {
               msg.cache->StoreEventMarker(asset_id, *eventMarkerOpt);
-              SPDLOG_DEBUG("Captured event marker from {} for asset {}",
-                           transformer.GetId(), asset_id);
+              // Debug-level log - internal implementation detail
+              msg.EmitNodeDebug(nodeId,
+                  std::format("Captured event marker from {} for asset {}",
+                              transformer.GetId(), asset_id));
             }
           } catch (const std::exception& e) {
-            SPDLOG_WARN("Failed to capture event marker from {} for asset {}: {}",
-                        transformer.GetId(), asset_id, e.what());
+            // Emit warning via event system for client visibility
+            msg.EmitNodeWarning(nodeId,
+                std::format("Failed to capture event marker from {} for asset {}: {}",
+                            transformer.GetId(), asset_id, e.what()));
           }
         }
       } else {
-        SPDLOG_WARN(
-            "Asset({}): Empty DataFrame provided to {}. Skipping transform",
-            asset_id, name);
+        // Emit warning via event system for client visibility
+        msg.EmitNodeWarning(nodeId,
+            std::format("Asset({}): Empty DataFrame provided to {}. Skipping transform",
+                        asset_id, name));
         // Create empty DataFrame with proper column schema from output metadata
         // This ensures cached entries exist even when transforms are skipped
         result = CreateEmptyOutputDataFrame(transformer);
@@ -302,6 +317,8 @@ void ApplyDefaultTransform(
         .error_message = "Cancelled",
         .asset_id = std::nullopt
     });
+    // Emit to external emitter (ConsoleEventViewer)
+    msg.EmitNodeFailed(nodeId, "Cancelled");
     if (msg.nodesFailed) {
       msg.nodesFailed->fetch_add(1);
     }
@@ -321,6 +338,9 @@ void ApplyDefaultTransform(
       .assets_processed = assetsProcessed.load(),
       .assets_failed = assetsFailed.load()
   });
+
+  // Emit to external emitter (ConsoleEventViewer)
+  msg.EmitNodeCompleted(nodeId, assetsProcessed.load(), assetsFailed.load(), static_cast<int64_t>(duration.count()));
 
   // Update progress counter
   if (msg.nodesCompleted) {
@@ -391,13 +411,16 @@ void ApplyCrossSectionTransform(
     msg.onNodeStarted(nodeId);
   }
 
-  // Emit node started event
+  // Emit to external emitter (ConsoleEventViewer) - returns execution sequence
+  size_t execSeq = msg.EmitNodeStarted(nodeId, transformName, true, asset_ids.size());
+
+  // Emit node started event (internal)
   msg.EmitEvent(events::NodeStartedEvent{
       .timestamp = startTime,
       .node_id = nodeId,
       .transform_name = transformName,
       .is_cross_sectional = true,
-      .node_index = 0,  // TODO: Could track this
+      .node_index = execSeq,  // TBB execution order
       .total_nodes = msg.totalNodes,
       .asset_count = asset_ids.size()
   });
@@ -407,17 +430,21 @@ void ApplyCrossSectionTransform(
     const auto meta =
         transformer.GetConfiguration().GetTransformDefinition().GetMetadata();
     if (meta.intradayOnly && !IsIntradayString(timeframe)) {
-      SPDLOG_WARN("Cross-sectional transform {} marked intradayOnly but "
-                  "timeframe {} is not intraday. Skipping.",
-                  transformer.GetConfiguration().GetId(), timeframe);
+      // Emit warning via event system for client visibility
+      msg.EmitNodeWarning(nodeId,
+          std::format("Cross-sectional transform {} marked intradayOnly but timeframe {} is not intraday. Skipping.",
+                      transformer.GetConfiguration().GetId(), timeframe));
 
-      // Emit skipped event
+      // Emit skipped event (internal)
       msg.EmitEvent(events::NodeSkippedEvent{
           .timestamp = events::Now(),
           .node_id = nodeId,
           .transform_name = transformName,
           .reason = "intradayOnly but timeframe is not intraday"
       });
+
+      // Emit to external emitter (ConsoleEventViewer)
+      msg.EmitNodeSkipped(nodeId, "intradayOnly but timeframe is not intraday");
 
       if (msg.nodesSkipped) {
         msg.nodesSkipped->fetch_add(1);
@@ -452,9 +479,10 @@ void ApplyCrossSectionTransform(
     tbb::parallel_for_each(asset_ids.begin(), asset_ids.end(), [&](auto const &asset_id) {
       // Validate inputs before gathering - skip asset if inputs not available
       if (!msg.cache->ValidateInputsAvailable(asset_id, transformer)) {
-        SPDLOG_WARN(
-            "Asset({}): Inputs not available for cross-sectional transform {}. Skipping asset.",
-            asset_id, transformer.GetConfiguration().GetId());
+        // Emit warning via event system for client visibility
+        msg.EmitNodeWarning(nodeId,
+            std::format("Asset({}): Inputs not available for cross-sectional transform {}. Skipping asset.",
+                        asset_id, transformer.GetConfiguration().GetId()));
         return;  // Skip this asset, don't add to concurrentInputs
       }
 
@@ -478,9 +506,10 @@ void ApplyCrossSectionTransform(
         if (sessionRange) {
           assetDataFrame = SliceBySession(assetDataFrame, *sessionRange);
         } else {
-          SPDLOG_WARN("Cross-sectional transform {} requiresSession but no "
-                      "session range was resolved.",
-                      transformer.GetConfiguration().GetId());
+          // Emit warning via event system for client visibility
+          msg.EmitNodeWarning(nodeId,
+              std::format("Cross-sectional transform {} requiresSession but no session range was resolved.",
+                          transformer.GetConfiguration().GetId()));
         }
       }
       auto inputSeries = assetDataFrame[inputId].rename(asset_id);
@@ -519,8 +548,10 @@ void ApplyCrossSectionTransform(
           }
         }
       } catch (const std::exception& e) {
-        SPDLOG_WARN("Failed to capture cross-sectional report from {}: {}",
-                    transformer.GetConfiguration().GetId(), e.what());
+        // Emit warning via event system for client visibility
+        msg.EmitNodeWarning(nodeId,
+            std::format("Failed to capture cross-sectional report from {}: {}",
+                        transformer.GetConfiguration().GetId(), e.what()));
       }
 
       SPDLOG_DEBUG("Cross-sectional reporter {} - skipping output distribution",
@@ -538,6 +569,8 @@ void ApplyCrossSectionTransform(
           .assets_processed = asset_ids.size(),
           .assets_failed = 0
       });
+      // Emit to external emitter (ConsoleEventViewer)
+      msg.EmitNodeCompleted(nodeId, asset_ids.size(), 0, static_cast<int64_t>(duration.count()));
       if (msg.nodesCompleted) {
         msg.nodesCompleted->fetch_add(1);
       }
@@ -561,6 +594,9 @@ void ApplyCrossSectionTransform(
         .assets_failed = 0
     });
 
+    // Emit to external emitter (ConsoleEventViewer)
+    msg.EmitNodeCompleted(nodeId, asset_ids.size(), 0, static_cast<int64_t>(duration.count()));
+
     // Update progress counter
     if (msg.nodesCompleted) {
       msg.nodesCompleted->fetch_add(1);
@@ -578,6 +614,8 @@ void ApplyCrossSectionTransform(
         .error_message = "Cancelled",
         .asset_id = std::nullopt
     });
+    // Emit to external emitter (ConsoleEventViewer)
+    msg.EmitNodeFailed(nodeId, "Cancelled");
     if (msg.nodesFailed) {
       msg.nodesFailed->fetch_add(1);
     }
@@ -600,10 +638,267 @@ void ApplyCrossSectionTransform(
         .asset_id = std::nullopt
     });
 
+    // Emit to external emitter (ConsoleEventViewer)
+    msg.EmitNodeFailed(nodeId, exp.what());
+
     // Update failed counter
     if (msg.nodesFailed) {
       msg.nodesFailed->fetch_add(1);
     }
   }
 }
+
+void ApplyAssetRefPassthroughTransform(
+    const epoch_script::transform::ITransformBase &transformer,
+    ExecutionContext &msg) {
+  const auto nodeId = transformer.GetId();
+  const auto transformName = transformer.GetName();
+  const auto& asset_ids_ref = msg.cache->GetAssetIDs();
+
+  // Record start time
+  auto startTime = events::Now();
+
+  if (msg.onNodeStarted) {
+    msg.onNodeStarted(nodeId);
+  }
+
+  // Emit to external emitter (ConsoleEventViewer) - returns execution sequence
+  size_t execSeq = msg.EmitNodeStarted(nodeId, transformName, false, asset_ids_ref.size());
+
+  // Emit node started event (internal)
+  msg.EmitEvent(events::NodeStartedEvent{
+      .timestamp = startTime,
+      .node_id = nodeId,
+      .transform_name = transformName,
+      .is_cross_sectional = false,
+      .node_index = execSeq,  // TBB execution order
+      .total_nodes = msg.totalNodes,
+      .asset_count = asset_ids_ref.size()
+  });
+
+  // Get filter criteria from options - build AssetFilterOptions struct
+  epoch_script::transform::AssetFilterOptions filterOpts;
+  const auto& config = transformer.GetConfiguration();
+  try { filterOpts.ticker = config.GetOptionValue("ticker").GetString(); } catch (...) {}
+  try { filterOpts.asset_class = config.GetOptionValue("asset_class").GetString(); } catch (...) {}
+  try { filterOpts.sector = config.GetOptionValue("sector").GetString(); } catch (...) {}
+  try { filterOpts.industry = config.GetOptionValue("industry").GetString(); } catch (...) {}
+  try { filterOpts.base_currency = config.GetOptionValue("base_currency").GetString(); } catch (...) {}
+  try { filterOpts.counter_currency = config.GetOptionValue("counter_currency").GetString(); } catch (...) {}
+
+  // Get output ID from configuration
+  const auto outputId = transformer.GetOutputId("result");
+
+  // Track assets processed and skipped
+  std::atomic<size_t> assetsProcessed{0};
+  std::atomic<size_t> assetsSkipped{0};
+  std::atomic<size_t> assetsFailed{0};
+
+  const auto& asset_ids = msg.cache->GetAssetIDs();
+
+  try {
+    tbb::parallel_for_each(asset_ids.begin(), asset_ids.end(), [&](const auto& asset_id) {
+      // Check cancellation
+      msg.ThrowIfCancelled();
+
+      // Evaluate if asset matches all filter criteria
+      bool matches = epoch_script::transform::EvaluateAssetFilters(asset_id, filterOpts);
+
+      // Skip non-matching assets entirely (most efficient)
+      if (!matches) {
+        assetsSkipped++;
+        return;
+      }
+
+      try {
+        // Validate inputs before gathering
+        if (!msg.cache->ValidateInputsAvailable(asset_id, transformer)) {
+          // Emit warning via event system for client visibility
+          msg.EmitNodeWarning(nodeId,
+              std::format("Asset({}): Inputs not available for asset_ref_passthrough {}. Skipping.",
+                          asset_id, nodeId));
+          assetsFailed++;
+          return;
+        }
+
+        // Gather input
+        auto inputDf = msg.cache->GatherInputs(asset_id, transformer);
+
+        // Rename input column to output ID and store
+        // The input has a single column (SLOT), rename it to the output ID
+        if (!inputDf.empty() && inputDf.num_cols() > 0) {
+          auto inputColName = inputDf.column_names()[0];
+          auto result = inputDf[inputColName].to_frame(outputId);
+          msg.cache->StoreTransformOutput(asset_id, transformer, result);
+        } else {
+          msg.cache->StoreTransformOutput(asset_id, transformer, inputDf);
+        }
+
+        assetsProcessed++;
+      } catch (const std::exception& e) {
+        msg.logger->log(std::format(
+            "Asset: {}, Transform: {}, Error: {}.", asset_id, nodeId, e.what()));
+        assetsFailed++;
+      }
+    });
+  } catch (const events::OperationCancelledException&) {
+    // Cancellation requested - emit failed event and re-throw
+    if (msg.onNodeCompleted) {
+      msg.onNodeCompleted(nodeId);
+    }
+    msg.EmitEvent(events::NodeFailedEvent{
+        .timestamp = events::Now(),
+        .node_id = nodeId,
+        .transform_name = transformName,
+        .error_message = "Cancelled",
+        .asset_id = std::nullopt
+    });
+    // Emit to external emitter (ConsoleEventViewer)
+    msg.EmitNodeFailed(nodeId, "Cancelled");
+    if (msg.nodesFailed) {
+      msg.nodesFailed->fetch_add(1);
+    }
+    throw;
+  }
+
+  // Emit node completed event
+  auto duration = events::ToMillis(events::Now() - startTime);
+  if (msg.onNodeCompleted) {
+    msg.onNodeCompleted(nodeId);
+  }
+  msg.EmitEvent(events::NodeCompletedEvent{
+      .timestamp = events::Now(),
+      .node_id = nodeId,
+      .transform_name = transformName,
+      .duration = duration,
+      .assets_processed = assetsProcessed.load(),
+      .assets_failed = assetsFailed.load()
+  });
+
+  // Emit to external emitter (ConsoleEventViewer)
+  msg.EmitNodeCompleted(nodeId, assetsProcessed.load(), assetsFailed.load(), static_cast<int64_t>(duration.count()));
+
+  // Update progress counter
+  if (msg.nodesCompleted) {
+    msg.nodesCompleted->fetch_add(1);
+  }
+
+  SPDLOG_DEBUG("asset_ref_passthrough {} completed: {} matched, {} skipped, {} failed",
+               nodeId, assetsProcessed.load(), assetsSkipped.load(), assetsFailed.load());
+}
+
+void ApplyIsAssetRefTransform(
+    const epoch_script::transform::ITransformBase &transformer,
+    ExecutionContext &msg) {
+  const auto nodeId = transformer.GetId();
+  const auto transformName = transformer.GetName();
+  const auto& asset_ids_ref = msg.cache->GetAssetIDs();
+
+  // Record start time
+  auto startTime = events::Now();
+
+  if (msg.onNodeStarted) {
+    msg.onNodeStarted(nodeId);
+  }
+
+  // Emit to external emitter (ConsoleEventViewer) - returns execution sequence
+  size_t execSeq = msg.EmitNodeStarted(nodeId, transformName, false, asset_ids_ref.size());
+
+  // Emit node started event (internal)
+  msg.EmitEvent(events::NodeStartedEvent{
+      .timestamp = startTime,
+      .node_id = nodeId,
+      .transform_name = transformName,
+      .is_cross_sectional = false,
+      .node_index = execSeq,  // TBB execution order
+      .total_nodes = msg.totalNodes,
+      .asset_count = asset_ids_ref.size()
+  });
+
+  // Get filter criteria from options - build AssetFilterOptions struct
+  epoch_script::transform::AssetFilterOptions filterOpts;
+  const auto& config = transformer.GetConfiguration();
+  try { filterOpts.ticker = config.GetOptionValue("ticker").GetString(); } catch (...) {}
+  try { filterOpts.asset_class = config.GetOptionValue("asset_class").GetString(); } catch (...) {}
+  try { filterOpts.sector = config.GetOptionValue("sector").GetString(); } catch (...) {}
+  try { filterOpts.industry = config.GetOptionValue("industry").GetString(); } catch (...) {}
+  try { filterOpts.base_currency = config.GetOptionValue("base_currency").GetString(); } catch (...) {}
+  try { filterOpts.counter_currency = config.GetOptionValue("counter_currency").GetString(); } catch (...) {}
+
+  // Get output ID from configuration
+  const auto outputId = transformer.GetOutputId("result");
+
+  // Track assets processed
+  std::atomic<size_t> assetsProcessed{0};
+  std::atomic<size_t> assetsFailed{0};
+
+  const auto& asset_ids = msg.cache->GetAssetIDs();
+
+  try {
+    tbb::parallel_for_each(asset_ids.begin(), asset_ids.end(), [&](const auto& asset_id) {
+      // Check cancellation
+      msg.ThrowIfCancelled();
+
+      try {
+        // is_asset_ref is purely based on asset ID - no input data needed
+        // Evaluate if asset matches all filter criteria
+        bool matches = epoch_script::transform::EvaluateAssetFilters(asset_id, filterOpts);
+
+        // Store as per-asset scalar (timeframe-agnostic like regular scalars)
+        auto boolScalar = epoch_frame::Scalar(arrow::MakeScalar(matches));
+        msg.cache->StoreAssetScalar(asset_id, outputId, boolScalar);
+
+        assetsProcessed++;
+      } catch (const std::exception& e) {
+        msg.logger->log(std::format(
+            "Asset: {}, Transform: {}, Error: {}.", asset_id, nodeId, e.what()));
+        assetsFailed++;
+      }
+    });
+  } catch (const events::OperationCancelledException&) {
+    // Cancellation requested - emit failed event and re-throw
+    if (msg.onNodeCompleted) {
+      msg.onNodeCompleted(nodeId);
+    }
+    msg.EmitEvent(events::NodeFailedEvent{
+        .timestamp = events::Now(),
+        .node_id = nodeId,
+        .transform_name = transformName,
+        .error_message = "Cancelled",
+        .asset_id = std::nullopt
+    });
+    // Emit to external emitter (ConsoleEventViewer)
+    msg.EmitNodeFailed(nodeId, "Cancelled");
+    if (msg.nodesFailed) {
+      msg.nodesFailed->fetch_add(1);
+    }
+    throw;
+  }
+
+  // Emit node completed event
+  auto duration = events::ToMillis(events::Now() - startTime);
+  if (msg.onNodeCompleted) {
+    msg.onNodeCompleted(nodeId);
+  }
+  msg.EmitEvent(events::NodeCompletedEvent{
+      .timestamp = events::Now(),
+      .node_id = nodeId,
+      .transform_name = transformName,
+      .duration = duration,
+      .assets_processed = assetsProcessed.load(),
+      .assets_failed = assetsFailed.load()
+  });
+
+  // Emit to external emitter (ConsoleEventViewer)
+  msg.EmitNodeCompleted(nodeId, assetsProcessed.load(), assetsFailed.load(), static_cast<int64_t>(duration.count()));
+
+  // Update progress counter
+  if (msg.nodesCompleted) {
+    msg.nodesCompleted->fetch_add(1);
+  }
+
+  SPDLOG_DEBUG("is_asset_ref {} completed: {} assets processed, {} failed",
+               nodeId, assetsProcessed.load(), assetsFailed.load());
+}
+
 } // namespace epoch_script::runtime

@@ -45,6 +45,7 @@
 #include <epoch_protos/tearsheet.pb.h>
 #include <fmt/format.h>
 #include <unordered_map>
+#include <epoch_data_sdk/events/all.h>
 
 using namespace epoch_script::runtime;
 using namespace epoch_script::runtime::test;
@@ -52,6 +53,14 @@ using namespace epoch_script;
 using namespace epoch_script::transform;
 using namespace std::chrono_literals;
 using namespace epoch_frame;
+
+namespace {
+    auto ExecuteWithEmitter(DataFlowRuntimeOrchestrator& orch, TimeFrameAssetDataFrameMap inputData) {
+        data_sdk::events::ScopedProgressEmitter emitter;
+        return orch.ExecutePipeline(std::move(inputData), emitter);
+    }
+}
+
 
 // ============================================================================
 // CARD REPORT TESTS
@@ -73,7 +82,7 @@ report = numeric_cards_report(agg="sum", category="Price", title="Total Close")(
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
 
-        auto results = orch.ExecutePipeline(std::move(inputData));
+        auto results = ExecuteWithEmitter(orch, std::move(inputData));
 
         // Verify report was generated
         auto reports = orch.GetGeneratedReports();
@@ -107,8 +116,7 @@ report = numeric_cards_report(agg="mean", category="Stats", title="Average Price
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 200.0, 300.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+        ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -133,8 +141,7 @@ report = numeric_cards_report(agg="mean", category="Stats", title="Mean Price")(
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 100.0, 100.0});  // Mean = 100
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 200.0, 200.0});  // Mean = 200
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
 
         // Each asset should have its own report
@@ -169,8 +176,7 @@ report = boolean_cards_report(agg="any", category="Signals", title="Any Above 10
         // Values: [100, 105, 110, 115, 120] - 3 values above 105, so any() returns true
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -195,8 +201,7 @@ report = boolean_cards_report(agg="all", category="Signals", title="All Above 10
         // Values: [100, 105, 110, 115, 120] - only 3 out of 5 above 105, so all() returns false
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -224,8 +229,7 @@ report = quantile_cards_report(quantile=0.5, category="Stats", title="Median Pri
         // Values: [100, 200, 300, 400, 500] - Median = 300
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 200.0, 300.0, 400.0, 500.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -262,8 +266,7 @@ report = bar_chart_report(agg="count", title="Price Distribution", category="Ana
         // [100, 105, 110, 115, 120] -> 2 Low, 3 High
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -312,8 +315,7 @@ report = histogram_chart_report(bins=5, title="Price Histogram", category="Distr
         // 10 evenly spaced values from 100 to 118
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 102.0, 104.0, 106.0, 108.0, 110.0, 112.0, 114.0, 116.0, 118.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -367,8 +369,7 @@ report = cs_numeric_cards_report(agg="mean", category="Cross-Section", title="CS
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 200.0, 200.0});
         inputData[dailyTF.ToString()][goog] = CreateOHLCVData({300.0, 300.0, 300.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
 
         // Cross-sectional reports are stored under GROUP_KEY ("ALL")
@@ -430,8 +431,7 @@ report = cs_bar_chart_report(agg="last", title="Asset Comparison", x_axis_label=
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 210.0, 220.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(epoch_script::GROUP_KEY));
 
@@ -491,8 +491,7 @@ volume_report = numeric_cards_report(agg="sum", category="Volume Stats", title="
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 200.0, 300.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -520,8 +519,7 @@ cs_report = cs_numeric_cards_report(agg="mean", category="Cross-Section", title=
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 100.0, 100.0});
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 200.0, 200.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
 
         // Per-asset reports
@@ -561,8 +559,7 @@ report = numeric_cards_report(agg="sum", category="Test", title="Sum")(c)
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({300.0, 300.0});  // Sum = 600
         inputData[dailyTF.ToString()][goog] = CreateOHLCVData({500.0, 500.0});  // Sum = 1000
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
 
         // Verify each asset has correct independent value
@@ -587,8 +584,7 @@ report = numeric_cards_report(agg="mean", category="Test", title="Mean")(c)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 200.0, 300.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         // Call GetGeneratedReports multiple times
         auto reports1 = orch.GetGeneratedReports();
         auto reports2 = orch.GetGeneratedReports();
@@ -629,8 +625,7 @@ report = pie_chart_report(title="Price Distribution", category="Analysis")(label
         // High: 110 + 115 + 120 = 345 (62.73%)
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -690,8 +685,7 @@ report = index_cards_report(target_value="200", category="Search", title="Price 
         // Searching for 200 should return index 2
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 150.0, 200.0, 250.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -737,8 +731,7 @@ report = any_cards_report(agg="first", category="Labels", title="First Label")(l
         // First label = "Low"
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -782,8 +775,7 @@ report = cs_table_report(title="Asset Prices", category="Comparison", agg="last"
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 210.0, 220.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
 
         // Cross-sectional tables are stored under GROUP_KEY
@@ -869,8 +861,7 @@ vol_report = numeric_cards_report(agg="sum", category="Volume", title="Total Vol
         inputData[dailyTF.ToString()][amzn] = CreateOHLCVData({400.0, 400.0, 400.0});  // Mean = 400
         inputData[dailyTF.ToString()][tsla] = CreateOHLCVData({500.0, 500.0, 500.0});  // Mean = 500
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
 
         // All assets should have reports
@@ -928,8 +919,7 @@ report = numeric_cards_report(agg="sum", category="Test", title="Test")(c)
         // Empty data
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         // Should either have no report or have an empty/zero-valued report
         if (reports.contains(aapl)) {
@@ -950,8 +940,7 @@ ma = sma(period=3)(c)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 200.0, 300.0, 400.0, 500.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         // No reporter transforms, so no reports
         REQUIRE(reports.empty());
@@ -978,8 +967,7 @@ report = line_chart_report(title="Price Trend", category="Analysis", x_axis_labe
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -1030,8 +1018,7 @@ report = line_chart_report(title="OHLC Trends", category="Analysis", x_axis_labe
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -1069,8 +1056,7 @@ report = area_chart_report(title="Price Area", category="Analysis", x_axis_label
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -1120,8 +1106,7 @@ report = area_chart_report(title="Stacked Area", category="Analysis", stack_type
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -1159,8 +1144,7 @@ report = boxplot_report(title="Price Distribution", category="Analysis", x_axis_
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -1199,8 +1183,7 @@ report = boxplot_report(title="Stats Test", category="Test")("Group A", c)
         TimeFrameAssetDataFrameMap inputData;
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({10.0, 20.0, 30.0, 40.0, 50.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(aapl));
 
@@ -1243,8 +1226,7 @@ report = cs_line_chart_report(title="Asset Comparison", category="Cross-Section"
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 210.0, 220.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(epoch_script::GROUP_KEY));
 
@@ -1299,8 +1281,7 @@ report = cs_line_chart_report(title="Price Trends", category="CS")(c)
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 150.0, 200.0});
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({50.0, 75.0, 100.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         auto& tearsheet = reports[epoch_script::GROUP_KEY];
         auto& lines_def = tearsheet.charts().charts(0).lines_def();
@@ -1353,8 +1334,7 @@ report = cs_heatmap_report(title="Correlation Matrix", category="Cross-Section",
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 210.0, 220.0, 230.0, 240.0});
         inputData[dailyTF.ToString()][goog] = CreateOHLCVData({300.0, 310.0, 320.0, 330.0, 340.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(epoch_script::GROUP_KEY));
 
@@ -1399,8 +1379,7 @@ report = cs_heatmap_report(title="Correlation", category="CS", mode="correlation
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0, 130.0, 140.0});
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({140.0, 130.0, 120.0, 110.0, 100.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         auto& heat_map_def = reports[epoch_script::GROUP_KEY].charts().charts(0).heat_map_def();
 
@@ -1434,8 +1413,7 @@ report = cs_heatmap_report(title="Asset Values", category="Cross-Section", mode=
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 210.0, 220.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(epoch_script::GROUP_KEY));
 
@@ -1471,8 +1449,7 @@ report = cs_heatmap_report(title="Mean Values", category="CS", mode="values", ag
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});  // mean = 110
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 220.0, 240.0});  // mean = 220
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         auto& heat_map_def = reports[epoch_script::GROUP_KEY].charts().charts(0).heat_map_def();
 
@@ -1501,8 +1478,7 @@ report = cs_heatmap_report(title="Sum Values", category="CS", mode="values", agg
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 110.0, 120.0});  // sum = 330
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 220.0, 240.0});  // sum = 660
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         auto& heat_map_def = reports[epoch_script::GROUP_KEY].charts().charts(0).heat_map_def();
 
@@ -1541,8 +1517,7 @@ report = cs_boxplot_report(title="Asset Distribution", category="Cross-Section",
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({100.0, 105.0, 110.0, 115.0, 120.0});
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({200.0, 210.0, 220.0, 230.0, 240.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         REQUIRE(reports.contains(epoch_script::GROUP_KEY));
 
@@ -1583,8 +1558,7 @@ report = cs_boxplot_report(title="Distribution Compare", category="CS")(c)
         // MSFT: 100, 200, 300, 400, 500 -> min=100, q1=150, median=300, q3=450, max=500
         inputData[dailyTF.ToString()][msft] = CreateOHLCVData({100.0, 200.0, 300.0, 400.0, 500.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         auto& boxplot_def = reports[epoch_script::GROUP_KEY].charts().charts(0).box_plot_def();
 
@@ -1624,8 +1598,7 @@ report = cs_boxplot_report(title="Custom Whiskers", category="CS", whisker_iqr=1
         // Data with potential outliers
         inputData[dailyTF.ToString()][aapl] = CreateOHLCVData({10.0, 20.0, 30.0, 40.0, 50.0});
 
-        orch.ExecutePipeline(std::move(inputData));
-
+ExecuteWithEmitter(orch, std::move(inputData));
         auto reports = orch.GetGeneratedReports();
         auto& boxplot_def = reports[epoch_script::GROUP_KEY].charts().charts(0).box_plot_def();
 

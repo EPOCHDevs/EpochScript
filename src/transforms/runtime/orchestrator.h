@@ -11,6 +11,7 @@
 #include "events/transform_progress_emitter.h"
 #include <epoch_script/transforms/runtime/transform_manager/itransform_manager.h>
 #include <epoch_script/transforms/core/registry.h>
+#include <epoch_data_sdk/events/all.h>
 #include <tbb/flow_graph.h>
 #include <thread>
 #include <condition_variable>
@@ -40,7 +41,9 @@ namespace epoch_script::runtime {
          * @brief Execute the flow graph.
          *        Typically you'd push some initial ExecutionContext into "root" nodes.
          */
-        TimeFrameAssetDataFrameMap ExecutePipeline(TimeFrameAssetDataFrameMap) override;
+        TimeFrameAssetDataFrameMap ExecutePipeline(
+            TimeFrameAssetDataFrameMap data,
+            data_sdk::events::ScopedProgressEmitter& emitter) override;
 
         AssetReportMap GetGeneratedReports() const override;
 
@@ -86,6 +89,44 @@ namespace epoch_script::runtime {
         // Enable/disable automatic progress summary events
         void SetProgressSummaryEnabled(bool enabled);
 
+        // ====================================================================
+        // External Event System Integration (for StratifyX/Job integration)
+        // ====================================================================
+
+        /**
+         * Set an external ScopedProgressEmitter for unified event emission.
+         * When set, the orchestrator will emit events through this emitter,
+         * allowing StratifyX to receive events from all layers through a single
+         * event dispatcher.
+         *
+         * @param emitter The ScopedProgressEmitter from the parent (e.g., Job)
+         */
+        void SetExternalProgressEmitter(data_sdk::events::ScopedProgressEmitterPtr emitter);
+
+        /**
+         * Set an external CancellationToken for unified cancellation propagation.
+         * When set, the orchestrator will check this token in addition to its
+         * internal token, enabling cancellation from the parent layer.
+         *
+         * @param token The CancellationToken from the parent (e.g., Job)
+         */
+        void SetExternalCancellationToken(data_sdk::events::CancellationTokenPtr token);
+
+        /**
+         * Get the external progress emitter (may be null if not set).
+         */
+        [[nodiscard]] data_sdk::events::ScopedProgressEmitterPtr GetExternalProgressEmitter() const;
+
+        /**
+         * Get the external cancellation token (may be null if not set).
+         */
+        [[nodiscard]] data_sdk::events::CancellationTokenPtr GetExternalCancellationToken() const;
+
+        /**
+         * Check if an external event system is configured.
+         */
+        [[nodiscard]] bool HasExternalEventSystem() const;
+
     private:
         std::vector<std::string> m_asset_ids;
         tbb::flow::graph m_graph{};
@@ -111,11 +152,19 @@ namespace epoch_script::runtime {
         events::IEventDispatcherPtr m_eventDispatcher;
         events::CancellationTokenPtr m_cancellationToken;
 
+        // External event system (from StratifyX/Job)
+        data_sdk::events::ScopedProgressEmitterPtr m_externalEmitter;
+        data_sdk::events::CancellationTokenPtr m_externalCancellationToken;
+
         // Progress tracking
         std::atomic<size_t> m_nodesCompleted{0};
         std::atomic<size_t> m_nodesFailed{0};
         std::atomic<size_t> m_nodesSkipped{0};
         std::atomic<bool> m_isExecuting{false};
+
+        // Execution order tracking for TBB parallel execution analysis
+        std::atomic<size_t> m_executionSequence{0};   // Order nodes started
+        std::atomic<size_t> m_completionSequence{0};  // Order nodes completed
 
         // Progress summary thread
         std::thread m_summaryThread;

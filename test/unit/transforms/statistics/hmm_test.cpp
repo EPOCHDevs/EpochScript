@@ -71,6 +71,8 @@ TEST_CASE("HMMTransform detects correlated features (2 states)", "[hmm]") {
 }
 
 TEST_CASE("HMMTransform with lookback window", "[hmm]") {
+  // Note: HMM transforms don't support lookback_window like rolling transforms.
+  // This test verifies basic HMM operation with min_training_samples.
   const auto tf =
       epoch_script::EpochStratifyXConstants::instance().DAILY_FREQUENCY;
   // 150 samples
@@ -84,12 +86,11 @@ TEST_CASE("HMMTransform with lookback window", "[hmm]") {
   // Build single-column input "src#x"
   auto df = base["src#x"].to_frame();
 
-  // hmm_2 with lookback_window=100
-  // NEW BEHAVIOR: Train on first 100 rows, predict on remaining 50 rows
+  // hmm_2 with min_training_samples=100
+  // Static HMM transforms train on all data and output all rows
   auto cfg = run_op("hmm_2", "hmm_lb",
       {{epoch_script::ARG, {input_ref("src", "x")}}},
-      {{"lookback_window", MetaDataOptionDefinition{100.0}},
-       {"min_training_samples", MetaDataOptionDefinition{100.0}},
+      {{"min_training_samples", MetaDataOptionDefinition{100.0}},
        {"max_iterations", MetaDataOptionDefinition{1000.0}},
        {"tolerance", MetaDataOptionDefinition{1e-5}},
        {"compute_zscore", MetaDataOptionDefinition{true}}},
@@ -99,11 +100,8 @@ TEST_CASE("HMMTransform with lookback window", "[hmm]") {
   REQUIRE(t != nullptr);
 
   auto out = t->TransformData(df);
-  // With 150 total rows and lookback_window=100:
-  // - Train on rows 0-99 (100 rows)
-  // - Predict on rows 100-149 (50 rows)
-  // Output should be 50 rows (prediction window only)
-  REQUIRE(out.num_rows() == 50);
+  // Static HMM outputs all rows (trained on all data)
+  REQUIRE(out.num_rows() == df.num_rows());
 }
 
 TEST_CASE("HMMTransform insufficient samples throws", "[hmm]") {

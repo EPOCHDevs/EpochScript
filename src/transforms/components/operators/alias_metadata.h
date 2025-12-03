@@ -17,18 +17,20 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeAliasMetaDa
     .name = "Alias Decimal",
     .options = {},
     .isCrossSectional = false,
-    .desc = "Internal compiler-inserted transform to create unique column identifiers for Decimal types.",
+    .desc = "Compiler-inserted column renamer for Decimal types.",
     .inputs = {IOMetaDataConstants::ANY_INPUT_METADATA},
     .outputs = {IOMetaDataConstants::NUMBER_OUTPUT_METADATA},
     .atLeastOneInputRequired = true,
     .tags = {"internal", "compiler", "identity"},
     .requiresTimeFrame = false,
     .allowNullInputs = true,
+    .internalUse = true,
+    .alias = "alias",
     .strategyTypes = {},
     .relatedTransforms = {},
     .assetRequirements = {"single-asset"},
-    .usageContext = "Automatically inserted by compiler for variable assignments. Not for direct use.",
-    .limitations = "Internal use only. Should not appear in user-written scripts."
+    .usageContext = "Automatically inserted by compiler for variable assignments.",
+    .limitations = "Internal use only."
   });
 
   // AliasBoolean - compiler-inserted identity for Boolean types
@@ -38,18 +40,20 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeAliasMetaDa
     .name = "Alias Boolean",
     .options = {},
     .isCrossSectional = false,
-    .desc = "Internal compiler-inserted transform to create unique column identifiers for Boolean types.",
+    .desc = "Compiler-inserted column renamer for Boolean types.",
     .inputs = {IOMetaDataConstants::ANY_INPUT_METADATA},
     .outputs = {IOMetaDataConstants::BOOLEAN_OUTPUT_METADATA},
     .atLeastOneInputRequired = true,
     .tags = {"internal", "compiler", "identity"},
     .requiresTimeFrame = false,
     .allowNullInputs = true,
+    .internalUse = true,
+    .alias = "alias",
     .strategyTypes = {},
     .relatedTransforms = {},
     .assetRequirements = {"single-asset"},
-    .usageContext = "Automatically inserted by compiler for variable assignments. Not for direct use.",
-    .limitations = "Internal use only. Should not appear in user-written scripts."
+    .usageContext = "Automatically inserted by compiler for variable assignments.",
+    .limitations = "Internal use only."
   });
 
   // AliasString - compiler-inserted identity for String types
@@ -59,18 +63,20 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeAliasMetaDa
     .name = "Alias String",
     .options = {},
     .isCrossSectional = false,
-    .desc = "Internal compiler-inserted transform to create unique column identifiers for String types.",
+    .desc = "Compiler-inserted column renamer for String types.",
     .inputs = {IOMetaDataConstants::ANY_INPUT_METADATA},
     .outputs = {IOMetaDataConstants::STRING_OUTPUT_METADATA},
     .atLeastOneInputRequired = true,
     .tags = {"internal", "compiler", "identity"},
     .requiresTimeFrame = false,
     .allowNullInputs = true,
+    .internalUse = true,
+    .alias = "alias",
     .strategyTypes = {},
     .relatedTransforms = {},
     .assetRequirements = {"single-asset"},
-    .usageContext = "Automatically inserted by compiler for variable assignments. Not for direct use.",
-    .limitations = "Internal use only. Should not appear in user-written scripts."
+    .usageContext = "Automatically inserted by compiler for variable assignments.",
+    .limitations = "Internal use only."
   });
 
   // AliasInteger - compiler-inserted identity for Integer types
@@ -80,18 +86,20 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeAliasMetaDa
     .name = "Alias Integer",
     .options = {},
     .isCrossSectional = false,
-    .desc = "Internal compiler-inserted transform to create unique column identifiers for Integer types.",
+    .desc = "Compiler-inserted column renamer for Integer types.",
     .inputs = {IOMetaDataConstants::ANY_INPUT_METADATA},
     .outputs = {IOMetaDataConstants::INTEGER_OUTPUT_METADATA},
     .atLeastOneInputRequired = true,
     .tags = {"internal", "compiler", "identity"},
     .requiresTimeFrame = false,
     .allowNullInputs = true,
+    .internalUse = true,
+    .alias = "alias",
     .strategyTypes = {},
     .relatedTransforms = {},
     .assetRequirements = {"single-asset"},
-    .usageContext = "Automatically inserted by compiler for variable assignments. Not for direct use.",
-    .limitations = "Internal use only. Should not appear in user-written scripts."
+    .usageContext = "Automatically inserted by compiler for variable assignments.",
+    .limitations = "Internal use only."
   });
 
   // AliasTimestamp - compiler-inserted identity for Timestamp types
@@ -101,18 +109,20 @@ inline std::vector<epoch_script::transforms::TransformsMetaData> MakeAliasMetaDa
     .name = "Alias Timestamp",
     .options = {},
     .isCrossSectional = false,
-    .desc = "Internal compiler-inserted transform to create unique column identifiers for Timestamp types.",
+    .desc = "Compiler-inserted column renamer for Timestamp types.",
     .inputs = {IOMetaDataConstants::ANY_INPUT_METADATA},
     .outputs = {IOMetaData{epoch_core::IODataType::Timestamp, "result", ""}},
     .atLeastOneInputRequired = true,
     .tags = {"internal", "compiler", "identity"},
     .requiresTimeFrame = false,
     .allowNullInputs = true,
+    .internalUse = true,
+    .alias = "alias",
     .strategyTypes = {},
     .relatedTransforms = {},
     .assetRequirements = {"single-asset"},
-    .usageContext = "Automatically inserted by compiler for variable assignments. Not for direct use.",
-    .limitations = "Internal use only. Should not appear in user-written scripts."
+    .usageContext = "Automatically inserted by compiler for variable assignments.",
+    .limitations = "Internal use only."
   });
 
   return metadataList;

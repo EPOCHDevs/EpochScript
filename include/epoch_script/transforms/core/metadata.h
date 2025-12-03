@@ -23,7 +23,8 @@ CREATE_ENUM(TransformCategory,
             Reporter,    // report / visualization sink nodes
             Executor,    // trade / order sink nodes
             EventMarker, // interactive UI event_markers
-            ML);
+            ML,
+            Portfolio);  // portfolio optimization (HRP, MVO, Risk Parity, etc.)
 
 // Chart helper (omit / null ⇒ not plotted)
 CREATE_ENUM(
@@ -144,6 +145,8 @@ struct TransformsMetaData {
   std::vector<std::string> requiredDataSources{};
   bool intradayOnly{false};
   bool allowNullInputs{false};
+  bool internalUse{false};  // Compiler-inserted transforms not for direct user use (e.g., static_cast, alias)
+  std::string alias{};  // Group name for related transforms (e.g., "static_cast" for static_cast_to_*, "alias" for alias_*)
 
   // Display configuration for flag PlotKind
   std::optional<FlagSchema> flagSchema{std::nullopt};

@@ -6,9 +6,7 @@
 
 #include "orchestrator_events.h"
 #include "event_dispatcher.h"
-#include <epoch_data_sdk/common/generic_event_types.h>
-#include <epoch_data_sdk/common/generic_event_dispatcher.h>
-#include <epoch_data_sdk/common/event_path.h>
+#include <epoch_data_sdk/events/all.h>
 
 namespace epoch_script::runtime::events {
 
@@ -21,6 +19,7 @@ using data_sdk::events::SummaryEvent;
 using data_sdk::events::LogEvent;
 using data_sdk::events::OperationStatus;
 using data_sdk::events::EventPath;
+using data_sdk::events::ScopeType;
 
 /**
  * Convert OrchestratorEvent to GenericEvent
@@ -87,7 +86,7 @@ inline GenericEvent ToGenericEvent(const OrchestratorEvent& event, const std::st
         else if constexpr (std::is_same_v<T, NodeStartedEvent>) {
             LifecycleEvent le;
             le.timestamp = e.timestamp;
-            le.path = data_sdk::events::MakeStagePath(job_id, "nodes").Child("node", e.node_id);
+            le.path = data_sdk::events::MakeStagePath(job_id, "nodes").Child(ScopeType::Node, e.node_id);
             le.status = OperationStatus::Started;
             le.operation_type = "node";
             le.operation_name = e.transform_name;
@@ -100,7 +99,7 @@ inline GenericEvent ToGenericEvent(const OrchestratorEvent& event, const std::st
         else if constexpr (std::is_same_v<T, NodeCompletedEvent>) {
             LifecycleEvent le;
             le.timestamp = e.timestamp;
-            le.path = data_sdk::events::MakeStagePath(job_id, "nodes").Child("node", e.node_id);
+            le.path = data_sdk::events::MakeStagePath(job_id, "nodes").Child(ScopeType::Node, e.node_id);
             le.status = OperationStatus::Completed;
             le.operation_type = "node";
             le.operation_name = e.transform_name;
@@ -112,7 +111,7 @@ inline GenericEvent ToGenericEvent(const OrchestratorEvent& event, const std::st
         else if constexpr (std::is_same_v<T, NodeFailedEvent>) {
             LifecycleEvent le;
             le.timestamp = e.timestamp;
-            le.path = data_sdk::events::MakeStagePath(job_id, "nodes").Child("node", e.node_id);
+            le.path = data_sdk::events::MakeStagePath(job_id, "nodes").Child(ScopeType::Node, e.node_id);
             le.status = OperationStatus::Failed;
             le.operation_type = "node";
             le.operation_name = e.transform_name;
@@ -125,7 +124,7 @@ inline GenericEvent ToGenericEvent(const OrchestratorEvent& event, const std::st
         else if constexpr (std::is_same_v<T, NodeSkippedEvent>) {
             LifecycleEvent le;
             le.timestamp = e.timestamp;
-            le.path = data_sdk::events::MakeStagePath(job_id, "nodes").Child("node", e.node_id);
+            le.path = data_sdk::events::MakeStagePath(job_id, "nodes").Child(ScopeType::Node, e.node_id);
             le.status = OperationStatus::Skipped;
             le.operation_type = "node";
             le.operation_name = e.transform_name;
@@ -140,9 +139,9 @@ inline GenericEvent ToGenericEvent(const OrchestratorEvent& event, const std::st
             // Build path based on asset_id presence
             if (e.asset_id.has_value()) {
                 pe.path = data_sdk::events::MakeNodePath(job_id, "nodes", "node", e.node_id)
-                    .Child("asset", *e.asset_id);
+                    .Child(ScopeType::Asset, *e.asset_id);
             } else {
-                pe.path = data_sdk::events::MakeStagePath(job_id, "nodes").Child("node", e.node_id);
+                pe.path = data_sdk::events::MakeStagePath(job_id, "nodes").Child(ScopeType::Node, e.node_id);
             }
 
             pe.current = e.current_step;
